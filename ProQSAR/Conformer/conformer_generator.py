@@ -2,7 +2,7 @@ from rdkit import Chem
 from dataclasses import dataclass
 from typing import Optional, List, Union
 
-from AtQSAR.AtConformer import conformer_function
+from ProQSAR.Conformer import conformer_function
 
 
 @dataclass

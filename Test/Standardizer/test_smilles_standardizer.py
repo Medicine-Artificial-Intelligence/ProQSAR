@@ -1,11 +1,6 @@
 import unittest
-import sys
-from pathlib import Path
-
-root_dir = Path(__file__).resolve().parents[2]
-sys.path.append(str(root_dir))
 from rdkit import Chem
-from AtQSAR.AtStandardizer import SMILESStandardizer
+from ProQSAR.Standardizer import SMILESStandardizer
 
 
 class TestSMILESStandardizer(unittest.TestCase):
@@ -19,29 +14,48 @@ class TestSMILESStandardizer(unittest.TestCase):
         ]
 
     def test_standardize_mol(self):
+        """Test standardizing a valid mol object."""
         mol = Chem.MolFromSmiles(self.example_smiles)
         standardized_mol = self.standardizer.standardize_mol(mol)
         self.assertIsNotNone(standardized_mol)
         # Additional checks can be added here based on expected behavior
 
-    def test_standardize_smiles(self):
+    def test_standardize_smiles_valid(self):
+        """Test standardizing a valid SMILES string."""
+        smiles = "CCO"  # Ethanol
         standardized_smiles, standardized_mol = self.standardizer.standardize_smiles(
-            self.example_smiles
+            smiles
         )
-        self.assertIsNotNone(standardized_smiles)
         self.assertIsNotNone(standardized_mol)
-        # Additional checks can be added here based on expected behavior
+        self.assertIsNotNone(standardized_smiles)
+        self.assertEqual(Chem.MolToSmiles(standardized_mol), "CCO")
+
+    def test_standardize_smiles_invalid(self):
+        """Test standardizing an invalid SMILES string."""
+        smiles = "Invalid_smiles"  # A simple cyclohexanol to test the stereochemistry handling
+        standardized_smiles, standardized_mol = self.standardizer.standardize_smiles(
+            smiles
+        )
+        self.assertIsNone(standardized_mol)
+        self.assertEqual(standardized_smiles, None)
 
     def test_standardize_dict_smiles(self):
         standardized_data = self.standardizer.standardize_dict_smiles(
             self.example_smiles_data
         )
+        print(type(standardized_data))
+        print(standardized_data)
         self.assertIsInstance(standardized_data, list)
         for item in standardized_data:
             self.assertIn("standardized_SMILES", item)
             self.assertIn("standardized_mol", item)
             self.assertIsNotNone(item["standardized_SMILES"])
             self.assertIsInstance(item["standardized_mol"], Chem.Mol)
+
+    def test_handle_invalid_data_type(self):
+        """Test standardization with invalid data type."""
+        with self.assertRaises(TypeError):
+            self.standardizer.standardize_dict_smiles("not a dataframe or list")
 
 
 if __name__ == "__main__":
