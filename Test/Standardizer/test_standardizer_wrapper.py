@@ -1,11 +1,6 @@
 import unittest
-import sys
-from pathlib import Path
-
-root_dir = Path(__file__).resolve().parents[2]
-sys.path.append(str(root_dir))
 from rdkit import Chem
-from AtQSAR.AtStandardizer import (
+from ProQSAR.Standardizer import (
     normalize_molecule,
     canonicalize_tautomer,
     salts_remover,

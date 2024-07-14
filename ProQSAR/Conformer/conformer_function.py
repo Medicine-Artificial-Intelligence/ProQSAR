@@ -1,31 +1,16 @@
 from rdkit import Chem
-from rdkit.Chem.rdDistGeom import ETDG, ETKDG, ETKDGv2, ETKDGv3, srETKDGv3, KDG
 import numpy as np
 import logging
 from typing import Union, Optional, List
-from rdkit.Chem import Draw
-from rdkit.Chem.Draw import IPythonConsole
-from AtQSAR.AtConformer.conformer_utils import (
+from ProQSAR.Conformer.conformer_utils import (
     _get_num_conformers_from_molecule_size,
     _get_max_iter_from_molecule_size,
     _assert_correct_force_field,
     _assert_has_conformers,
+    _get_embedding_method,
 )
 
 logger = logging.getLogger(__name__)
-
-
-_embedding_method = {
-    "ETDG": ETDG(),
-    "ETKDG": ETKDG(),
-    "ETKDGv2": ETKDGv2(),
-    "ETKDGv3": ETKDGv3(),
-    "srETKDGv3": srETKDGv3(),
-    "KDG": KDG(),
-}
-
-
-_available_ff_methods = ["MMFF", "MMFF94", "MMFF94s", "UFF"]
 
 
 def mol_embed(
@@ -58,7 +43,7 @@ def mol_embed(
     if num_conformers is None or num_conformers == "auto":
         num_conformers = _get_num_conformers_from_molecule_size(molecule)
 
-    params = _embedding_method.get(embedding_method, "ETKDGv3")
+    params = _get_embedding_method(embedding_method)
 
     params.numThreads = num_threads
     params.randomSeed = random_seed

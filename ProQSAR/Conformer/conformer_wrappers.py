@@ -1,6 +1,6 @@
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
-from AtQSAR.AtConformer import ConformerGenerator
+from ProQSAR.Conformer import ConformerGenerator
 
 
 def generate_conformers_parallel(molecule):
