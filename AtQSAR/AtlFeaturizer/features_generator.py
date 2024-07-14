@@ -58,7 +58,8 @@ class FeatureGenerator:
         self : Your class instance
             Your class instance that contains molecule data.
         rdk : str, optional
-            The type of RDKit fingerprint to calculate. Default is 'all', which calculates fingerprints for RDKit versions 5, 6, and 7.
+            The type of RDKit fingerprint to calculate. Default is 'all', which calculates fingerprints for RDKit versions 5, 6,
+            and 7.
 
         Returns:
         None

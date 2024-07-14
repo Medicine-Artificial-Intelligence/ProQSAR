@@ -10,7 +10,9 @@ from cats2d.rd_cats2d import CATS2D
 class MolecularFingerprint:
 
     @staticmethod
-    def RDKFp(mol, maxPath=5, fpSize=2048, nBitsPerHash=2):
+    def RDKFp(
+        mol: Mol, maxPath: int = 5, fpSize: int = 2048, nBitsPerHash: int = 2
+    ) -> np.ndarray:
         """
         Calculate RDKit fingerprint of a molecule.
 
@@ -31,8 +33,10 @@ class MolecularFingerprint:
         fp = Chem.RDKFingerprint(
             mol, maxPath=maxPath, fpSize=fpSize, nBitsPerHash=nBitsPerHash
         )
-        ar = np.zeros((1,), dtype=np.int8)
-        DataStructs.ConvertToNumpyArray(fp, ar)
+        ar = np.zeros(
+            (fpSize,), dtype=np.uint8
+        )  # Adjust the size and type according to your needs
+        ConvertToNumpyArray(fp, ar)
         return ar
 
     @staticmethod
