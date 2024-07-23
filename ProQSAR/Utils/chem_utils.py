@@ -1,6 +1,5 @@
 from rdkit import Chem
 from rdkit.Chem import Draw
-from rdkit.Chem.Draw import IPythonConsole
 from IPython.display import SVG, display
 
 
@@ -39,7 +38,7 @@ def draw_mol_with_SVG(mol, molSize=(450, 150), drawOptions=None):
 
         # Get the SVG text and clean the header
         svg = drawer.GetDrawingText().replace("svg:", "")
-        display(SVG(svg))
+        return SVG(svg)
     except Exception as e:
         print(f"Error drawing molecule: {e}")
 
@@ -94,6 +93,6 @@ def visualize_conformers(
     legends = [
         f"{force_field_method} energy = {energy:.2f}" for energy in energies
     ]  # Create the legends for the conformers
-    return IPythonConsole.ShowMols(
+    return Draw.IPythonConsole.ShowMols(
         conformers, legends=legends, subImgSize=subImgSize
     )  # Show the conformers
