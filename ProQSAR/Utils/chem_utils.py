@@ -1,5 +1,6 @@
 from rdkit import Chem
 from rdkit.Chem import Draw
+from rdkit.Chem.Draw import IPythonConsole
 from IPython.display import SVG, display
 
 
@@ -47,7 +48,7 @@ def visualize_conformers(
     molecule: Chem.Mol,
     force_field_method: str = "MMFF94",
     subImgSize: tuple = (200, 200),
-) -> Draw.IPythonConsole.display.Image:
+) -> IPythonConsole.display.Image:
     """
     Visualize the conformers of a molecule.
 

@@ -12,6 +12,6 @@ To install and set up the SynRBL framework, follow these steps. Please ensure yo
 
 ```bash
   conda create --name proqsar python=3.11
-  conda activate syntemp-env
+  conda activate proqsar
   pip install requirements.txt
   ```
