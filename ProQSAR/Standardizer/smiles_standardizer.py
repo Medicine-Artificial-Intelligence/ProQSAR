@@ -12,7 +12,6 @@ from ProQSAR.Standardizer.standardizer_wrapper import (
     fragments_remover,
     remove_hydrogens_and_sanitize,
 )
-from ProQSAR.Utils.chem_utils import draw_mol_with_SVG
 
 
 class SMILESStandardizer:
@@ -30,7 +29,6 @@ class SMILESStandardizer:
     def standardize_mol(
         self,
         mol: Chem.Mol,
-        verbose: bool = False,
         normalize: bool = True,
         tautomerize: bool = True,
         remove_salts: bool = False,
@@ -45,7 +43,6 @@ class SMILESStandardizer:
 
         Parameters:
             mol (Chem.Mol): The molecule to be standardized.
-            verbose (bool): If True, the molecule is visualized at each step.
             normalize (bool): Applies normalization corrections.
             tautomerize (bool): Canonicalizes tautomers.
             remove_salts (bool): Removes salt fragments.
@@ -84,22 +81,17 @@ class SMILESStandardizer:
         if remove_fragments or largest_fragment_only:
             mol = fragments_remover(mol)
 
-        # Visualize the molecule if verbose is set
-        if verbose:
-            draw_mol_with_SVG(mol)
-
         # Finalize by removing explicit hydrogens and sanitizing
         return remove_hydrogens_and_sanitize(mol)
 
     def standardize_smiles(
-        self, smiles: str, visualize: bool = False, **kwargs
+        self, smiles: str, **kwargs
     ) -> Tuple[Optional[str], Optional[Chem.Mol]]:
         """
         Converts a SMILES string to a standardized RDKit Mol object and returns both the SMILES and Mol.
 
         Parameters:
             smiles (str): The SMILES string to be standardized.
-            visualize (bool): If set, visualizes the molecule during standardization.
 
         Returns:
             tuple: A tuple containing the standardized SMILES string and the Mol object, or (None, None)
@@ -110,9 +102,7 @@ class SMILESStandardizer:
             return None, None
 
         try:
-            standardized_mol = self.standardize_mol(
-                original_mol, verbose=visualize, **kwargs
-            )
+            standardized_mol = self.standardize_mol(original_mol, **kwargs)
             standardized_smiles = Chem.MolToSmiles(standardized_mol)
             return standardized_smiles, standardized_mol
         except Chem.MolSanitizeException:
@@ -122,7 +112,6 @@ class SMILESStandardizer:
         self,
         data_input: Union[pd.DataFrame, List[dict]],
         key: str = "SMILES",
-        visualize: bool = False,
         n_jobs: int = 4,
         **kwargs
     ) -> Union[pd.DataFrame, List[dict]]:
@@ -132,7 +121,6 @@ class SMILESStandardizer:
         Parameters:
             data_input (DataFrame or list of dicts): Data containing SMILES strings to be standardized.
             key (str): Key or column name for SMILES strings in the data.
-            visualize (bool): If True, visualizes the molecules during standardization.
             n_jobs (int): Number of jobs to run in parallel.
 
         Returns:
@@ -152,9 +140,7 @@ class SMILESStandardizer:
             )
 
         standardized_results = Parallel(n_jobs=n_jobs, verbose=1)(
-            delayed(self.standardize_smiles)(
-                reaction_data.get(key, ""), visualize=visualize, **kwargs
-            )
+            delayed(self.standardize_smiles)(reaction_data.get(key, ""), **kwargs)
             for reaction_data in data_input
         )
 

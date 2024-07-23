@@ -1,6 +1,8 @@
 # ProQSAR
-QSAR
 
+Automatic pipeline for QSAR modeling
+
+![screenshot](./Docs/Image/AtQSAR-BenchML.png)
 
 ## Installation
 
