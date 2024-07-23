@@ -36,7 +36,8 @@ def _get_embedding_method(force_field_method: str = "ETKDG") -> Any:
 
     if force_field_method not in _embedding_methods:
         raise KeyError(
-            f"Unsupported force field method '{force_field_method}'. Supported methods are: {list(_embedding_methods.keys())}."
+            f"Unsupported force field method '{force_field_method}'."
+            + " Supported methods are: {list(_embedding_methods.keys())}."
         )
 
     return _embedding_methods[force_field_method]

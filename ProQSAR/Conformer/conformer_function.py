@@ -30,8 +30,8 @@ def mol_embed(
     - embedding_method (str): The embedding method to use, corresponding to different RDKit embedding strategies.
       Defaults to 'ETKDGv3'.
     - num_threads (int): The number of threads to use for conformer generation. Defaults to 1.
-    - random_coords_threshold (int): Atom count threshold above which random coordinates are used to initialize embeddings.
-      Defaults to 100.
+    - random_coords_threshold (int): Atom count threshold above which random coordinates are
+    used to initialize embeddings. Defaults to 100.
     - random_seed (int): Seed for the random number generator to ensure reproducibility. Defaults to 42.
 
     Returns:
