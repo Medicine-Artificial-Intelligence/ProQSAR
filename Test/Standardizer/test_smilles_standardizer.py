@@ -1,6 +1,6 @@
 import unittest
 from rdkit import Chem
-from ProQSAR.Standardizer import SMILESStandardizer
+from ProQSAR.Standardizer.smiles_standardizer import SMILESStandardizer
 
 
 class TestSMILESStandardizer(unittest.TestCase):

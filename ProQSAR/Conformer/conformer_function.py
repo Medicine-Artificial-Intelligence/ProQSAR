@@ -11,6 +11,7 @@ from ProQSAR.Conformer.conformer_utils import (
     _get_embedding_method,
 )
 
+
 def mol_embed(
     molecule: Chem.Mol,
     num_conformers: Optional[Union[int, str]] = "auto",
@@ -63,7 +64,9 @@ def mol_embed(
     )
 
     if not success:
-        logging.warning("Failed to embed any conformers; attempting to compute 2D coordinates.")
+        logging.warning(
+            "Failed to embed any conformers; attempting to compute 2D coordinates."
+        )
         Chem.rdDepictor.Compute2DCoords(mol_copy)
 
     return mol_copy
@@ -163,7 +166,10 @@ def force_field_minimization(
 #     new_molecule.AddConformer(conformer, assignId=True)
 #     return new_molecule
 
-def get_lowest_energy_conformer(molecule: Chem.Mol, force_field_method: str = "UFF") -> Chem.Mol:
+
+def get_lowest_energy_conformer(
+    molecule: Chem.Mol, force_field_method: str = "UFF"
+) -> Chem.Mol:
     """
     Identifies the conformer with the lowest energy based on a specified force field method.
 
@@ -180,7 +186,7 @@ def get_lowest_energy_conformer(molecule: Chem.Mol, force_field_method: str = "U
     _assert_has_conformers(molecule)
 
     conformer_ids = [conformer.GetId() for conformer in molecule.GetConformers()]
-    lowest_energy = float('inf')
+    lowest_energy = float("inf")
     conformer_id_keep = None
 
     for conformer_id in conformer_ids:
@@ -263,7 +269,9 @@ def compute_force_field_energy(
             molecule, mmffVariant=force_field_method
         )
         if not mmff_properties:
-            raise RuntimeError(f"Failed to initialize MMFF properties for {force_field_method}.")
+            raise RuntimeError(
+                f"Failed to initialize MMFF properties for {force_field_method}."
+            )
         force_field = rdForceFieldHelpers.MMFFGetMoleculeForceField(
             molecule, mmff_properties, confId=conformer_id
         )
