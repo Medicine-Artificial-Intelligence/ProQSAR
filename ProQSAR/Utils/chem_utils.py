@@ -1,6 +1,6 @@
 from rdkit import Chem
 from rdkit.Chem import Draw
-from IPython.display import SVG, display
+from IPython.display import SVG
 
 
 def draw_mol_with_SVG(mol, molSize=(450, 150), drawOptions=None):
