@@ -48,7 +48,7 @@ def visualize_conformers(
     molecule: Chem.Mol,
     force_field_method: str = "MMFF94",
     subImgSize: tuple = (200, 200),
-) -> IPythonConsole.display.Image:
+):
     """
     Visualize the conformers of a molecule.
 
@@ -94,6 +94,6 @@ def visualize_conformers(
     legends = [
         f"{force_field_method} energy = {energy:.2f}" for energy in energies
     ]  # Create the legends for the conformers
-    return Chem.Draw.IPythonConsole.ShowMols(
+    return IPythonConsole.ShowMols(
         conformers, legends=legends, subImgSize=subImgSize
     )  # Show the conformers
