@@ -7,7 +7,7 @@ name: Test & Lint
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
