@@ -50,18 +50,19 @@ class FeatureGenerator:
         for fp in feature_types:
             try:
                 if fp.startswith("RDK"):
-                    maxpath = int(fp[-2:])
+                    maxpath = int(fp[-1:])
+                    logging.info("bug", maxpath)
                     fp_size = 2048 if maxpath <= 6 else 4096
                     result[fp] = RDKFp(mol, maxPath=maxpath, fpSize=fp_size)
                 elif "ECFP" in fp:
-                    d = int(fp[-2:]) * 2
+                    d = int(fp[-1:]) * 2
                     nBits = 2048 if d < 6 else 4096
                     use_features = "feat" in fp.lower()
                     result[fp] = ECFPs(
                         mol, radius=d, nBits=nBits, useFeatures=use_features
                     )
-                elif "ECFP" in fp:
-                    d = int(fp[-2:]) * 2
+                elif "FCFP" in fp:
+                    d = int(fp[-1:]) * 2
                     nBits = 2048 if d < 6 else 4096
                     use_features = "fcfp" in fp.lower()
                     result[fp] = ECFPs(
