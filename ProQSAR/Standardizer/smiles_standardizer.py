@@ -1,7 +1,8 @@
-from typing import List, Optional, Tuple, Union
+import logging
 import pandas as pd
 from rdkit import Chem
 from joblib import Parallel, delayed
+from typing import List, Optional, Tuple, Union
 from ProQSAR.Standardizer.standardizer_wrapper import (
     normalize_molecule,
     canonicalize_tautomer,
@@ -25,6 +26,28 @@ class SMILESStandardizer:
         standardize_smiles: Converts SMILES strings to standardized RDKit Mol objects.
         standardize_dict_smiles: Standardizes SMILES strings within a pandas DataFrame or a list of dictionaries.
     """
+
+    @staticmethod
+    def smiles2mol(smiles: str) -> Optional[Chem.Mol]:
+        """
+        Convert SMILES string to RDKit Mol object.
+
+        Parameters
+        ----------
+        smiles : str
+            SMILES string to be converted.
+
+        Returns
+        -------
+        Chem.Mol
+            RDKit Mol object.
+        """
+        try:
+            mol = Chem.MolFromSmiles(smiles)
+            return mol
+        except Exception as e:
+            logging.error(f"Failed to convert SMILES to Mol: {e}")
+            return None
 
     def standardize_mol(
         self,
@@ -59,7 +82,7 @@ class SMILESStandardizer:
             ValueError: If the input molecule is None.
         """
         if mol is None:
-            raise ValueError("Input molecule must not be None")
+            logging.error("Input {mol} must not be None")
 
         # Ensure ring information is computed
         mol.UpdatePropertyCache(strict=False)
@@ -97,7 +120,7 @@ class SMILESStandardizer:
             tuple: A tuple containing the standardized SMILES string and the Mol object, or (None, None)
             if unsuccessful.
         """
-        original_mol = Chem.MolFromSmiles(smiles)
+        original_mol = SMILESStandardizer.smiles2mol(smiles)
         if not original_mol:
             return None, None
 
@@ -105,15 +128,16 @@ class SMILESStandardizer:
             standardized_mol = self.standardize_mol(original_mol, **kwargs)
             standardized_smiles = Chem.MolToSmiles(standardized_mol)
             return standardized_smiles, standardized_mol
-        except Chem.MolSanitizeException:
-            return "Sanitization failed for SMILES: " + smiles, None
+        except Exception as e:
+            logging.error(f"Failed to standardize {smiles}: {e}")
+            return None, None
 
     def standardize_dict_smiles(
         self,
         data_input: Union[pd.DataFrame, List[dict]],
         key: str = "SMILES",
         n_jobs: int = 4,
-        **kwargs
+        **kwargs,
     ) -> Union[pd.DataFrame, List[dict]]:
         """
         Standardizes SMILES strings within a pandas DataFrame or a list of dictionaries using parallel processing.

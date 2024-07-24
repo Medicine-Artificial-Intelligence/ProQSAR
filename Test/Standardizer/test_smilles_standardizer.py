@@ -1,4 +1,5 @@
 import unittest
+import pandas as pd
 from rdkit import Chem
 from ProQSAR.Standardizer.smiles_standardizer import SMILESStandardizer
 
@@ -8,10 +9,11 @@ class TestSMILESStandardizer(unittest.TestCase):
     def setUp(self):
         self.standardizer = SMILESStandardizer()
         self.example_smiles = "CC(=O)OC1=CC=CC=C1C(=O)O"
-        self.example_smiles_data = [
-            {"SMILES": "CC(=O)OC1=CC=CC=C1C(=O)O"},  # Aspirin
-            {"SMILES": "C1=CC=C(C=C1)C=O"},  # Benzaldehyde
+        self.example_smiles_list_dict = [
+            {"SMILES": "CC(=O)OC1=CC=CC=C1C(=O)O"},
+            {"SMILES": "C1=CC=C(C=C1)C=O"},
         ]
+        self.example_smiles_data = pd.DataFrame(self.example_smiles_list_dict)
 
     def test_standardize_mol(self):
         """Test standardizing a valid mol object."""
@@ -41,10 +43,19 @@ class TestSMILESStandardizer(unittest.TestCase):
 
     def test_standardize_dict_smiles(self):
         standardized_data = self.standardizer.standardize_dict_smiles(
+            self.example_smiles_list_dict
+        )
+        self.assertIsInstance(standardized_data, list)
+        for item in standardized_data:
+            self.assertIn("standardized_SMILES", item)
+            self.assertIn("standardized_mol", item)
+            self.assertIsNotNone(item["standardized_SMILES"])
+            self.assertIsInstance(item["standardized_mol"], Chem.Mol)
+
+    def test_standardize_df_smiles(self):
+        standardized_data = self.standardizer.standardize_dict_smiles(
             self.example_smiles_data
         )
-        print(type(standardized_data))
-        print(standardized_data)
         self.assertIsInstance(standardized_data, list)
         for item in standardized_data:
             self.assertIn("standardized_SMILES", item)

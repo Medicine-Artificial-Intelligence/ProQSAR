@@ -9,7 +9,7 @@ from rdkit.Chem.Pharm2D import Gobbi_Pharm2D, Generate
 
 
 def RDKFp(
-    mol: Chem.Mol, maxPath: int = 5, fpSize: int = 2048, nBitsPerHash: int = 2
+    mol: Chem.Mol, maxPath: int = 6, fpSize: int = 2048, nBitsPerHash: int = 2
 ) -> Optional[np.ndarray]:
     """
     Calculate RDKit fingerprint of a molecule.
