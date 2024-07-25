@@ -5,7 +5,7 @@ from sklearn.preprocessing import (
     RobustScaler,
     FunctionTransformer,
 )
-from typing import Optional, List
+from typing import Optional
 import pickle
 import os
 
