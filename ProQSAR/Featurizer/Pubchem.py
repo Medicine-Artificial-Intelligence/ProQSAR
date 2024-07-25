@@ -21,7 +21,7 @@ from rdkit import Chem, DataStructs
 # ftp://ftp.ncbi.nlm.nih.gov/pubchem/specifications/pubchem_fingerprints.txt
 
 smartsPatts = {
-    1: ("[H]", 3),  # 1-115
+    1: ("[H]", 3),
     2: ("[H]", 7),
     3: ("[H]", 15),
     4: ("[H]", 31),

@@ -1,6 +1,6 @@
 import unittest
 from rdkit import Chem
-from ProQSAR.Standardizer import (
+from ProQSAR.Standardizer.standardizer_wrapper import (
     normalize_molecule,
     canonicalize_tautomer,
     salts_remover,

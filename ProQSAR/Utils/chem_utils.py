@@ -1,6 +1,29 @@
 from rdkit import Chem
+from rdkit.Chem.Draw import IPythonConsole
 from rdkit.Chem import Draw
-from IPython.display import SVG, display
+import logging
+
+
+def smiles2mol(smiles):
+    """
+    Convert SMILES string to RDKit Mol object.
+
+    Parameters
+    ----------
+    smiles : str
+        SMILES string to be converted.
+
+    Returns
+    -------
+    Chem.Mol
+        RDKit Mol object.
+    """
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        return mol
+    except Exception as e:
+        logging.error(f"Failed to convert SMILES to Mol: {e}")
+        return None
 
 
 def draw_mol_with_SVG(mol, molSize=(450, 150), drawOptions=None):
@@ -38,7 +61,7 @@ def draw_mol_with_SVG(mol, molSize=(450, 150), drawOptions=None):
 
         # Get the SVG text and clean the header
         svg = drawer.GetDrawingText().replace("svg:", "")
-        display(SVG(svg))
+        return svg
     except Exception as e:
         print(f"Error drawing molecule: {e}")
 
@@ -47,7 +70,7 @@ def visualize_conformers(
     molecule: Chem.Mol,
     force_field_method: str = "MMFF94",
     subImgSize: tuple = (200, 200),
-) -> Draw.IPythonConsole.display.Image:
+):
     """
     Visualize the conformers of a molecule.
 
@@ -93,6 +116,6 @@ def visualize_conformers(
     legends = [
         f"{force_field_method} energy = {energy:.2f}" for energy in energies
     ]  # Create the legends for the conformers
-    return Chem.Draw.IPythonConsole.ShowMols(
+    return IPythonConsole.ShowMols(
         conformers, legends=legends, subImgSize=subImgSize
     )  # Show the conformers

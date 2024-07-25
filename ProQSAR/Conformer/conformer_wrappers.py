@@ -1,4 +1,3 @@
-import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 from ProQSAR.Conformer import ConformerGenerator
 
