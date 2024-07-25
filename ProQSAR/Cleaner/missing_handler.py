@@ -5,6 +5,7 @@ from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
 from sklearn.linear_model import BayesianRidge
 from typing import Tuple, Optional, List
 import pickle
+import os
 
 
 class MissingHandler:
@@ -160,16 +161,19 @@ class MissingHandler:
         - pd.DataFrame: The transformed (imputed) DataFrame.
         """
         # Load necessary objects
-        with open(f"{save_dir}/binary_cols.pkl", "rb") as file:
-            binary_cols = pickle.load(file)
-        with open(f"{save_dir}/binary_imputer.pkl", "rb") as file:
-            binary_imputer = pickle.load(file)
         with open(f"{save_dir}/non_binary_imputer.pkl", "rb") as file:
             non_binary_imputer = pickle.load(file)
         with open(f"{save_dir}/columns_to_exclude.pkl", "rb") as file:
             columns_to_exclude = pickle.load(file)
         with open(f"{save_dir}/drop_cols.pkl", "rb") as file:
             drop_cols = pickle.load(file)
+        if os.path.exists(f"{save_dir}/binary_cols.pkl"):
+            with open(f"{save_dir}/binary_cols.pkl", "rb") as file:
+                binary_cols = pickle.load(file)
+            with open(f"{save_dir}/binary_imputer.pkl", "rb") as file:
+                binary_imputer = pickle.load(file)
+        else:
+            binary_cols = []
 
         data_to_impute = data.drop(columns=columns_to_exclude)
         data_to_impute.drop(columns=drop_cols, inplace=True, errors="ignore")
@@ -194,3 +198,17 @@ class MissingHandler:
             [data[columns_to_exclude], imputed_data_binary, imputed_data_non_binary],
             axis=1,
         )
+
+    def fit_transform(self, data: pd.DataFrame, save_dir: str) -> pd.DataFrame:
+        """
+        Fits the imputation models to the data and transforms the data using the fitted models.
+
+        Parameters:
+        - data (pd.DataFrame): The data to fit and transform.
+        - save_dir (str): Directory where the imputers and configuration files are stored.
+
+        Returns:
+        - pd.DataFrame: The transformed (imputed) DataFrame.
+        """
+        self.fit(data)
+        return self.transform(data, save_dir)
