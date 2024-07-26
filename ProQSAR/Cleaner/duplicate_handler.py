@@ -2,7 +2,6 @@ import pandas as pd
 import pickle
 from typing import Optional
 
-
 class DuplicateHandler:
     def __init__(
         self,
@@ -59,9 +58,8 @@ class DuplicateHandler:
 
         # Drop duplicated rows & columns
         temp_data = data.drop(columns=cols_to_exclude)
-        dup_rows = temp_data.duplicated()
-        data = data[~dup_rows].reset_index(drop=True)
-        data = data.drop(columns=dup_cols)
+        dup_rows = temp_data.index[temp_data.duplicated()].tolist()
+        data = data.drop(index=dup_rows, columns=dup_cols)
 
         return data
 
