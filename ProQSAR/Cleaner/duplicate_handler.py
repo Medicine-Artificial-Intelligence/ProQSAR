@@ -2,6 +2,7 @@ import pandas as pd
 import pickle
 from typing import Optional
 
+
 class DuplicateHandler:
     def __init__(
         self,
