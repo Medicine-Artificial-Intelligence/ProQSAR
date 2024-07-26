@@ -6,6 +6,7 @@ import shutil
 import os
 from ProQSAR.Cleaner.duplicate_handler import DuplicateHandler
 
+
 def create_sample_data() -> pd.DataFrame:
     """
     Creates a sample DataFrame with duplicate rows and columns.
@@ -13,15 +14,16 @@ def create_sample_data() -> pd.DataFrame:
     Returns:
     - pd.DataFrame: The sample data with duplicates.
     """
-    data = pd.DataFrame({"ID": range(1, 6), 
-                    "Activity": np.random.rand(5),
-                    "Feature1": np.random.choice([0, 1], 5),
-                    "Feature2": np.random.choice([0, 1], 5),
-                    "Feature3": np.random.choice([0, 1], 5),
-                    "Feature4": np.random.rand(5),
-                    "Feature5": np.random.rand(5),
-                    "Feature6": np.random.rand(5)
-                    })
+    data = pd.DataFrame({
+        "ID": range(1, 6),
+        "Activity": np.random.rand(5),
+        "Feature1": np.random.choice([0, 1], 5),
+        "Feature2": np.random.choice([0, 1], 5),
+        "Feature3": np.random.choice([0, 1], 5),
+        "Feature4": np.random.rand(5),
+        "Feature5": np.random.rand(5),
+        "Feature6": np.random.rand(5)
+    })
     # Add duplicate rows
     data = pd.concat([data, data.iloc[0:2]], ignore_index=True)
     # Add duplicate columns
@@ -29,6 +31,7 @@ def create_sample_data() -> pd.DataFrame:
     data["Feature5"] = data["Feature6"]
 
     return data
+
 
 class TestDuplicateHandler(unittest.TestCase):
 
@@ -74,7 +77,7 @@ class TestDuplicateHandler(unittest.TestCase):
 
         self.assertNotIn("Feature2", transformed_test_data.columns)
         self.assertNotIn("Feature6", transformed_test_data.columns)
-        self.assertEqual(len(transformed_test_data), 5)  # One duplicate row should be removed
+        self.assertEqual(len(transformed_test_data), 5)
 
     def test_fit_transform(self):
         """
@@ -84,13 +87,17 @@ class TestDuplicateHandler(unittest.TestCase):
 
         self.assertNotIn("Feature2", transformed_train_data.columns)
         self.assertNotIn("Feature6", transformed_train_data.columns)
-        self.assertEqual(len(transformed_train_data), 5)  # One duplicate row should be removed
+        self.assertEqual(len(transformed_train_data), 5)
 
     def test_no_duplicates(self):
-        data_no_duplicates = self.train_data.drop(index=[5, 6],columns=["Feature2", "Feature6"])
+        """
+        Test the DuplicateHandler with data that has no duplicates.
+        """
+        data_no_duplicates = self.train_data.drop(index=[5, 6], columns=["Feature2", "Feature6"])
         transformed_data = self.handler.fit_transform(data_no_duplicates, self.save_dir)
 
         self.assertEqual(transformed_data.shape, data_no_duplicates.shape)
+
 
 if __name__ == "__main__":
     unittest.main()
