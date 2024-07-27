@@ -99,7 +99,7 @@ class TestMissingHandler(unittest.TestCase):
         handler = MissingHandler(
             id_col="ID", activity_col="Activity", save_dir=self.save_dir
         )
-        imputed_train_data = handler.fit_transform(self.train_data, self.save_dir)
+        imputed_train_data = handler.fit_transform(self.train_data)
         self.assertFalse(imputed_train_data.isnull().any().any())
 
     def test_knn_imputation_strategy(self):
@@ -113,7 +113,7 @@ class TestMissingHandler(unittest.TestCase):
             n_neighbors=3,
             save_dir=self.save_dir,
         )
-        imputed_train_data = handler.fit_transform(self.train_data, self.save_dir)
+        imputed_train_data = handler.fit_transform(self.train_data)
         self.assertFalse(imputed_train_data.isnull().any().any())
 
     def test_median_imputation_strategy(self):
@@ -126,7 +126,7 @@ class TestMissingHandler(unittest.TestCase):
             imputation_strategy="median",
             save_dir=self.save_dir,
         )
-        imputed_train_data = handler.fit_transform(self.train_data, self.save_dir)
+        imputed_train_data = handler.fit_transform(self.train_data)
         self.assertFalse(imputed_train_data.isnull().any().any())
 
     def test_mode_imputation_strategy(self):
@@ -139,7 +139,7 @@ class TestMissingHandler(unittest.TestCase):
             imputation_strategy="mode",
             save_dir=self.save_dir,
         )
-        imputed_train_data = handler.fit_transform(self.train_data, self.save_dir)
+        imputed_train_data = handler.fit_transform(self.train_data)
         self.assertFalse(imputed_train_data.isnull().any().any())
 
     def test_mice_imputation_strategy(self):
@@ -152,7 +152,7 @@ class TestMissingHandler(unittest.TestCase):
             imputation_strategy="mice",
             save_dir=self.save_dir,
         )
-        imputed_train_data = handler.fit_transform(self.train_data, self.save_dir)
+        imputed_train_data = handler.fit_transform(self.train_data)
         self.assertFalse(imputed_train_data.isnull().any().any())
 
     def test_dropping_high_missing_columns(self):
@@ -165,7 +165,7 @@ class TestMissingHandler(unittest.TestCase):
             missing_thresh=40,
             save_dir=self.save_dir,
         )
-        imputed_train_data = handler.fit_transform(self.train_data, self.save_dir)
+        imputed_train_data = handler.fit_transform(self.train_data)
         imputed_test_data = handler.transform(self.test_data, self.save_dir)
 
         self.assertEqual(len(imputed_train_data.columns), 10)
@@ -179,17 +179,52 @@ class TestMissingHandler(unittest.TestCase):
         """
         binary_cols = [f"Feature{i}" for i in range(1, 6)]
         train_no_binary = self.train_data.drop(columns=binary_cols)
-        test_no_binary = self.test_data.drop(columns=binary_cols)
 
         handler = MissingHandler(
             id_col="ID", activity_col="Activity", save_dir=self.save_dir
         )
 
-        imputed_train_data = handler.fit_transform(train_no_binary, self.save_dir)
-        imputed_test_data = handler.transform(test_no_binary, self.save_dir)
+        imputed_train_data = handler.fit_transform(train_no_binary)
 
         self.assertFalse(imputed_train_data.isnull().any().any())
-        self.assertFalse(imputed_test_data.isnull().any().any())
+
+    def test_only_binary_columns(self):
+        """
+        Tests the fit_transform method when there are only binary columns.
+        """
+        non_binary_cols = [f"Feature{i}" for i in range(6, 11)]
+        train_only_binary = self.train_data.drop(columns=non_binary_cols)
+
+        handler = MissingHandler(
+            id_col="ID", activity_col="Activity", save_dir=self.save_dir
+        )
+
+        imputed_train_data = handler.fit_transform(train_only_binary)
+
+        self.assertFalse(imputed_train_data.isnull().any().any())
+
+    def test_fit_unsupported_imputer(self):
+        """
+        Tests the fit method with an unsupported imputation strategy.
+        """
+        handler = MissingHandler(
+            id_col="ID",
+            activity_col="Activity",
+            imputation_strategy="unsupported_imputer",
+            save_dir=self.save_dir,
+        )
+        with self.assertRaises(ValueError):
+            handler.fit(self.train_data)
+
+    def test_transform_without_fit(self):
+        """
+        Tests the transform method without fitting the imputation models first.
+        """
+        handler = MissingHandler(
+            id_col="ID", activity_col="Activity", save_dir=self.save_dir
+        )
+        with self.assertRaises(FileNotFoundError):
+            handler.transform(self.test_data, self.save_dir)
 
 
 if __name__ == "__main__":
