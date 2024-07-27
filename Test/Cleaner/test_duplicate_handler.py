@@ -14,16 +14,18 @@ def create_sample_data() -> pd.DataFrame:
     Returns:
     - pd.DataFrame: The sample data with duplicates.
     """
-    data = pd.DataFrame({
-        "ID": range(1, 6),
-        "Activity": np.random.rand(5),
-        "Feature1": np.random.choice([0, 1], 5),
-        "Feature2": np.random.choice([0, 1], 5),
-        "Feature3": np.random.choice([0, 1], 5),
-        "Feature4": np.random.rand(5),
-        "Feature5": np.random.rand(5),
-        "Feature6": np.random.rand(5)
-    })
+    data = pd.DataFrame(
+        {
+            "ID": range(1, 6),
+            "Activity": np.random.rand(5),
+            "Feature1": np.random.choice([0, 1], 5),
+            "Feature2": np.random.choice([0, 1], 5),
+            "Feature3": np.random.choice([0, 1], 5),
+            "Feature4": np.random.rand(5),
+            "Feature5": np.random.rand(5),
+            "Feature6": np.random.rand(5),
+        }
+    )
     # Add duplicate rows
     data = pd.concat([data, data.iloc[0:2]], ignore_index=True)
     # Add duplicate columns
@@ -83,7 +85,7 @@ class TestDuplicateHandler(unittest.TestCase):
         """
         Test the fit_transform method of DuplicateHandler.
         """
-        transformed_train_data = self.handler.fit_transform(self.train_data, self.save_dir)
+        transformed_train_data = self.handler.fit_transform(self.train_data)
 
         self.assertNotIn("Feature2", transformed_train_data.columns)
         self.assertNotIn("Feature6", transformed_train_data.columns)
@@ -93,10 +95,19 @@ class TestDuplicateHandler(unittest.TestCase):
         """
         Test the DuplicateHandler with data that has no duplicates.
         """
-        data_no_duplicates = self.train_data.drop(index=[5, 6], columns=["Feature2", "Feature6"])
-        transformed_data = self.handler.fit_transform(data_no_duplicates, self.save_dir)
+        data_no_duplicates = self.train_data.drop(
+            index=[5, 6], columns=["Feature2", "Feature6"]
+        )
+        transformed_data = self.handler.fit_transform(data_no_duplicates)
 
         self.assertEqual(transformed_data.shape, data_no_duplicates.shape)
+
+    def test_transform_without_fit(self):
+        """
+        Tests the transform method without fitting first.
+        """
+        with self.assertRaises(FileNotFoundError):
+            self.handler.transform(self.test_data, self.save_dir)
 
 
 if __name__ == "__main__":
