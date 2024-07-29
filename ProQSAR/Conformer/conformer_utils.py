@@ -1,9 +1,13 @@
 import logging
 from rdkit import Chem
 from rdkit.Chem.rdDistGeom import ETDG, ETKDG, ETKDGv2, ETKDGv3, srETKDGv3, KDG
-from typing import Any
+from typing import Type, Dict, Any
 
 logger = logging.getLogger(__name__)
+
+
+# Cache for instantiated embedding methods to avoid redundant initializations
+_embedding_method_cache: Dict[str, Any] = {}
 
 
 def _get_embedding_method(force_field_method: str = "ETKDG") -> Any:
@@ -12,35 +16,38 @@ def _get_embedding_method(force_field_method: str = "ETKDG") -> Any:
 
     Parameters:
     - force_field_method (str): The force field method identifier. Defaults to 'ETKDG'.
-        Supported values are 'ETDG', 'ETKDG', 'ETKDGv2', 'ETKDGv3', 'srETKDGv3', and 'KDG'.
+        Supported values: 'ETDG', 'ETKDG', 'ETKDGv2', 'ETKDGv3', 'srETKDGv3', 'KDG'.
 
     Returns:
     - Any: An instance of the specified RDKit embedding method class.
-
-    Raises:
-    - KeyError: If the specified force field method is not supported.
-
-    Example:
-    >>> embedding_method = _get_embedding_method('ETKDG')
-    >>> print(type(embedding_method))
-    <class 'rdkit.Chem.rdDistGeom.ETKDG'>
     """
-    _embedding_methods = {
-        "ETDG": ETDG(),
-        "ETKDG": ETKDG(),
-        "ETKDGv2": ETKDGv2(),
-        "ETKDGv3": ETKDGv3(),
-        "srETKDGv3": srETKDGv3(),
-        "KDG": KDG(),
+    global _embedding_method_cache
+
+    # Define available embedding methods
+    _embedding_methods: Dict[str, Type[Any]] = {
+        "ETDG": ETDG,
+        "ETKDG": ETKDG,
+        "ETKDGv2": ETKDGv2,
+        "ETKDGv3": ETKDGv3,
+        "srETKDGv3": srETKDGv3,
+        "KDG": KDG,
     }
 
+    # Check if method is supported, else log an error and default to ETKDGv3
     if force_field_method not in _embedding_methods:
-        raise KeyError(
-            f"Unsupported force field method '{force_field_method}'."
-            + " Supported methods are: {list(_embedding_methods.keys())}."
+        logger.error(
+            f"Unsupported force field method '{force_field_method}'. "
+            f"Supported methods are: {list(_embedding_methods.keys())}. Using default 'ETKDGv3'."
         )
+        force_field_method = "ETKDGv3"
 
-    return _embedding_methods[force_field_method]
+    # Cache instantiation of embedding methods to improve performance
+    if force_field_method not in _embedding_method_cache:
+        _embedding_method_cache[force_field_method] = _embedding_methods[
+            force_field_method
+        ]()
+
+    return _embedding_method_cache[force_field_method]
 
 
 def _get_num_conformers_from_molecule_size(
@@ -60,11 +67,19 @@ def _get_num_conformers_from_molecule_size(
     Defaults to 0.04.
 
     Returns:
-        int: Calculated number of conformers to generate.
+    - int: The calculated number of conformers to generate, adhering to specified bounds.
     """
     num_atoms = molecule.GetNumAtoms()
-    suggested_num = max_num_conformers - int(num_atoms * decr_num_conformers)
-    return max(min_num_conformers, min(max_num_conformers, suggested_num))
+    decrement = int(num_atoms * decr_num_conformers)
+    suggested_num = max_num_conformers - decrement
+
+    # Ensuring the result is within the specified bounds
+    if suggested_num < min_num_conformers:
+        return min_num_conformers
+    elif suggested_num > max_num_conformers:
+        return max_num_conformers
+    else:
+        return suggested_num
 
 
 def _get_max_iter_from_molecule_size(

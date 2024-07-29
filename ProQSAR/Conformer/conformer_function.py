@@ -244,43 +244,96 @@ def get_lowest_energy_conformer(
 #     return force_field.CalcEnergy()
 
 
+# def compute_force_field_energy(
+#     molecule: Chem.Mol, conformer_id: int, force_field_method: str = "UFF"
+# ) -> float:
+#     """
+#     Computes the force field energy for a specified conformer of an RDKit molecule object.
+
+#     Parameters:
+#     - molecule (Chem.Mol): The molecule to calculate energy for.
+#     - conformer_id (int): The ID of the conformer whose energy needs to be computed.
+#     - force_field_method (str): The force field method to use, defaults to 'UFF'.
+
+#     Returns:
+#     - float: The energy of the specified conformer.
+
+#     Raises:
+#     - RuntimeError: If there is an issue initializing the force field.
+#     """
+#     if force_field_method == "MMFF":
+#         force_field_method = "MMFF94"
+
+#     if force_field_method.startswith("MMFF"):
+#         mmff_properties = rdForceFieldHelpers.MMFFGetMoleculeProperties(
+#             molecule, mmffVariant=force_field_method
+#         )
+#         if not mmff_properties:
+#             raise RuntimeError(
+#                 f"Failed to initialize MMFF properties for {force_field_method}."
+#             )
+#         force_field = rdForceFieldHelpers.MMFFGetMoleculeForceField(
+#             molecule, mmff_properties, confId=conformer_id
+#         )
+#     else:
+#         force_field = rdForceFieldHelpers.UFFGetMoleculeForceField(
+#             molecule, confId=conformer_id
+#         )
+
+#     if not force_field:
+#         raise RuntimeError("Failed to initialize force field.")
+
+#     return force_field.CalcEnergy()
+
+
+from rdkit import Chem
+from rdkit.Chem import rdForceFieldHelpers
+
 def compute_force_field_energy(
     molecule: Chem.Mol, conformer_id: int, force_field_method: str = "UFF"
 ) -> float:
     """
-    Computes the force field energy for a specified conformer of an RDKit molecule object.
+    Computes the force field energy for a specified conformer of an RDKit molecule object using
+    either UFF or MMFF force fields.
 
     Parameters:
     - molecule (Chem.Mol): The molecule to calculate energy for.
     - conformer_id (int): The ID of the conformer whose energy needs to be computed.
-    - force_field_method (str): The force field method to use, defaults to 'UFF'.
+    - force_field_method (str): The force field method to use, defaults to 'UFF'. 'MMFF' will be interpreted as 'MMFF94'.
 
     Returns:
     - float: The energy of the specified conformer.
 
     Raises:
-    - RuntimeError: If there is an issue initializing the force field.
+    - RuntimeError: If there is an issue initializing the force field or if the conformer ID is invalid.
+    - ValueError: If the force field method is not supported.
     """
     if force_field_method == "MMFF":
         force_field_method = "MMFF94"
 
-    if force_field_method.startswith("MMFF"):
-        mmff_properties = rdForceFieldHelpers.MMFFGetMoleculeProperties(
-            molecule, mmffVariant=force_field_method
-        )
-        if not mmff_properties:
-            raise RuntimeError(
-                f"Failed to initialize MMFF properties for {force_field_method}."
+    try:
+        if force_field_method.startswith("MMFF"):
+            mmff_properties = rdForceFieldHelpers.MMFFGetMoleculeProperties(
+                molecule, mmffVariant=force_field_method
             )
-        force_field = rdForceFieldHelpers.MMFFGetMoleculeForceField(
-            molecule, mmff_properties, confId=conformer_id
-        )
-    else:
-        force_field = rdForceFieldHelpers.UFFGetMoleculeForceField(
-            molecule, confId=conformer_id
-        )
+            if not mmff_properties:
+                raise RuntimeError(
+                    f"Failed to initialize MMFF properties for {force_field_method}."
+                )
+            force_field = rdForceFieldHelpers.MMFFGetMoleculeForceField(
+                molecule, mmff_properties, confId=conformer_id
+            )
+        elif force_field_method == "UFF":
+            force_field = rdForceFieldHelpers.UFFGetMoleculeForceField(
+                molecule, confId=conformer_id
+            )
+        else:
+            raise ValueError(f"Unsupported force field method: {force_field_method}")
 
-    if not force_field:
-        raise RuntimeError("Failed to initialize force field.")
+        if not force_field:
+            raise RuntimeError("Failed to initialize force field.")
 
-    return force_field.CalcEnergy()
+        return force_field.CalcEnergy()
+    except Exception as e:
+        raise RuntimeError(f"Error computing force field energy: {str(e)}")
+
