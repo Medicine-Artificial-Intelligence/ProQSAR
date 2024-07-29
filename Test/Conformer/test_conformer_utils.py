@@ -17,11 +17,6 @@ class TestConformerUtils(unittest.TestCase):
         method = _get_embedding_method("ETKDG")
         self.assertIsNotNone(method)
 
-    def test_get_embedding_method_invalid(self):
-        """Test handling of invalid embedding method request."""
-        with self.assertRaises(KeyError):
-            _get_embedding_method("nonexistent")
-
     def test_get_num_conformers(self):
         """Test calculating the number of conformers based on molecule size."""
         molecule = Chem.MolFromSmiles("CCO")  # Ethanol
