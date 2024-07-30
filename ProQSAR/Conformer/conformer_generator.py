@@ -1,178 +1,251 @@
 import pandas as pd
 from rdkit import Chem
+from ProQSAR.Conformer._embedding import Embeddings
+from ProQSAR.Conformer._force_field import ForceField
+from typing import Any, Dict, Optional, Union
+import logging
 from joblib import Parallel, delayed
-from typing import Dict, Any, List, Union, Optional
 
-from ProQSAR.Conformer import conformer_function
+logger = logging.getLogger(__name__)
 
 
 class ConformerGenerator:
     """
-    A class used to generate molecular conformers with configurable settings.
-
-    Parameters
-    ----------
-    num_conformer_candidates : Optional[Union[str, int]]
-        Number of conformers to generate, with 'auto' to allow automatic determination.
-    embedding_method : str
-        The embedding method to use.
-    force_field_method : str
-        The force field method to use.
-    max_iter : Optional[Union[str, int]]
-        Maximum number of iterations for generating a conformer.
-    keep_hydrogens : bool
-        Indicates whether to keep the hydrogens in the selected conformer.
+    A class to handle the generation and optimization of conformers for molecules.
     """
 
-    def __init__(
-        self,
-        num_conformer_candidates: Optional[Union[str, int]] = "auto",
-        embedding_method: str = "ETKDGv2",
-        force_field_method: str = "MMFF94",
-        max_iter: Optional[Union[str, int]] = "auto",
-        keep_hydrogens: bool = False,
-    ):
-        self.num_conformer_candidates = num_conformer_candidates
-        self.embedding_method = embedding_method
-        self.force_field_method = force_field_method
-        self.max_iter = max_iter
-        self.keep_hydrogens = keep_hydrogens
+    def __init__(self) -> None:
+        """
+        Initializes the ConformerGenerator instance.
+        """
+        pass
 
     @staticmethod
-    def gen_conformers(
+    def _mol_process(
         molecule: Chem.Mol,
-        num_conformer_candidates: Optional[Union[str, int]] = "auto",
-        embedding_method: str = "ETKDGv2",
-        force_field_method: str = "MMFF94",
-        max_iter: Optional[Union[str, int]] = "auto",
-        keep_hydrogens: bool = False,
-    ) -> Optional[Chem.Mol]:
+        num_conformers: Optional[Union[int, str]] = "auto",
+        embedding_method: str = "ETKDGv3",
+        num_threads: int = 1,
+        random_coords_threshold: int = 100,
+        random_seed: int = 42,
+        force_field_method: Optional[str] = "MMFF94",
+        max_iter: Optional[Union[int, str]] = "auto",
+        return_energies: bool = False,
+        **kwargs: Any
+    ) -> tuple[Chem.Mol, float]:
         """
-        Generates a conformer for the specified RDKit molecule using provided embedding and force field methods.
+        Processes a molecule to generate and minimize conformers.
 
         Parameters:
-        - molecule (Chem.Mol): The molecule for which to generate a conformer.
-        - num_conformer_candidates (Optional[Union[str, int]]): The number or strategy ('auto') to determine
-        how many conformer candidates to consider during generation. Defaults to 'auto'.
-        - embedding_method (str): The molecular embedding method to use. Defaults to 'ETKDGv2'.
-        - force_field_method (str): The force field method to apply for energy minimization. Defaults to 'MMFF94'.
-        - max_iter (Optional[Union[str, int]]): The maximum number of iterations for the force field minimization.
-        Can be set to 'auto' for automatic determination based on the molecule size. Defaults to 'auto'.
-        - keep_hydrogens (bool): Specifies whether to keep hydrogen atoms attached in the final conformer.
-        Defaults to False, which means hydrogens are removed.
+        - molecule (Chem.Mol): The RDKit molecule object.
+        - num_conformers (Optional[Union[int, str]]): Number of conformers to generate or
+        'auto'. Defaults to 'auto'.
+        - embedding_method (str): Method for embedding. Defaults to 'ETKDGv3'.
+        - num_threads (int): Number of threads to use. Defaults to 1.
+        - random_coords_threshold (int): Threshold for random coordinates.
+        Defaults to 100.
+        - random_seed (int): Seed for random number generation. Defaults to 42.
+        - force_field_method (Optional[str]): Force field method for minimization.
+        Defaults to 'MMFF94'.
+        - max_iter (Optional[Union[int, str]]): Maximum iterations for minimization
+        or 'auto'. Defaults to 'auto'.
+        - return_energies (bool): Whether to return energies. Defaults to False.
+        - **kwargs (Any): Additional parameters for minimization.
 
         Returns:
-        - Optional[Chem.Mol]: The generated conformer as an RDKit Mol object, or None if the input is invalid.
-
-        Raises:
-        - ValueError: If the input is not a valid RDKit Mol object.
+        - tuple[Chem.Mol, float]: The minimized molecule and its energy.
         """
-        if not isinstance(molecule, Chem.Mol):
-            raise ValueError("Input must be a Chem.Mol object.")
+        try:
+            embed = Embeddings.mol_embed(
+                molecule,
+                num_conformers,
+                embedding_method,
+                num_threads,
+                random_coords_threshold,
+                random_seed,
+            )
+            minimize = ForceField.force_field_minimization(
+                embed,
+                force_field_method,
+                max_iter,
+                return_energies,
+                num_threads,
+                **kwargs
+            )
+            minimized_mol = ForceField.get_lowest_energy_conformer(
+                minimize, force_field_method
+            )
+            minimized_energy = ForceField.compute_force_field_energy(
+                minimized_mol, 0, force_field_method
+            )
+            logger.info("Successfully processed molecule: %s", molecule)
+            return minimized_mol, minimized_energy
+        except Exception as e:
+            logger.error("Error in _mol_process: %s", str(e))
+            raise
 
-        molecule = Chem.AddHs(molecule)
-        molecule = conformer_function.mol_embed(
-            molecule, num_conformer_candidates, embedding_method
-        )
-        molecule = conformer_function.force_field_minimization(
-            molecule, force_field_method, max_iter
-        )
-        molecule = conformer_function.get_lowest_energy_conformer(
-            molecule, force_field_method
-        )
+    @staticmethod
+    def _smiles_process(
+        smiles: str,
+        num_conformers: Optional[Union[int, str]] = "auto",
+        embedding_method: str = "ETKDGv3",
+        num_threads: int = 1,
+        random_coords_threshold: int = 100,
+        random_seed: int = 42,
+        force_field_method: Optional[str] = "MMFF94",
+        max_iter: Optional[Union[int, str]] = "auto",
+        return_energies: bool = False,
+        **kwargs: Any
+    ) -> tuple[Optional[Chem.Mol], Optional[float]]:
+        """
+        Processes a SMILES string to generate and minimize conformers.
 
-        if not keep_hydrogens:
-            molecule = Chem.RemoveHs(molecule)
+        Parameters:
+        - smiles (str): The SMILES representation of the molecule.
+        - num_conformers (Optional[Union[int, str]]): Number of conformers to generate or
+        'auto'. Defaults to 'auto'.
+        - embedding_method (str): Method for embedding. Defaults to 'ETKDGv3'.
+        - num_threads (int): Number of threads to use. Defaults to 1.
+        - random_coords_threshold (int): Threshold for random coordinates.
+        Defaults to 100.
+        - random_seed (int): Seed for random number generation. Defaults to 42.
+        - force_field_method (Optional[str]): Force field method for minimization.
+        Defaults to 'MMFF94'.
+        - max_iter (Optional[Union[int, str]]): Maximum iterations for minimization
+        or 'auto'. Defaults to 'auto'.
+        - return_energies (bool): Whether to return energies. Defaults to False.
+        - **kwargs (Any): Additional parameters for minimization.
 
-        return molecule
+        Returns:
+        - tuple[Optional[Chem.Mol], Optional[float]]: The minimized molecule and its
+        energy. Returns (None, None) if the SMILES is invalid or an error occurs.
+        """
+        try:
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is None:
+                logger.error("Invalid SMILES string: %s", smiles)
+                return None, None
+
+            return ConformerGenerator._mol_process(
+                mol,
+                num_conformers,
+                embedding_method,
+                num_threads,
+                random_coords_threshold,
+                random_seed,
+                force_field_method,
+                max_iter,
+                return_energies,
+                **kwargs
+            )
+        except Exception as e:
+            logger.error("Error in _smiles_process: %s", str(e))
+            return None, None
 
     @staticmethod
     def _dict_process(
-        input_dict: Dict[Any, Any],
-        mol_column: str = "mol",
-        num_conformer_candidates: Optional[Union[str, int]] = "auto",
-        embedding_method: str = "ETKDGv2",
-        force_field_method: str = "MMFF94",
-        max_iter: Optional[Union[str, int]] = "auto",
-        keep_hydrogens: bool = False,
-    ) -> Dict[Any, Any]:
+        input_dict: Dict[str, Any],
+        smi_col: str = "SMILES",
+        num_conformers: Optional[Union[int, str]] = "auto",
+        embedding_method: str = "ETKDGv3",
+        num_threads: int = 1,
+        random_coords_threshold: int = 100,
+        random_seed: int = 42,
+        force_field_method: Optional[str] = "MMFF94",
+        max_iter: Optional[Union[int, str]] = "auto",
+        return_energies: bool = False,
+        **kwargs: Any
+    ) -> Dict[str, Any]:
         """
-        Processes a dictionary of molecular data to generate conformers for each molecule,
-        storing the results in a new key within the same dictionary.
+        Processes an SMILES string from the input dictionary to compute molecular conformers and possibly calculate
+        energy differences. The results, including the energy and conformer, are added back to the input dictionary.
 
         Parameters:
-        - input_dict (Dict[Any, Any]): A dictionary where each key corresponds to a data identifier and
-        the value is an RDKit molecule object.
-        - mol_column (str): The key under which the RDKit molecule objects are stored in the dictionary.
-        Defaults to 'mol'.
-        - num_conformer_candidates (Optional[Union[str, int]]): Specifies the number of conformer
-        candidates or 'auto' to use an automatic determination. Defaults to 'auto'.
-        - embedding_method (str): Embedding method for generating the molecular geometry. Defaults to 'ETKDGv2'.
-        - force_field_method (str): Method for force field energy minimization. Defaults to 'MMFF94'.
-        - max_iter (Optional[Union[str, int]]): Maximum number of iterations for energy minimization.
-        Defaults to 'auto'.
-        - keep_hydrogens (bool): Whether to retain hydrogens in the final conformers. Defaults to False.
+        - input_dict (Dict[str, Any]): Input dictionary containing molecular data.
+        - smi_col (str): Key in dictionary for SMILES string. Defaults to 'SMILES'.
+        - num_conformers (Optional[Union[int, str]]): Number of conformers to generate or 'auto'.
+        - embedding_method (str): Method for molecular embedding.
+        - num_threads (int): Number of threads to use for calculations.
+        - random_coords_threshold (int): Threshold for using random coordinates in calculations.
+        - random_seed (int): Seed for random number generator.
+        - force_field_method (Optional[str]): Force field method for energy minimization.
+        - max_iter (Optional[Union[int, str]]): Maximum iterations for minimization or 'auto'.
+        - return_energies (bool): Flag to decide if energies should be returned.
+        - **kwargs (Any): Additional keyword arguments for other processing needs.
 
         Returns:
-        - Dict[Any, Any]: A modified dictionary similar to the input but with an additional key ('mol_conf')
-        for each entry containing the generated conformer.
-
-        This method modifies the input dictionary in-place, adding a new key with the generated conformers.
+        - Dict[str, Any]: The input dictionary enhanced with 'energy' and 'conformer' data.
         """
-        result_dict = input_dict.copy()
-        result_dict["mol_conf"] = ConformerGenerator.gen_conformers(
-            input_dict[mol_column],
-            num_conformer_candidates,
+        data = input_dict.copy()
+        smi = data.get(smi_col)
+        if smi is None:
+            data["energy"] = None
+            data["conformer"] = None
+            return data
+
+        minimized_mol, minimized_energy = ConformerGenerator._smiles_process(
+            smi,
+            num_conformers,
             embedding_method,
+            num_threads,
+            random_coords_threshold,
+            random_seed,
             force_field_method,
             max_iter,
-            keep_hydrogens,
+            return_energies,
+            **kwargs
         )
-        return result_dict
+        data["energy"] = minimized_energy
+        data["conformer"] = minimized_mol
+        return data
 
-    def _conformers_parallel(
-        self,
-        data: Union[pd.DataFrame, List[Dict[Any, Any]]],
-        mol_column: str = "mol",
-        n_jobs: int = 4,
-        verbose: int = 0,
-    ) -> Union[pd.DataFrame, List[Dict[Any, Any]]]:
+    @classmethod
+    def parallel_process(
+        cls,
+        input_data: Union[list, pd.DataFrame],
+        smi_col: str = "SMILES",
+        num_conformers: Optional[Union[int, str]] = "auto",
+        embedding_method: str = "ETKDGv3",
+        num_threads: int = 1,
+        random_coords_threshold: int = 100,
+        random_seed: int = 42,
+        force_field_method: Optional[str] = "MMFF94",
+        max_iter: Optional[Union[int, str]] = "auto",
+        return_energies: bool = False,
+        n_jobs: int = -1,  # Use all available cores
+        **kwargs: Any
+    ) -> list:
         """
-        Generates conformers in parallel for molecules contained within a pandas DataFrame or
-        a list of dictionaries.
+        Processes a list or DataFrame of molecular data in parallel using multiple cores,
+        each entry processed to compute energy difference based on SMILES strings.
 
         Parameters:
-        - data (Union[pd.DataFrame, List[Dict[Any, Any]]]): Data structure containing molecules
-        for which conformers are to be generated.
-        - mol_column (str): Name of the column or key in the DataFrame/dictionary where
-        RDKit molecules are stored. Default is 'mol'.
-        - n_jobs (int): Number of parallel jobs to run. Default is 4.
-        - verbose (int): Verbosity level for parallel processing. Default is 0.
+        - input_data (Union[list, pd.DataFrame]): List of dictionaries or a DataFrame containing molecular data.
+        - smi_col (str): Column or key for the SMILES string.
+        - num_conformers, embedding_method, num_threads, random_coords_threshold,
+        random_seed, force_field_method, max_iter, return_energies as in _dict_process.
+        - n_jobs (int): Number of jobs to run in parallel. -1 uses all cores.
 
         Returns:
-        - Union[pd.DataFrame, List[Dict[Any, Any]]]: A new DataFrame or list of dictionaries,
-        each with an additional key/column containing the generated conformers.
+        - list: A list of floats representing the energy differences or NaNs for each input.
         """
-        if isinstance(data, pd.DataFrame):
-            result_data = data.copy()
-            molecules = result_data[mol_column].tolist()
-        elif isinstance(data, list):
-            result_data = data
-            molecules = [mol[mol_column] for mol in result_data]
-        else:
-            raise ValueError(
-                "Input data must be a pandas DataFrame or a list of dictionaries."
+        if isinstance(input_data, pd.DataFrame):
+            input_data = input_data.to_dict("records")
+
+        results = Parallel(n_jobs=n_jobs)(
+            delayed(cls._dict_process)(
+                input_dict=record,
+                smi_col=smi_col,
+                num_conformers=num_conformers,
+                embedding_method=embedding_method,
+                num_threads=num_threads,
+                random_coords_threshold=random_coords_threshold,
+                random_seed=random_seed,
+                force_field_method=force_field_method,
+                max_iter=max_iter,
+                return_energies=return_energies,
+                **kwargs
             )
-
-        results = Parallel(n_jobs=n_jobs, verbose=verbose)(
-            delayed(self.gen_conformers)(mol) for mol in molecules
+            for record in input_data
         )
-
-        # Update the original data structure with results
-        for i, mol in enumerate(result_data):
-            mol["mol_conf"] = results[i]
-
-        if isinstance(data, pd.DataFrame):
-            return pd.DataFrame(result_data)
-        else:
-            return result_data
+        return results
