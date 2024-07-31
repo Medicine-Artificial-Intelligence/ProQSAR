@@ -22,6 +22,7 @@ def create_sample_data() -> pd.DataFrame:
     pd.DataFrame
         A sample DataFrame with random and sequential data.
     """
+    np.random.seed(42)
     data = pd.DataFrame(
         {
             "ID": range(1, 21),

@@ -14,6 +14,7 @@ def create_sample_data() -> pd.DataFrame:
     Returns:
     - pd.DataFrame: The sample data with duplicates.
     """
+    np.random.seed(42)
     data = pd.DataFrame(
         {
             "ID": range(1, 6),

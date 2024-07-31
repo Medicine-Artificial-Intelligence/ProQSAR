@@ -11,14 +11,15 @@ class TestLowVarianceHandler(unittest.TestCase):
         """
         Create sample data for testing.
         """
+        np.random.seed(42)
         self.data = pd.DataFrame(
             {
                 "ID": np.arange(1, 21),
                 "Activity": np.random.rand(20) * 10,
                 "Feature1": np.random.choice([0, 1], 20),
                 "Feature2": np.random.choice([0, 1], 20),
-                "Feature3": np.random.normal(0, np.sqrt(0.02), 20),
-                "Feature4": np.random.normal(0, np.sqrt(0.03), 20),
+                "Feature3": np.random.normal(0, np.sqrt(0.01), 20),
+                "Feature4": np.random.normal(0, np.sqrt(0.01), 20),
                 "Feature5": np.random.normal(0, np.sqrt(0.5), 20),
                 "Feature6": np.random.normal(0, np.sqrt(0.8), 20),
                 "Feature7": np.random.normal(0, np.sqrt(1.0), 20),

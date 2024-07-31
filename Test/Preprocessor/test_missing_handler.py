@@ -14,6 +14,7 @@ def create_sample_data() -> pd.DataFrame:
     Returns:
     - pd.DataFrame: The generated DataFrame with missing values.
     """
+    np.random.seed(42)
     data = pd.DataFrame(
         {
             "ID": range(1, 21),
