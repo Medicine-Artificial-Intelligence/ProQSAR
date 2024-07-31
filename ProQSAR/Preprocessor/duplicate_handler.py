@@ -5,10 +5,7 @@ import os
 
 class DuplicateHandler:
     def __init__(
-        self, 
-        id_col: str, 
-        activity_col: str, 
-        save_dir: str = "Project/DuplicateHandler"
+        self, id_col: str, activity_col: str, save_dir: str = "Project/DuplicateHandler"
     ):
         """
         Initializes the DuplicateHandler with the necessary configuration.

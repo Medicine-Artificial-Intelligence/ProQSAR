@@ -39,7 +39,7 @@ class Rescaler:
         id_col: str,
         activity_col: str,
         scaler_method: str = "MinMaxScaler",
-        save_dir: str = "Project/Rescaler"
+        save_dir: str = "Project/Rescaler",
     ):
         """
         Constructs all the necessary attributes for the Rescaler object.

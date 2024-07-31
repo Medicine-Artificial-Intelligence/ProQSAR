@@ -15,7 +15,7 @@ class MissingHandler:
         missing_thresh: float = 40.0,
         imputation_strategy: str = "mean",
         n_neighbors: int = 5,
-        save_dir: str = "Project/MissingHandler"
+        save_dir: str = "Project/MissingHandler",
     ):
         """
         Initializes the MissingHandler with necessary configuration.
@@ -162,7 +162,9 @@ class MissingHandler:
             with open(f"{save_dir}/drop_cols.pkl", "rb") as file:
                 drop_cols = pickle.load(file)
         else:
-            raise FileNotFoundError("Imputation stategy must be fitted before transform.")
+            raise FileNotFoundError(
+                "Imputation stategy must be fitted before transform."
+            )
 
         binary_cols = []
         non_binary_imputer, binary_imputer = None, None
