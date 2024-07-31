@@ -4,7 +4,7 @@ import numpy as np
 import pickle
 import shutil
 import os
-from ProQSAR.Cleaner.duplicate_handler import DuplicateHandler
+from ProQSAR.Preprocessor.duplicate_handler import DuplicateHandler
 
 
 def create_sample_data() -> pd.DataFrame:

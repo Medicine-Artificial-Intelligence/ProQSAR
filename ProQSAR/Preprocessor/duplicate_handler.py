@@ -5,10 +5,10 @@ import os
 
 class DuplicateHandler:
     def __init__(
-        self,
-        id_col: str,
-        activity_col: str,
-        save_dir: str,
+        self, 
+        id_col: str, 
+        activity_col: str, 
+        save_dir: str = "Project/DuplicateHandler"
     ):
         """
         Initializes the DuplicateHandler with the necessary configuration.
@@ -16,7 +16,7 @@ class DuplicateHandler:
         Parameters:
         - id_col (str): The name of the column to be used as the identifier.
         - activity_col (str): The name of the column to be used for activity tracking.
-        - save_dir (Optional[str]): Directory to save the configuration; None if not saving.
+        - save_dir (str): Directory to save the configuration.
         """
         self.id_col = id_col
         self.activity_col = activity_col

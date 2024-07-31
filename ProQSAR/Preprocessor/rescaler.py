@@ -38,8 +38,8 @@ class Rescaler:
         self,
         id_col: str,
         activity_col: str,
-        save_dir: str,
         scaler_method: str = "MinMaxScaler",
+        save_dir: str = "Project/Rescaler"
     ):
         """
         Constructs all the necessary attributes for the Rescaler object.
@@ -50,10 +50,10 @@ class Rescaler:
             The column name representing the ID in the data.
         activity_col : str
             The column name representing the activity in the data.
-        save_dir : str
-            The directory where the scaler and column information will be saved.
         scaler_method : str, optional
             The method used for scaling (default is "MinMaxScaler").
+        save_dir : str, optional
+            The directory where the scaler and column information will be saved.
         """
         self.id_col = id_col
         self.activity_col = activity_col

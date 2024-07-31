@@ -10,7 +10,7 @@ from sklearn.preprocessing import (
     RobustScaler,
     FunctionTransformer,
 )
-from ProQSAR.Cleaner.rescaler import Rescaler
+from ProQSAR.Preprocessor.rescaler import Rescaler
 
 
 def create_sample_data() -> pd.DataFrame:

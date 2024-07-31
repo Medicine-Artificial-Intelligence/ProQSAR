@@ -4,7 +4,7 @@ import shutil
 import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
-from ProQSAR.Cleaner.missing_handler import MissingHandler
+from ProQSAR.Preprocessor.missing_handler import MissingHandler
 
 
 def create_sample_data() -> pd.DataFrame:
