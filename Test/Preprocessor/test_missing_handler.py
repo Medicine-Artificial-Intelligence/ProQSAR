@@ -78,9 +78,12 @@ class TestMissingHandler(unittest.TestCase):
         handler = MissingHandler(
             id_col="ID", activity_col="Activity", save_dir=self.save_dir
         )
-        binary_imputer, non_binary_imputer = handler.fit(self.train_data)
-        self.assertIsInstance(binary_imputer, SimpleImputer)
-        self.assertIsInstance(non_binary_imputer, SimpleImputer)
+        handler.fit(self.train_data)
+        self.assertTrue(os.path.exists(f"{self.save_dir}/binary_imputer.pkl"))
+        self.assertTrue(os.path.exists(f"{self.save_dir}/binary_cols.pkl"))
+        self.assertTrue(os.path.exists(f"{self.save_dir}/non_binary_imputer.pkl"))
+        self.assertTrue(os.path.exists(f"{self.save_dir}/columns_to_exclude.pkl"))
+        self.assertTrue(os.path.exists(f"{self.save_dir}/drop_cols.pkl"))
 
     def test_transform(self):
         """
@@ -90,7 +93,7 @@ class TestMissingHandler(unittest.TestCase):
             id_col="ID", activity_col="Activity", save_dir=self.save_dir
         )
         handler.fit(self.train_data)
-        imputed_test_data = handler.transform(self.test_data, self.save_dir)
+        imputed_test_data = handler.transform(self.test_data)
         self.assertFalse(imputed_test_data.isnull().any().any())
 
     def test_fit_transform(self):
@@ -167,7 +170,7 @@ class TestMissingHandler(unittest.TestCase):
             save_dir=self.save_dir,
         )
         imputed_train_data = handler.fit_transform(self.train_data)
-        imputed_test_data = handler.transform(self.test_data, self.save_dir)
+        imputed_test_data = handler.transform(self.test_data)
 
         self.assertEqual(len(imputed_train_data.columns), 10)
         self.assertEqual(len(imputed_test_data.columns), 10)
@@ -225,7 +228,20 @@ class TestMissingHandler(unittest.TestCase):
             id_col="ID", activity_col="Activity", save_dir=self.save_dir
         )
         with self.assertRaises(FileNotFoundError):
-            handler.transform(self.test_data, self.save_dir)
+            handler.transform(self.test_data)
+
+    def test_static_transform(self):
+        """
+        Tests the static_transform method using saved imputers.
+        """
+        handler = MissingHandler(
+            id_col="ID", activity_col="Activity", save_dir=self.save_dir
+        )
+        handler.fit(self.train_data)
+        imputed_test_data = MissingHandler.static_transform(
+            self.test_data, self.save_dir
+        )
+        self.assertFalse(imputed_test_data.isnull().any().any())
 
 
 if __name__ == "__main__":

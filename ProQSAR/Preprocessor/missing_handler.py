@@ -10,12 +10,12 @@ import os
 class MissingHandler:
     def __init__(
         self,
-        id_col: str,
-        activity_col: str,
+        id_col: Optional[str] = None,
+        activity_col: Optional[str] = None,
         missing_thresh: float = 40.0,
         imputation_strategy: str = "mean",
         n_neighbors: int = 5,
-        save_dir: str = "Project/MissingHandler",
+        save_dir: Optional[str] = None,
     ):
         """
         Initializes the MissingHandler with necessary configuration.
@@ -34,6 +34,9 @@ class MissingHandler:
         self.imputation_strategy = imputation_strategy
         self.n_neighbors = n_neighbors
         self.save_dir = save_dir
+        self.binary_imputer = None
+        self.non_binary_imputer = None
+        self.columns_to_exclude = []
         if save_dir and not os.path.exists(save_dir):
             os.makedirs(save_dir, exist_ok=True)
 
@@ -78,16 +81,18 @@ class MissingHandler:
             if data_to_impute[col].dropna().isin([0, 1]).all()
         ]
         data_binary = data_to_impute[binary_cols]
-        data_non_binary = data_to_impute.drop(columns=binary_cols)
+        data_non_binary = data_to_impute.drop(columns=binary_cols, errors="ignore")
 
         # Fit imputation transformer for binary columns
-        binary_imputer = SimpleImputer(strategy="most_frequent")
+        binary_imputer = []
         if binary_cols:
+            binary_imputer = SimpleImputer(strategy="most_frequent")
             binary_imputer.fit(data_binary)
-            with open(f"{save_dir}/binary_imputer.pkl", "wb") as file:
-                pickle.dump(binary_imputer, file)
-            with open(f"{save_dir}/binary_cols.pkl", "wb") as file:
-                pickle.dump(binary_cols, file)
+            if save_dir:
+                with open(f"{save_dir}/binary_imputer.pkl", "wb") as file:
+                    pickle.dump(binary_imputer, file)
+                with open(f"{save_dir}/binary_cols.pkl", "wb") as file:
+                    pickle.dump(binary_cols, file)
 
         # Fit imputation transformer for non-binary columns
         imputer_dict = {
@@ -103,8 +108,9 @@ class MissingHandler:
             non_binary_imputer = imputer_dict.get(imputation_strategy)
             if non_binary_imputer:
                 non_binary_imputer.fit(data_non_binary)
-                with open(f"{save_dir}/non_binary_imputer.pkl", "wb") as file:
-                    pickle.dump(non_binary_imputer, file)
+                if save_dir:
+                    with open(f"{save_dir}/non_binary_imputer.pkl", "wb") as file:
+                        pickle.dump(non_binary_imputer, file)
             else:
                 raise ValueError(
                     f"Unsupported imputation strategy {imputation_strategy}. Choose from"
@@ -113,7 +119,7 @@ class MissingHandler:
 
         return binary_imputer, non_binary_imputer
 
-    def fit(self, data: pd.DataFrame) -> Tuple[SimpleImputer, Optional[SimpleImputer]]:
+    def fit(self, data: pd.DataFrame) -> None:
         """
         Fits the imputation models to the data and optionally saves the configuration and models.
 
@@ -123,29 +129,95 @@ class MissingHandler:
         Returns:
         Tuple[SimpleImputer, Optional[SimpleImputer]]: The fitted binary and non-binary imputers.
         """
-        columns_to_exclude = [self.id_col, self.activity_col]
-        data_to_impute = data.drop(columns=columns_to_exclude)
+        self.columns_to_exclude = [self.id_col, self.activity_col]
+        data_to_impute = data.drop(columns=self.columns_to_exclude, errors="ignore")
 
         missing_percent_df = self.calculate_missing_percent(data_to_impute)
-        drop_cols = missing_percent_df[
+        self.drop_cols = missing_percent_df[
             missing_percent_df["MissingPercent"] > self.missing_thresh
         ]["ColumnName"].tolist()
-        data_to_impute.drop(columns=drop_cols, inplace=True)
+        data_to_impute.drop(columns=self.drop_cols, inplace=True)
 
-        with open(f"{self.save_dir}/columns_to_exclude.pkl", "wb") as file:
-            pickle.dump(columns_to_exclude, file)
-        with open(f"{self.save_dir}/drop_cols.pkl", "wb") as file:
-            pickle.dump(drop_cols, file)
+        self.binary_cols = [
+            col
+            for col in data_to_impute.columns
+            if data_to_impute[col].dropna().isin([0, 1]).all()
+        ]
 
-        return self._get_imputer(
+        if self.save_dir:
+            with open(f"{self.save_dir}/columns_to_exclude.pkl", "wb") as file:
+                pickle.dump(self.columns_to_exclude, file)
+            with open(f"{self.save_dir}/drop_cols.pkl", "wb") as file:
+                pickle.dump(self.drop_cols, file)
+
+        self.binary_imputer, self.non_binary_imputer = self._get_imputer(
             data_to_impute,
             imputation_strategy=self.imputation_strategy,
             n_neighbors=self.n_neighbors,
             save_dir=self.save_dir,
         )
 
+    def transform(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Impute missing values in the input DataFrame using the fitted models.
+
+        This method applies the learned imputation strategies to the input DataFrame and returns the imputed DataFrame.
+
+        Parameters:
+        ----------
+        data : pd.DataFrame
+            DataFrame with missing values to be imputed. Should have the same structure as during fitting, excluding
+            columns specified in `columns_to_exclude`.
+
+        Returns:
+        -------
+        pd.DataFrame
+            DataFrame with missing values imputed.
+
+        Raises:
+        ------
+        FileNotFoundError
+            If imputation models have not been fitted (i.e., `columns_to_exclude` is not set).
+        """
+        if not self.columns_to_exclude:
+            raise FileNotFoundError(
+                "Imputation stategy must be fitted before transform."
+            )
+
+        data_to_impute = data.drop(columns=self.columns_to_exclude)
+        data_to_impute.drop(columns=self.drop_cols, inplace=True, errors="ignore")
+
+        data_binary = data_to_impute[self.binary_cols]
+        data_non_binary = data_to_impute.drop(columns=self.binary_cols, errors="ignore")
+
+        imputed_data_binary = (
+            pd.DataFrame(
+                self.binary_imputer.transform(data_binary), columns=data_binary.columns
+            )
+            if self.binary_imputer
+            else data_binary
+        )
+
+        imputed_data_non_binary = (
+            pd.DataFrame(
+                self.non_binary_imputer.transform(data_non_binary),
+                columns=data_non_binary.columns,
+            )
+            if self.non_binary_imputer
+            else data_non_binary
+        )
+
+        return pd.concat(
+            [
+                data[self.columns_to_exclude],
+                imputed_data_binary,
+                imputed_data_non_binary,
+            ],
+            axis=1,
+        )
+
     @staticmethod
-    def transform(data: pd.DataFrame, save_dir: str) -> pd.DataFrame:
+    def static_transform(data: pd.DataFrame, save_dir: str) -> pd.DataFrame:
         """
         Transforms the provided DataFrame using the saved imputers and configurations.
 
@@ -216,4 +288,4 @@ class MissingHandler:
         pd.DataFrame: The transformed (imputed) DataFrame.
         """
         self.fit(data)
-        return self.transform(data, self.save_dir)
+        return self.transform(data)
