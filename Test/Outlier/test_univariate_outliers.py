@@ -24,7 +24,7 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
             shutil.rmtree(self.save_dir)
         os.makedirs(self.save_dir)
 
-        np.random.seed(0)
+        np.random.seed(42)
 
         self.data = pd.DataFrame(
             {
@@ -97,7 +97,9 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         )
 
         # Use _impute_nan method directly
-        _, bad = handler._feature_quality(self.data)
+        _, bad = handler._feature_quality(
+            self.data, id_col="ID", activity_col="Activity"
+        )
         iqr_thresholds = handler._iqr_threshold(self.data[bad])
         imputed_data = handler._impute_nan(self.data, iqr_thresholds)
 

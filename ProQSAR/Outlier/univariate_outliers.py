@@ -2,6 +2,7 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
+from sklearn.exceptions import NotFittedError
 from sklearn.preprocessing import PowerTransformer, QuantileTransformer
 from ProQSAR.Preprocessor.missing_handler import MissingHandler
 from typing import Tuple, Optional, List, Dict
@@ -218,7 +219,9 @@ class UnivariateOutliersHandler:
         data : pd.DataFrame
             The input dataframe.
         """
-        _, self.bad = self._feature_quality(data)
+        _, self.bad = self._feature_quality(
+            data, id_col=self.id_col, activity_col=self.activity_col
+        )
 
         if self.bad:
             if self.handling_method in ["iqr", "winsorization", "imputation"]:
@@ -317,8 +320,8 @@ class UnivariateOutliersHandler:
             The transformed dataframe.
         """
         if not os.path.exists(f"{save_dir}/handling_method.pkl"):
-            raise FileNotFoundError(
-                "The model has not been fitted yet. Please check your save directory."
+            raise NotFittedError(
+                "The UnivariateOutliersHandler instance is not fitted yet. Call 'fit' before using this method."
             )
 
         with open(f"{save_dir}/handling_method.pkl", "rb") as file:
