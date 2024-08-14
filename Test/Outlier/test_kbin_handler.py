@@ -26,7 +26,7 @@ class TestKBinHandler(unittest.TestCase):
 
         Creates a directory `test_outlier_handler` and populates it with a DataFrame.
         """
-        self.save_dir = "test_outlier_handler"
+        self.save_dir = "test_dir"
         if os.path.exists(self.save_dir):
             shutil.rmtree(self.save_dir)
         os.makedirs(self.save_dir)

@@ -251,6 +251,8 @@ class UnivariateOutliersHandler:
                 self.handler = QuantileTransformer(output_distribution="uniform").fit(
                     data[self.bad]
                 )
+            else:
+                raise ValueError(f"Unsupported method: {self.handling_method}")
 
         if self.save_dir:
             with open(f"{self.save_dir}/handling_method.pkl", "wb") as file:
@@ -401,15 +403,12 @@ class UnivariateOutliersHandler:
 
             if data2 is None:
                 transformed_data1 = handler.transform(data1)
-                original_data1_len = data1.shape[0]
-                transformed_data1_len = transformed_data1.shape[0]
-                removed_data1 = original_data1_len - transformed_data1_len
                 comparison_data.append(
                     {
                         "Method": method,
-                        "Original Rows (data1)": original_data1_len,
-                        "After Handling Rows (data1)": transformed_data1_len,
-                        "Removed Rows (data1)": removed_data1,
+                        "Original Rows": data1.shape[0],
+                        "After Handling Rows": transformed_data1.shape[0],
+                        "Removed Rows": data1.shape[0] - transformed_data1.shape[0],
                     }
                 )
                 comparison_table = pd.DataFrame(comparison_data)
@@ -418,15 +417,12 @@ class UnivariateOutliersHandler:
                 )
             else:
                 transformed_data2 = handler.transform(data2)
-                original_data2_len = data2.shape[0]
-                transformed_data2_len = transformed_data2.shape[0]
-                removed_data2 = original_data2_len - transformed_data2_len
                 comparison_data.append(
                     {
                         "Method": method,
-                        "Original Rows (data1)": original_data2_len,
-                        "After Handling Rows (data1)": transformed_data2_len,
-                        "Removed Rows (data1)": removed_data2,
+                        "Original Rows": data2.shape[0],
+                        "After Handling Rows": transformed_data2.shape[0],
+                        "Removed Rows": data2.shape[0] - transformed_data2.shape[0],
                     }
                 )
                 comparison_table = pd.DataFrame(comparison_data)
