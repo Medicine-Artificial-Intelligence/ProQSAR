@@ -386,7 +386,7 @@ class FeatureSelector:
         self.cv = self._determine_cv_strategy(self.task_type)
 
         if self.method == "best":
-            self.method = self._select_best_method
+            self.method = self._select_best_method(data)
             self.feature_selector = self.method_map[self.method](
                 X=X_data, y=y_data, task_type=self.task_type
             )
@@ -657,7 +657,7 @@ class FeatureSelector:
 
         plot.set_title("Comparison of Feature Selection Methods", fontsize=16)
         plot.set_xlabel("Method", fontsize=14)
-        plot.set_ylabel("Cross-Validation Score", fontsize=14)
+        plot.set_ylabel(f"{self.scoring} Score", fontsize=14)
 
         # Adding the mean values to the plot
         vertical_offset = melted_result["Value"].max() * 0.01
