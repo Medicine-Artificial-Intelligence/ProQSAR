@@ -1,0 +1,118 @@
+from rdkit import Chem
+from rdkit.Chem.Scaffolds import MurckoScaffold
+import pandas as pd
+import numpy as np
+import logging
+from typing import List, Tuple, Literal
+from ProQSAR.Partition.stratified_scaffold_kfold import StratifiedScaffoldKFold
+
+
+class StratifiedScaffoldPartition:
+    """
+    A class used to split data into training and testing sets based on molecular scaffolds
+    with stratification on the activity column.
+    """
+
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        activity_col: str,
+        smiles_col: str,
+        random_state: int = 42,
+        n_splits: int = 5,
+        scaff_based: Literal["median", "mean"] = "median",
+        shuffle: bool = True,
+    ):
+        """
+        Constructs all the necessary attributes for the StratifiedScaffoldPartition object.
+
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            The dataset containing the features and labels.
+        activity_col : str
+            The name of the column representing the activity or target label.
+        smiles_col : str
+            The name of the column containing SMILES strings for molecular data.
+        random_state : int, optional
+            The random seed used by the random number generator (default is 42).
+        n_splits : int, optional
+            Number of splits/folds to create (default is 5).
+        scaff_based : Literal["median", "mean"], optional
+            The strategy to use for scaffold-based splitting (default is 'median').
+        shuffle : bool, optional
+            Whether to shuffle the data before splitting (default is True).
+        """
+        self.data = data
+        self.random_state = random_state
+        self.activity_col = activity_col
+        self.smiles_col = smiles_col
+        self.n_splits = n_splits
+        self.scaff_based = scaff_based
+        self.shuffle = shuffle
+
+    @staticmethod
+    def get_scaffold_groups(smiles_list: List[str]) -> np.ndarray:
+        """
+        Generates scaffold groups from the SMILES strings and returns an array of group indices.
+
+        Parameters:
+        -----------
+        smiles_list : List[str]
+            A list of SMILES strings.
+
+        Returns:
+        --------
+        np.ndarray:
+            An array of integers representing scaffold group indices.
+        """
+        scaffolds = {}
+        for idx, smiles in enumerate(smiles_list):
+            try:
+                mol = Chem.MolFromSmiles(smiles)
+                scaffold = MurckoScaffold.MurckoScaffoldSmiles(
+                    mol=mol, includeChirality=False
+                )
+            except Exception:
+                logging.error(f"Failed to convert SMILES to Mol: {smiles}")
+                continue
+
+            if scaffold not in scaffolds:
+                scaffolds[scaffold] = [idx]
+            else:
+                scaffolds[scaffold].append(idx)
+
+        scaffold_lists = list(scaffolds.values())
+        groups = np.full(len(smiles_list), -1, dtype="i")
+        for i, scaff in enumerate(scaffold_lists):
+            groups[scaff] = i
+
+        if -1 in groups:
+            raise AssertionError("Some molecules are not assigned to a group.")
+        return groups
+
+    def fit(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Splits the data into training and testing sets using stratified scaffolds.
+
+        Returns:
+        --------
+        Tuple[pd.DataFrame, pd.DataFrame]:
+            The training and testing sets as pandas DataFrames.
+        """
+        cv = StratifiedScaffoldKFold(
+            n_splits=self.n_splits,
+            random_state=self.random_state,
+            shuffle=self.shuffle,
+            scaff_based=self.scaff_based,
+        )
+        groups = StratifiedScaffoldPartition.get_scaffold_groups(
+            self.data[self.smiles_col].to_list()
+        )
+        y = self.data[self.activity_col].to_numpy(dtype=float)
+        X = self.data.drop([self.activity_col, self.smiles_col], axis=1).to_numpy()
+        train_idx, test_idx = next(cv.split(X, y, groups))
+        data_train = self.data.iloc[train_idx]
+        data_test = self.data.iloc[test_idx]
+
+        return data_train, data_test

@@ -1,7 +1,3 @@
-import logging
-from rdkit import Chem
-from rdkit.Chem.Scaffolds import MurckoScaffold
-import pandas as pd
 import numpy as np
 from sklearn.model_selection._split import (
     _BaseKFold,
@@ -9,57 +5,9 @@ from sklearn.model_selection._split import (
 )
 from sklearn.utils import check_random_state
 from sklearn.utils.validation import column_or_1d
-from typing import List, Tuple, Generator, Union, Literal, Optional
+from typing import List, Generator, Union, Literal, Optional
 from sklearn.preprocessing import KBinsDiscretizer
 from collections import defaultdict
-
-
-def get_scaffold_groups(smiles_list: List[str]) -> np.ndarray:
-    """
-    Groups molecules by their Bemis-Murcko scaffolds based on a list of SMILES strings.
-
-    Parameters:
-    -----------
-    smiles_list : List[str]
-        A list of SMILES strings representing molecules.
-
-    Returns:
-    --------
-    np.ndarray
-        A 1D numpy array where each element represents the group (scaffold) index for the corresponding molecule
-        in the `smiles_list`. Each unique scaffold is assigned a unique index, and all molecules that share the
-        same scaffold are grouped under the same index.
-
-    Raises:
-    -------
-    AssertionError:
-        If any molecule is not assigned to a group (i.e., the `groups` array contains -1).
-    """
-    scaffolds = {}
-    for idx, smiles in enumerate(smiles_list):
-
-        try:
-            mol = Chem.MolFromSmiles(smiles)
-            scaffold = MurckoScaffold.MurckoScaffoldSmiles(
-                mol=mol, includeChirality=False
-            )
-        except Exception:
-            logging.error(f"Failed to convert SMILES to Mol: {smiles}")
-            continue
-
-        if scaffold not in scaffolds:
-            scaffolds[scaffold] = [idx]
-        else:
-            scaffolds[scaffold].append(idx)
-
-    scaffold_lists = list(scaffolds.values())
-    groups = np.full(len(smiles_list), -1, dtype="i")
-    for i, scaff in enumerate(scaffold_lists):
-        groups[scaff] = i
-
-    if -1 in groups:
-        raise AssertionError("Some molecules are not assigned to a group.")
-    return groups
 
 
 class StratifiedScaffoldKFold(GroupsConsumerMixin, _BaseKFold):
@@ -293,72 +241,3 @@ class StratifiedScaffoldKFold(GroupsConsumerMixin, _BaseKFold):
                 min_samples_in_fold = samples_in_fold
                 best_fold = i
         return best_fold
-
-
-def stratified_scaffold(
-    data: pd.DataFrame,
-    smiles_col: str,
-    activity_col: str,
-    n_splits: int = 5,
-    scaff_based: Literal["median", "mean"] = "median",
-    random_state: Optional[int] = None,
-    shuffle: bool = True,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Perform a stratified scaffold split on the given dataset, ensuring a balanced distribution of the target variable
-    across training and test sets, while respecting molecular scaffold groupings.
-
-    Parameters
-    ----------
-    data : pd.DataFrame
-        The dataset containing the molecular data, including the SMILES column (representing molecular structures)
-        and the activity column (target variable).
-
-    smiles_col : str
-        The name of the column in the `data` DataFrame containing the SMILES strings that define the molecular
-        scaffolds.
-
-    activity_col : str
-        The name of the column in the `data` DataFrame containing the target variable (activity values) to be
-        stratified.
-
-    n_splits : int, default=5
-        The number of folds to be used in the Stratified Scaffold K-Fold splitting. Only the first split is used to
-        create the training and test sets.
-
-    scaff_based : Literal['median', 'mean'], default='median'
-        Strategy for scaffold-based splitting: whether to use the 'median' or 'mean' of the activity values
-        within each scaffold group to perform stratification.
-
-    random_state : Optional[int], default=None
-        Seed for random number generation used in shuffling the data. Pass an integer for reproducible results.
-
-    shuffle : bool, default=True
-        Whether to shuffle the data before splitting into folds.
-
-    Returns
-    -------
-    Tuple[pd.DataFrame, pd.DataFrame]
-        A tuple containing two DataFrames:
-        - train: The training set consisting of rows from the `data` DataFrame corresponding to the training fold.
-        - test: The test set consisting of rows from the `data` DataFrame corresponding to the test fold.
-
-    Example
-    -------
-    >>> train, test = stratified_scaffold(data, smiles_col='smiles', activity_col='activity', n_splits=5)
-    """
-
-    cv = StratifiedScaffoldKFold(
-        n_splits=n_splits,
-        shuffle=shuffle,
-        random_state=random_state,
-        scaff_based=scaff_based,
-    )
-    groups = get_scaffold_groups(data[smiles_col].to_list())
-    y = data[activity_col].to_numpy(dtype=float)
-    X = data.drop([activity_col, smiles_col], axis=1).to_numpy()
-    train_idx, test_idx = next(cv.split(X, y, groups))
-    train = data.iloc[train_idx]
-    test = data.iloc[test_idx]
-
-    return train, test
