@@ -1,12 +1,7 @@
-import os
-import pickle
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from IPython.display import display
 from sklearn.base import BaseEstimator
-from typing import Union, Optional, List
+from typing import Union, Optional
 from sklearn.model_selection import (
     RepeatedStratifiedKFold,
     RepeatedKFold,
@@ -34,7 +29,6 @@ from sklearn.ensemble import (
 from xgboost import XGBClassifier, XGBRegressor
 from catboost import CatBoostClassifier, CatBoostRegressor
 from sklearn.neural_network import MLPClassifier, MLPRegressor
-from sklearn.model_selection import cross_validate
 from sklearn.metrics import (
     roc_auc_score,
     average_precision_score,
@@ -55,23 +49,18 @@ from sklearn.metrics import (
 
 def _get_task_type(data: pd.DataFrame, activity_col: str) -> str:
     """
-    Determines the task type (classification or regression) based on the target variable.
+    Determines the type of task based on the number of unique target values.
 
-    Parameters
-    ----------
-    data : pd.DataFrame
-        The dataset containing the target variable.
+    Args:
+        data (pd.DataFrame): Data containing the features and target.
+        activity_col (str): Column name for the target variable.
 
-    Returns
-    -------
-    str
-        The type of task: "C" for classification or "R" for regression.
+    Returns:
+        str: 'C' for classification (binary), 'R' for regression (continuous).
 
-    Raises
-    ------
-    ValueError
-        If the number of unique categories in the target variable is insufficient.
-    """   
+    Raises:
+        ValueError: If insufficient categories to determine model type.
+    """
     y_data = data[activity_col]
     unique_targets = len(np.unique(y_data))
     if unique_targets == 2:
@@ -79,36 +68,34 @@ def _get_task_type(data: pd.DataFrame, activity_col: str) -> str:
     elif unique_targets > 2:
         return "R"
     else:
-        raise ValueError(
-            "Insufficient number of categories to determine model type."
-            )
-        
+        raise ValueError("Insufficient number of categories to determine model type.")
+
+
 def _get_method_map(
-    task_type: str, 
-    add_method: Optional[dict] = None
-    ) -> dict[str, BaseEstimator]:
+    task_type: str,
+    add_method: Optional[dict] = None,
+    n_jobs: Optional[int] = -1,
+) -> dict:
     """
-    Gets the method map based on the task type.
+    Retrieves a dictionary mapping model names to their corresponding estimators.
 
-    Parameters
-    ----------
-    task_type : str
-        The type of task ("C" or "R").
+    Args:
+        task_type (str): 'C' for classification, 'R' for regression.
+        add_method (Optional[dict]): Additional methods to add to the map.
+        n_jobs (Optional[int]): Number of jobs for parallelization.
 
-    Returns
-    -------
-    dict[str, BaseEstimator]
-        The method map for the task type.
+    Returns:
+        dict: A dictionary of model names and estimators.
     """
     if task_type == "C":
         method_map = {
             "Logistic": LogisticRegression(
-                max_iter=10000, solver="liblinear", random_state=42
+                max_iter=10000, solver="liblinear", random_state=42, n_jobs=n_jobs
             ),
-            "KNN": KNeighborsClassifier(n_neighbors=20),
+            "KNN": KNeighborsClassifier(n_neighbors=20, n_jobs=n_jobs),
             "SVM": SVC(probability=True, max_iter=10000),
-            "RF": RandomForestClassifier(random_state=42),
-            "ExT": ExtraTreesClassifier(random_state=42),
+            "RF": RandomForestClassifier(random_state=42, n_jobs=n_jobs),
+            "ExT": ExtraTreesClassifier(random_state=42, n_jobs=n_jobs),
             "Ada": AdaBoostClassifier(n_estimators=100, random_state=42),
             "Grad": GradientBoostingClassifier(random_state=42),
             "XGB": XGBClassifier(random_state=42, verbosity=0, eval_metric="logloss"),
@@ -117,61 +104,75 @@ def _get_method_map(
                 alpha=0.01, max_iter=10000, hidden_layer_sizes=(150,), random_state=42
             ),
         }
-    else:
+    elif task_type == "R":
         method_map = {
-            "Linear": LinearRegression(),
-            "KNN": KNeighborsRegressor(),
+            "Linear": LinearRegression(n_jobs=n_jobs),
+            "KNN": KNeighborsRegressor(n_jobs=n_jobs),
             "SVM": SVR(),
-            "RF": RandomForestRegressor(random_state=42),
-            "ExT": ExtraTreesRegressor(random_state=42),
+            "RF": RandomForestRegressor(random_state=42, n_jobs=n_jobs),
+            "ExT": ExtraTreesRegressor(random_state=42, n_jobs=n_jobs),
             "Ada": AdaBoostRegressor(random_state=42),
             "Grad": GradientBoostingRegressor(random_state=42),
             "XGB": XGBRegressor(
-                random_state=42, verbosity=0, objective="reg:squarederror"
+                random_state=42,
+                verbosity=0,
+                objective="reg:squarederror",
             ),
             "CatB": CatBoostRegressor(random_state=42, verbose=0),
             "MLP": MLPRegressor(
                 alpha=0.01, max_iter=10000, hidden_layer_sizes=(150,), random_state=42
             ),
             "Ridge": Ridge(),
-            "ElasticNet": ElasticNetCV(cv=5),
+            "ElasticNet": ElasticNetCV(cv=5, n_jobs=n_jobs),
         }
+    else:
+        raise ValueError(
+            "Invalid task_type. Please choose 'C' for classification or 'R' for regression."
+        )
 
     if add_method:
         method_map.update(add_method)
 
     return method_map
 
+
 def _get_cv_strategy(
-    task_type: str
-    ) -> Union[RepeatedStratifiedKFold, RepeatedKFold]:
-        """
-        Determines the cross-validation strategy based on the task type.
-
-        Parameters
-        ----------
-        task_type : str
-            The type of task ("C" or "R").
-
-        Returns
-        -------
-        Union[RepeatedStratifiedKFold, RepeatedKFold]
-            The cross-validation strategy.
-        """
-        if task_type == "C":
-            return RepeatedStratifiedKFold(n_splits=10, n_repeats=3, random_state=42)
-        else:
-            return RepeatedKFold(n_splits=10, n_repeats=3, random_state=42)
-        
-def _get_iv_scoring_list(task_type: str):
+    task_type: str,
+    n_splits: int = 10,
+    n_repeats: int = 3,
+) -> Union[RepeatedStratifiedKFold, RepeatedKFold]:
     """
-    Determines the scoring target for model selection based on the task type.
+    Defines the cross-validation strategy based on task type.
 
-    Parameters:
-        task_type (str): The type of task ('C' for classification or 'R' for regression).
+    Args:
+        task_type (str): 'C' for classification, 'R' for regression.
+        n_splits (int): Number of splits for cross-validation.
+        n_repeats (int): Number of repetitions for cross-validation.
 
     Returns:
-        str: The scoring target metric.
+        RepeatedStratifiedKFold or RepeatedKFold: Cross-validation strategy.
+    """
+    if task_type == "C":
+        return RepeatedStratifiedKFold(
+            n_splits=n_splits, n_repeats=n_repeats, random_state=42
+        )
+    elif task_type == "R":
+        return RepeatedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=42)
+    else:
+        raise ValueError(
+            "Invalid task_type. Please choose 'C' for classification or 'R' for regression."
+        )
+
+
+def _get_iv_scoring_list(task_type: str) -> list:
+    """
+    Returns a list of scoring metrics based on the task type.
+
+    Args:
+        task_type (str): 'C' for classification, 'R' for regression.
+
+    Returns:
+        list: List of scoring metrics.
     """
     if task_type == "C":
         return [
@@ -184,7 +185,7 @@ def _get_iv_scoring_list(task_type: str):
             "neg_log_loss",
             "neg_brier_score",
         ]
-    else:
+    elif task_type == "R":
         return [
             "r2",
             "neg_mean_squared_error",
@@ -194,22 +195,29 @@ def _get_iv_scoring_list(task_type: str):
             "neg_mean_absolute_percentage_error",
             "max_error",
         ]
+    else:
+        raise ValueError(
+            "Invalid task_type. Please choose 'C' for classification or 'R' for regression."
+        )
 
 
-def _get_ev_scoring_(
-    task_type: str, y_test, y_test_pred, y_test_proba
-) -> str:
+def _get_ev_scoring_dict(
+    task_type: str,
+    y_test: pd.Series,
+    y_test_pred: pd.Series,
+    y_test_proba: Optional[pd.Series] = None,
+) -> dict:
     """
-    Compute external validation scoring metrics.
+    Returns a dictionary of evaluation metrics based on the task type.
 
     Args:
-        task_type (str): The type of task ('C' for classification, 'R' for regression).
-        y_test (np.ndarray): True labels.
-        y_test_pred (np.ndarray): Predicted labels.
-        y_test_proba (Optional[np.ndarray]): Predicted probabilities (for classification).
+        task_type (str): 'C' for classification, 'R' for regression.
+        y_test (pd.Series): Ground truth values.
+        y_test_pred (pd.Series): Predicted values.
+        y_test_proba (Optional[pd.Series]): Predicted probabilities (for classification).
 
     Returns:
-        dict: A dictionary with scoring metrics.
+        dict: A dictionary of evaluation metrics.
     """
     if task_type == "C":
         scoring_dict = {
@@ -223,7 +231,7 @@ def _get_ev_scoring_(
             "brier_score": brier_score_loss(y_test, y_test_proba),
         }
 
-    else:
+    elif task_type == "R":
         scoring_dict = {
             "r2": r2_score(y_test, y_test_pred),
             "mean_squared_error": mean_squared_error(y_test, y_test_pred),
@@ -237,6 +245,9 @@ def _get_ev_scoring_(
             ),
             "max_error": max_error(y_test, y_test_pred),
         }
+    else:
+        raise ValueError(
+            "Invalid task type. Please choose 'C' for classification or 'R' for regression."
+        )
 
     return scoring_dict
-
