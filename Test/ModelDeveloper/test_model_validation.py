@@ -95,13 +95,33 @@ class TestModelReports(unittest.TestCase):
 
     def test_ev_report_regression(self):
         # Test ev_report for regression data (with train/test split)
-        data_train = self.reg_data.sample(frac=0.8, random_state=1)
+        data_train = self.reg_data.sample(frac=0.8, random_state=42)
         data_test = self.reg_data.drop(data_train.index)
         ev_result = ev_report(
             data_train, data_test, activity_col="Activity", id_col="ID"
         )
         self.assertIsInstance(ev_result, pd.DataFrame)
         self.assertGreater(len(ev_result), 0)
+
+    def test_ev_report_save_csv(self):
+        data_train = self.class_data.sample(frac=0.8, random_state=42)
+        data_test = self.class_data.drop(data_train.index)
+        ev_report(
+            data_train,
+            data_test,
+            activity_col="Activity",
+            id_col="ID",
+            select_method=["KNN", "SVM", "ExT"],
+            scoring_list=["roc_auc", "f1", "recall"],
+            save_csv=True,
+            csv_name="test_ev_report",
+            save_dir="test_dir",
+        )
+        # Ensure the csv file is saved
+        self.assertTrue(os.path.exists("test_dir/test_ev_report.csv"))
+        # Cleanup created file
+        os.remove("test_dir/test_ev_report.csv")
+        os.rmdir("test_dir")
 
     def test_invalid_graph_type(self):
         # Test invalid graph type in _plot_iv_report
@@ -154,9 +174,9 @@ class TestModelReports(unittest.TestCase):
             save_dir="test_dir",
         )
         # Ensure the figure file is saved
-        self.assertTrue(os.path.exists("test_dir/test_iv_graph.png"))
+        self.assertTrue(os.path.exists("test_dir/test_iv_graph_accuracy_box.png"))
         # Cleanup created file
-        os.remove("test_dir/test_iv_graph.png")
+        os.remove("test_dir/test_iv_graph_accuracy_box.png")
         os.rmdir("test_dir")
 
 

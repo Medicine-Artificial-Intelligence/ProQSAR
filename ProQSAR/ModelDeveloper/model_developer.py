@@ -11,12 +11,13 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_method_map,
     _get_cv_strategy,
 )
-from ProQSAR. ModelDeveloper.model_validation import iv_report
+from ProQSAR.ModelDeveloper.model_validation import iv_report
+
 
 class ModelDeveloper:
     """
     Class to handle model development for machine learning tasks.
-    
+
     Attributes:
     -----------
     activity_col : str
@@ -58,14 +59,15 @@ class ModelDeveloper:
     --------
     fit(data: pd.DataFrame) -> BaseEstimator
         Fits the model to the provided data.
-    
+
     predict(data: pd.DataFrame) -> pd.DataFrame
         Predicts outcomes using the fitted model.
-    
-    static_predict(data: pd.DataFrame, save_dir: str, save_pred_result: bool = True, pred_result_name: str = "pred_result") -> pd.DataFrame
+
+    static_predict(data: pd.DataFrame, save_dir: str,
+        save_pred_result: bool = True, pred_result_name: str = "pred_result") -> pd.DataFrame
         Loads a pre-trained model from disk and predicts outcomes.
     """
-    
+
     def __init__(
         self,
         activity_col: str,
@@ -129,21 +131,33 @@ class ModelDeveloper:
 
         self.task_type = _get_task_type(data, self.activity_col)
         self.method_map = _get_method_map(self.task_type, self.add_method, self.n_jobs)
-        self.cv = _get_cv_strategy(self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats)
+        self.cv = _get_cv_strategy(
+            self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
+        )
 
         if self.method == "best":
             if self.scoring_target is None:
-                self.scoring_target = "f1" if self.task_type == "C" else "r2"   
+                self.scoring_target = "f1" if self.task_type == "C" else "r2"
             comparison_df = iv_report(
-                data=data, activity_col=self.activity_col, id_col=self.id_col,
-                add_method=self.add_method ,scoring_list=[self.scoring_target], 
-                n_splits=self.n_splits, n_repeats=self.n_repeats,
-                visualize=self.visualize, save_fig=self.save_fig, fig_name=self.fig_name,
-                save_csv=self.iv_report_name, csv_name=self.iv_report_name, 
-                save_dir=self.save_dir, n_jobs=self.n_jobs
+                data=data,
+                activity_col=self.activity_col,
+                id_col=self.id_col,
+                add_method=self.add_method,
+                scoring_list=[self.scoring_target],
+                n_splits=self.n_splits,
+                n_repeats=self.n_repeats,
+                visualize=self.visualize,
+                save_fig=self.save_fig,
+                fig_name=self.fig_name,
+                save_csv=self.iv_report_name,
+                csv_name=self.iv_report_name,
+                save_dir=self.save_dir,
+                n_jobs=self.n_jobs,
             )
 
-            self.method = comparison_df.loc[comparison_df[f"{self.scoring_target}_mean"].idxmax(), "Method"]
+            self.method = comparison_df.loc[
+                comparison_df[f"{self.scoring_target}_mean"].idxmax(), "Method"
+            ]
             self.model = self.method_map[self.method].fit(X=X_data, y=y_data)
         elif self.method in self.method_map:
             self.model = self.method_map[self.method].fit(X=X_data, y=y_data)
@@ -177,7 +191,9 @@ class ModelDeveloper:
             A DataFrame containing the predicted outcomes and optionally the probabilities.
         """
         if self.model is None:
-            raise NotFittedError("ModelDeveloper is not fitted yet. Call 'fit' before using this method.")
+            raise NotFittedError(
+                "ModelDeveloper is not fitted yet. Call 'fit' before using this method."
+            )
 
         X_data = data.drop([self.activity_col, self.id_col], axis=1)
         y_pred = self.model.predict(X_data)
@@ -199,11 +215,11 @@ class ModelDeveloper:
 
     @staticmethod
     def static_predict(
-        data: pd.DataFrame, 
-        save_dir: str, 
-        save_pred_result: bool = True, 
-        pred_result_name: str = "pred_result"
-        ) -> pd.DataFrame:
+        data: pd.DataFrame,
+        save_dir: str,
+        save_pred_result: bool = True,
+        pred_result_name: str = "pred_result",
+    ) -> pd.DataFrame:
         """
         Loads a pre-trained model from disk and predicts outcomes.
 
@@ -258,4 +274,3 @@ class ModelDeveloper:
             pred_result.to_csv(f"{save_dir}/{pred_result_name}.csv")
 
         return pred_result
-

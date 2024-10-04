@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator
 from typing import Union, Optional
 from sklearn.model_selection import (
     RepeatedStratifiedKFold,

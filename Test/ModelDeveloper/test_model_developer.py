@@ -1,12 +1,10 @@
-import os
-import shutil
 import unittest
 import pandas as pd
 import numpy as np
-from sklearn.datasets import make_classification, make_regression
+from sklearn.datasets import make_classification
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
 from ProQSAR.ModelDeveloper.model_developer import ModelDeveloper
 
 
@@ -42,27 +40,29 @@ class TestModelDeveloper(unittest.TestCase):
     def setUp(self):
         """Setup the test environment."""
         self.data = create_classification_data()
-        self.train_data, self.test_data = train_test_split(self.class_data, test_size=0.2, random_state=42)
+        self.train_data, self.test_data = train_test_split(
+            self.data, test_size=0.2, random_state=42
+        )
 
         self.model_dev = ModelDeveloper(
             activity_col="Activity",
             id_col="ID",
             method="best",
             scoring_target="accuracy",
-            add_method={'NewMethod': RandomForestClassifier()},
+            add_method={"NewMethod": RandomForestClassifier()},
         )
 
     def test_fit_method(self):
         """Test fitting the model."""
         model = self.model_dev.fit(self.train_data)
         self.assertIsNotNone(model)
-        self.assertTrue(hasattr(self.model_dev, 'model'))
+        self.assertTrue(hasattr(self.model_dev, "model"))
 
     def test_predict_method(self):
         """Test predicting using the fitted model."""
         self.model_dev.fit(self.train_data)
         predictions = self.model_dev.predict(self.test_data)
-        self.assertIn('Predicted values', predictions.columns)
+        self.assertIn("Predicted values", predictions.columns)
         self.assertEqual(predictions.shape[0], self.test_data.shape[0])
 
     def test_static_predict(self):
@@ -75,19 +75,19 @@ class TestModelDeveloper(unittest.TestCase):
 
         # Create a new ModelDeveloper instance for static prediction
         static_model_dev = ModelDeveloper(
-            activity_col='Activity',
-            id_col='ID',
-            save_dir=self.model_dev.save_dir
+            activity_col="Activity", id_col="ID", save_dir=self.model_dev.save_dir
         )
 
         # Predict using static_predict method
-        static_predictions = static_model_dev.static_predict(self.test_data, save_dir=self.model_dev.save_dir)
-        self.assertIn('Predicted values', static_predictions.columns)
+        static_predictions = static_model_dev.static_predict(
+            self.test_data, save_dir=self.model_dev.save_dir
+        )
+        self.assertIn("Predicted values", static_predictions.columns)
         self.assertEqual(static_predictions.shape[0], self.test_data.shape[0])
 
     def test_fit_invalid_method(self):
         """Test fitting with an invalid method raises ValueError."""
-        self.model_dev.method = 'invalid_method'
+        self.model_dev.method = "invalid_method"
         with self.assertRaises(ValueError):
             self.model_dev.fit(self.train_data)
 
@@ -95,6 +95,7 @@ class TestModelDeveloper(unittest.TestCase):
         """Test prediction raises NotFittedError if model is not fitted."""
         with self.assertRaises(NotFittedError):
             self.model_dev.predict(self.test_data)
+
 
 if __name__ == "__main__":
     unittest.main()
