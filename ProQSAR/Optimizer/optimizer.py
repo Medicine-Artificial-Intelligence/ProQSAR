@@ -1,9 +1,11 @@
 import optuna
-import numpy as np
 import pandas as pd
 from sklearn.model_selection import cross_val_score
 from typing import Optional, List
-from ProQSAR.ModelDeveloper.model_developer_utils import _get_task_type
+from ProQSAR.ModelDeveloper.model_developer_utils import (
+    _get_task_type,
+    _get_cv_strategy,
+)
 from ProQSAR.Optimizer.optimizer_utils import _get_model_list, _get_model_and_params
 
 
@@ -17,7 +19,8 @@ class Optimizer:
         add_model: Optional[dict] = None,
         scoring: Optional[str] = None,
         n_trials: int = 10,
-        cv: int = 5,
+        n_splits: int = 5,
+        n_repeats: int = 2,
         n_jobs: int = -1,
     ):
 
@@ -28,73 +31,55 @@ class Optimizer:
         self.add_model = add_model if add_model else {}
         self.scoring = scoring
         self.n_trials = n_trials
-        self.cv = cv
+        self.n_splits = n_splits
+        self.n_repeats = n_repeats
         self.n_jobs = n_jobs
         self.best_model = None
         self.best_params = None
         self.best_score = None
         self.task_type = None
+        self.cv = None
         self.param_ranges.update(
             {name: params for name, (model, params) in self.add_model.items()}
         )
 
     def optimize(self, data: pd.DataFrame):
 
-        X_data = data.drop([self.activity_col, self.id_col], axis=1)
-        y_data = data[self.activity_col]
+        X = data.drop([self.activity_col, self.id_col], axis=1)
+        y = data[self.activity_col]
 
         self.task_type = _get_task_type(data, self.activity_col)
-        if self.select_model is None:
-            self.select_model = _get_model_list(self.task_type, self.add_model)
+        self.cv = _get_cv_strategy(
+            self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
+        )
+        if self.scoring is None:
+            self.scoring = "f1" if self.task_type == "C" else "r2"
 
-        study = optuna.create_study(direction="maximize")
-        study.optimize(
-            lambda trial: self.objective(trial, X_data, y_data),
-            n_trials=self.n_trials,
-            n_jobs=self.n_jobs,
+        model_list = (
+            self.select_model
+            if self.select_model
+            else _get_model_list(self.task_type, self.add_model)
         )
 
-        self.best_model = study.best_trial.user_attrs["best_model"]
+        def objective(trial):
+            model_name = trial.suggest_categorical("model", model_list)
+            model, params = _get_model_and_params(
+                trial, model_name, self.param_ranges, self.add_model
+            )
+
+            model.set_params(**params)
+            score = cross_val_score(
+                model, X, y, scoring=self.scoring, cv=self.cv, n_jobs=self.n_jobs
+            ).mean()
+            return score
+
+        study = optuna.create_study(direction="maximize")
+        study.optimize(objective, n_trials=self.n_trials, n_jobs=self.n_jobs)
+
         self.best_params = study.best_trial.params
         self.best_score = study.best_value
 
-        print(f"Best model: {self.best_model}")
-        print(f"Best parameters: {self.best_params}")
-        print(f"Best {self.scoring} score: {self.best_score}")
-
-    def objective(self, trial, X, y):
-        """
-        Objective function for the optimization.
-
-        Parameters:
-            trial (optuna.trial.Trial): An Optuna trial object.
-            X (pd.DataFrame or np.ndarray): Feature data.
-            y (pd.Series or np.ndarray): Target data.
-
-        Returns:
-            float: Cross-validated score of the model.
-        """
-        model_name = trial.suggest_categorical("model", self.select_model)
-        model, params = _get_model_and_params(
-            trial, trial, model_name, self.param_ranges, self.add_model
-        )
-
-        model.set_params(**params)
-        score = cross_val_score(
-            model, X, y, scoring=self.scoring, cv=self.cv, n_jobs=self.n_jobs
-        ).mean()
-
-        trial.set_user_attr("best_model", model_name)
-        return score
-
-    def get_best_model(self):
-        """
-        Get the best model selected by Optuna.
-
-        Returns:
-            str: Name of the best model.
-        """
-        return self.best_model
+        return self.best_params, self.best_score
 
     def get_best_params(self):
         """
