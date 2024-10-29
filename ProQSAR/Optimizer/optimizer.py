@@ -10,15 +10,65 @@ from ProQSAR.Optimizer.optimizer_utils import _get_model_list, _get_model_and_pa
 
 
 class Optimizer:
+    """
+    A class to optimize machine learning models using Optuna for hyperparameter tuning.
+
+    Parameters:
+    ----------
+    activity_col : str
+        The name of the target column in the dataset.
+    id_col : str
+        The name of the identifier column in the dataset (not used in modeling).
+    select_model : Optional[List[str]], default=None
+        A list of model names to optimize. If None, all compatible models will be considered.
+    scoring : Optional[str], default=None
+        The scoring metric to use for model evaluation. If None, defaults to "f1" for classification
+        tasks and "r2" for regression tasks.
+    param_ranges : dict, default={}
+        A dictionary specifying the ranges of hyperparameters for each model.
+    add_model : dict, default={}
+        A dictionary of additional models and their parameter ranges to consider during optimization.
+    n_trials : int, default=100
+        The number of trials to run for hyperparameter optimization.
+    n_splits : int, default=5
+        The number of splits for cross-validation.
+    n_repeats : int, default=2
+        The number of times to repeat cross-validation.
+    n_jobs : int, default=-1
+        The number of parallel jobs to run for cross-validation. -1 means using all processors.
+
+    Attributes:
+    ----------
+    best_model : Optional
+        The best model found during optimization.
+    best_params : Optional[dict]
+        The best hyperparameters found during optimization.
+    best_score : Optional[float]
+        The best score achieved with the best parameters.
+    task_type : Optional[str]
+        The type of task (classification or regression).
+    cv : Optional
+        The cross-validation strategy used.
+
+    Methods:
+    -------
+    optimize(data: pd.DataFrame) -> tuple:
+        Optimizes the model based on the provided dataset.
+    get_best_params() -> dict:
+        Retrieves the best hyperparameters found during optimization.
+    get_best_score() -> float:
+        Retrieves the best score achieved during optimization.
+    """
+
     def __init__(
         self,
         activity_col: str,
         id_col: str,
         select_model: Optional[List[str]] = None,
-        param_ranges: Optional[dict] = None,
-        add_model: Optional[dict] = None,
         scoring: Optional[str] = None,
-        n_trials: int = 10,
+        param_ranges: dict = {},
+        add_model: dict = {},
+        n_trials: int = 100,
         n_splits: int = 5,
         n_repeats: int = 2,
         n_jobs: int = -1,
@@ -27,8 +77,8 @@ class Optimizer:
         self.activity_col = activity_col
         self.id_col = id_col
         self.select_model = select_model
-        self.param_ranges = param_ranges if param_ranges else {}
-        self.add_model = add_model if add_model else {}
+        self.param_ranges = param_ranges
+        self.add_model = add_model
         self.scoring = scoring
         self.n_trials = n_trials
         self.n_splits = n_splits
@@ -43,7 +93,20 @@ class Optimizer:
             {name: params for name, (model, params) in self.add_model.items()}
         )
 
-    def optimize(self, data: pd.DataFrame):
+    def optimize(self, data: pd.DataFrame) -> tuple:
+        """
+        Optimizes the model based on the provided dataset.
+
+        Parameters:
+        ----------
+        data : pd.DataFrame
+            The input data containing features and target variable.
+
+        Returns:
+        -------
+        tuple
+            A tuple containing the best parameters and the best score achieved.
+        """
 
         X = data.drop([self.activity_col, self.id_col], axis=1)
         y = data[self.activity_col]
@@ -52,13 +115,10 @@ class Optimizer:
         self.cv = _get_cv_strategy(
             self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
         )
-        if self.scoring is None:
-            self.scoring = "f1" if self.task_type == "C" else "r2"
+        self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
 
-        model_list = (
-            self.select_model
-            if self.select_model
-            else _get_model_list(self.task_type, self.add_model)
+        model_list = self.select_model or _get_model_list(
+            self.task_type, self.add_model
         )
 
         def objective(trial):
@@ -81,20 +141,46 @@ class Optimizer:
 
         return self.best_params, self.best_score
 
-    def get_best_params(self):
+    def get_best_params(self) -> dict:
         """
-        Get the best parameters found for the selected model.
+        Retrieves the best model and hyperparameters found during optimization.
 
         Returns:
-            dict: Best parameter dictionary.
-        """
-        return self.best_params
+        -------
+        dict
+            The best model and hyperparameters.
 
-    def get_best_score(self):
+        Raises:
+        ------
+        AttributeError
+            If called before running 'optimize'.
         """
-        Get the best cross-validated score found for the selected model.
+        if self.best_params:
+            return self.best_params
+        else:
+            raise AttributeError(
+                "Attempted to access 'best_params' before running 'optimize'. "
+                "Run 'optimize' to obtain the best parameters."
+            )
+
+    def get_best_score(self) -> float:
+        """
+        Retrieves the best score achieved during optimization.
 
         Returns:
-            float: Best score.
+        -------
+        float
+            The best score.
+
+        Raises:
+        ------
+        AttributeError
+            If called before running 'optimize'.
         """
-        return self.best_score
+        if self.best_params:
+            return self.best_score
+        else:
+            raise AttributeError(
+                "Attempted to access 'best_score' before running 'optimize'. "
+                "Run 'optimize' to obtain the best score."
+            )
