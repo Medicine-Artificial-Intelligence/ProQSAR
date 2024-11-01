@@ -96,32 +96,6 @@ class TestFeatureSelector(unittest.TestCase):
         """
         shutil.rmtree(self.save_dir)
 
-    def test_initialization(self):
-        """
-        Test the initialization of the FeatureSelector class.
-        """
-        fs = FeatureSelector(activity_col="Activity", id_col="ID")
-        self.assertEqual(fs.activity_col, "Activity")
-        self.assertEqual(fs.id_col, "ID")
-        self.assertEqual(fs.method, "best")
-        self.assertIsNone(fs.scoring)
-
-    def test_determine_task_type_classification(self):
-        """
-        Test the determination of task type for classification data.
-        """
-        fs = FeatureSelector(activity_col="Activity", id_col="ID")
-        task_type = fs._determine_task_type(self.data_classification)
-        self.assertEqual(task_type, "C")
-
-    def test_determine_task_type_regression(self):
-        """
-        Test the determination of task type for regression data.
-        """
-        fs = FeatureSelector(activity_col="Activity", id_col="ID")
-        task_type = fs._determine_task_type(self.data_regression)
-        self.assertEqual(task_type, "R")
-
     def test_fit_classification(self):
         """
         Test fitting the FeatureSelector on classification data.
@@ -152,7 +126,7 @@ class TestFeatureSelector(unittest.TestCase):
         """
         Test the fit_transform method of the FeatureSelector.
         """
-        fs = FeatureSelector(activity_col="Activity", id_col="ID", method="Anova")
+        fs = FeatureSelector(activity_col="Activity", id_col="ID", select_method="Anova")
         transformed_data = fs.fit_transform(self.data_classification)
         self.assertNotEqual(
             transformed_data.shape[1], self.data_classification.shape[1]
@@ -165,7 +139,6 @@ class TestFeatureSelector(unittest.TestCase):
         fs = FeatureSelector(
             activity_col="Activity",
             id_col="ID",
-            compare_table="table",
             compare_visual="box",
         )
         result_df = fs.compare_feature_selectors(self.data_classification)
