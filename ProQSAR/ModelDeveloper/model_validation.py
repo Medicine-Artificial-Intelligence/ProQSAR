@@ -7,20 +7,21 @@ from typing import Optional, List
 from sklearn.model_selection import cross_validate
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_task_type,
-    _get_method_map,
+    _get_model_map,
     _get_cv_strategy,
-    _get_iv_scoring_list,
+    _get_cv_scoring_list,
     _get_ev_scoring_dict,
 )
 
 
-def _plot_iv_report(
+def _plot_cv_report(
     report_df: pd.DataFrame,
     scoring_list: List[str],
     graph_type: Optional[str] = "box",
+    xlabel: str = "Model",
     save_fig: bool = False,
-    fig_name: str = "iv_graph",
-    save_dir: str = "Project/Model_Development",
+    fig_prefix: str = "cv_graph",
+    save_dir: str = "Project/ModelDevelopment",
 ) -> None:
     """
     Plots internal validation report for model comparison based on specified scoring metrics.
@@ -35,8 +36,8 @@ def _plot_iv_report(
         Type of graph to plot ('box', 'bar', 'violin'). Default is 'box'.
     save_fig : bool
         Whether to save the figure. Default is False.
-    fig_name : str
-        Name of the figure to save. Default is 'iv_graph'.
+    fig_prefix : str
+        Name of the figure to save. Default is 'cv_graph'.
     save_dir : str
         Directory where the figure will be saved. Default is 'Project/Model_Development'.
 
@@ -48,13 +49,13 @@ def _plot_iv_report(
     sns.set_style("whitegrid")
 
     for metric in scoring_list:
-        plt.figure(figsize=(20, 10))
+        plt.figure(figsize=(25, 10))
 
         score_columns = [
             col for col in report_df.columns if col.startswith(f"{metric}_fold")
         ]
         melted_result = report_df.melt(
-            id_vars=["Method"],
+            id_vars=[xlabel],
             value_vars=score_columns,
             var_name="Score",
             value_name="Value",
@@ -62,13 +63,13 @@ def _plot_iv_report(
 
         if graph_type == "box":
             plot = sns.boxplot(
-                x="Method",
+                x=xlabel,
                 y="Value",
                 data=melted_result,
                 showmeans=True,
                 width=0.5,
                 palette="plasma",
-                hue="Method",
+                hue=xlabel,
                 meanprops={
                     "marker": "o",
                     "markerfacecolor": "red",
@@ -79,26 +80,26 @@ def _plot_iv_report(
             )
         elif graph_type == "bar":
             plot = sns.barplot(
-                x="Method",
+                x=xlabel,
                 y="Value",
                 data=melted_result,
                 errorbar="sd",
                 palette="plasma",
-                hue="Method",
+                hue=xlabel,
                 width=0.5,
                 color="black",
             )
         elif graph_type == "violin":
             plot = sns.violinplot(
-                x="Method",
+                x=xlabel,
                 y="Value",
                 data=melted_result,
                 inner=None,
                 palette="plasma",
-                hue="Method",
+                hue=xlabel,
             )
             sns.stripplot(
-                x="Method",
+                x=xlabel,
                 y="Value",
                 data=melted_result,
                 color="white",
@@ -110,10 +111,8 @@ def _plot_iv_report(
                 f"Invalid graph type '{graph_type}'. Choose 'box', 'bar' or 'violin'."
             )
 
-        plot.set_title(
-            f"Compare the performance of different models on {metric}", fontsize=16
-        )
-        plot.set_xlabel("Model", fontsize=14)
+        plot.set_title(f"Cross-Validated Model Performance, on {metric}", fontsize=14)
+        plot.set_xlabel(xlabel, fontsize=14)
         plot.set_ylabel(f"{metric.capitalize()}", fontsize=14)
 
         # Adding the mean values to the plot
@@ -133,28 +132,28 @@ def _plot_iv_report(
             if save_dir and not os.path.exists(save_dir):
                 os.makedirs(save_dir, exist_ok=True)
             plt.savefig(
-                f"{save_dir}/{fig_name}_{metric}_{graph_type}.png",
+                f"{save_dir}/{fig_prefix}_{metric}_{graph_type}.png",
                 dpi=300,
             )
 
     plt.show()
 
 
-def iv_report(
+def cross_validation_report(
     data: pd.DataFrame,
     activity_col: str,
     id_col: str,
-    add_method: Optional[dict] = None,
-    select_method: Optional[List[str]] = None,
+    add_model: Optional[dict] = None,
+    select_model: Optional[List[str]] = None,
     scoring_list: Optional[List[str]] = None,
     n_splits: int = 10,
     n_repeats: int = 3,
     visualize: Optional[str] = None,
     save_fig: bool = False,
     save_csv: bool = False,
-    fig_name: str = "iv_graph",
-    csv_name: str = "iv_report",
-    save_dir: str = "Project/Model_Development",
+    fig_prefix: str = "cv_graph",
+    csv_name: str = "cv_report",
+    save_dir: str = "Project/ModelDevelopment",
     n_jobs: int = -1,
 ) -> pd.DataFrame:
     """
@@ -168,9 +167,9 @@ def iv_report(
         The target column in the dataset.
     id_col : str
         The identifier column in the dataset.
-    add_method : Optional[dict]
+    add_model : Optional[dict]
         Dictionary of additional models to include.
-    select_method : Optional[List[str]]
+    select_model : Optional[List[str]]
         List of models to be selected for validation.
     scoring_list : Optional[List[str]]
         List of scoring metrics for the validation. If None, default metrics are used.
@@ -184,7 +183,7 @@ def iv_report(
         Whether to save the figures generated. Default is False.
     save_csv : bool
         Whether to save the report to a CSV file. Default is False.
-    fig_name : str
+    fig_prefix : str
         File name for saving the figure.
     csv_name : str
         File name for saving the report.
@@ -203,23 +202,22 @@ def iv_report(
     y_data = data[activity_col]
 
     task_type = _get_task_type(data, activity_col)
-    method_map = _get_method_map(task_type, add_method, n_jobs)
+    model_map = _get_model_map(task_type, add_model, n_jobs)
     cv = _get_cv_strategy(task_type, n_splits=n_splits, n_repeats=n_repeats)
 
-    if scoring_list is None:
-        scoring_list = _get_iv_scoring_list(task_type)
+    scoring_list = scoring_list or _get_cv_scoring_list(task_type)
 
     result = []
     models_to_compare = {}
 
-    if select_method is None:
-        models_to_compare = method_map
+    if select_model is None:
+        models_to_compare = model_map
     else:
-        for name in select_method:
-            if name in method_map:
-                models_to_compare.update({name: method_map[name]})
+        for name in select_model:
+            if name in model_map:
+                models_to_compare.update({name: model_map[name]})
             else:
-                raise ValueError(f"Method '{name}' is not recognized.")
+                raise ValueError(f"Model '{name}' is not recognized.")
 
     for name, model in models_to_compare.items():
         scores = cross_validate(
@@ -231,48 +229,48 @@ def iv_report(
             n_jobs=n_jobs,
         )
 
-        method_result = {"Method": name}
+        model_result = {"Model": name}
         for metric in scoring_list:
             metric_scores = scores[f"test_{metric}"]
-            method_result[f"{metric}_mean"] = round(np.mean(metric_scores), 3)
-            method_result[f"{metric}_std"] = round(np.std(metric_scores), 3)
-            method_result[f"{metric}_median"] = round(np.median(metric_scores), 3)
+            model_result[f"{metric}_mean"] = round(np.mean(metric_scores), 3)
+            model_result[f"{metric}_std"] = round(np.std(metric_scores), 3)
+            model_result[f"{metric}_median"] = round(np.median(metric_scores), 3)
             for i, score in enumerate(metric_scores):
-                method_result[f"{metric}_fold{i+1}"] = score
+                model_result[f"{metric}_fold{i+1}"] = score
 
-        result.append(method_result)
+        result.append(model_result)
 
-    iv_df = pd.DataFrame(result)
+    cv_df = pd.DataFrame(result)
 
     if visualize:
-        _plot_iv_report(
-            report_df=iv_df,
+        _plot_cv_report(
+            report_df=cv_df,
             scoring_list=scoring_list,
             graph_type=visualize,
             save_fig=save_fig,
-            fig_name=fig_name,
+            fig_prefix=fig_prefix,
             save_dir=save_dir,
         )
 
     if save_csv:
         if save_dir and not os.path.exists(save_dir):
             os.makedirs(save_dir, exist_ok=True)
-        iv_df.to_csv(f"{save_dir}/{csv_name}.csv")
+        cv_df.to_csv(f"{save_dir}/{csv_name}.csv")
 
-    return iv_df
+    return cv_df
 
 
-def ev_report(
+def external_validation_report(
     data_train: pd.DataFrame,
     data_test: pd.DataFrame,
     activity_col: str,
     id_col: str,
-    add_method: Optional[dict] = None,
-    select_method: Optional[List[str]] = None,
+    add_model: Optional[dict] = None,
+    select_model: Optional[List[str]] = None,
     scoring_list: Optional[List[str]] = None,
     save_csv: bool = False,
     csv_name: str = "ev_report",
-    save_dir: str = "Project/Model_Development",
+    save_dir: str = "Project/ModelDevelopment",
     n_jobs: int = -1,
 ) -> pd.DataFrame:
     """
@@ -288,9 +286,9 @@ def ev_report(
         The target column in the dataset.
     id_col : str
         The identifier column in the dataset.
-    add_method : Optional[dict]
+    add_model : Optional[dict]
         Dictionary of additional models to include.
-    select_method : Optional[List[str]]
+    select_model : Optional[List[str]]
         List of models to be selected for validation.
     scoring_list : Optional[List[str]]
         List of scoring metrics for the validation. If None, default metrics are used.
@@ -315,17 +313,17 @@ def ev_report(
     y_test = data_test[activity_col]
 
     task_type = _get_task_type(data_train, activity_col)
-    method_map = _get_method_map(task_type, add_method, n_jobs)
+    model_map = _get_model_map(task_type, add_model, n_jobs)
 
     models_to_compare = {}
-    if select_method is None:
-        models_to_compare = method_map
+    if select_model is None:
+        models_to_compare = model_map
     else:
-        for name in select_method:
-            if name in method_map:
-                models_to_compare.update({name: method_map[name]})
+        for name in select_model:
+            if name in model_map:
+                models_to_compare.update({name: model_map[name]})
             else:
-                raise ValueError(f"Method '{name}' is not recognized.")
+                raise ValueError(f"Model '{name}' is not recognized.")
 
     ev_score = {}
     for name, model in models_to_compare.items():

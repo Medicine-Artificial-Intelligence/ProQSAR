@@ -8,10 +8,10 @@ from typing import Optional
 
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_task_type,
-    _get_method_map,
+    _get_model_map,
     _get_cv_strategy,
 )
-from ProQSAR.ModelDeveloper.model_validation import iv_report
+from ProQSAR.ModelDeveloper.model_validation import cross_validation_report
 
 
 class ModelDeveloper:
@@ -24,11 +24,11 @@ class ModelDeveloper:
         Name of the activity column in the dataset.
     id_col : str
         Name of the ID column in the dataset.
-    method : str, optional
-        The method to use for model development, 'best' or a specific model (default: 'best').
-    add_method : Optional[dict], optional
-        Additional methods to be added (default: None).
-    scoring_target : Optional[str], optional
+    select_model : str, optional
+        The model to use for model development, 'best' or a specific model (default: 'best').
+    add_model : Optional[dict], optional
+        Additional models to be added (default: None).
+    scoring : Optional[str], optional
         Scoring metric to target for comparison (default: None).
     n_splits : int, optional
         Number of cross-validation splits (default: 10).
@@ -42,16 +42,16 @@ class ModelDeveloper:
         Name of the prediction result file (default: 'pred_result').
     save_dir : str, optional
         Directory to save model and results (default: 'Project/Model_Development').
-    save_iv_report : bool, optional
+    save_cv_report : bool, optional
         Whether to save the IV report (default: False).
-    iv_report_name : str, optional
-        Name of the IV report file (default: 'comparison_iv_report').
+    cv_report_name : str, optional
+        Name of the IV report file (default: 'comparison_cv_report').
     visualize : Optional[str], optional
         Visualization option for report (default: None).
     save_fig : bool, optional
         Whether to save figures (default: False).
-    fig_name : str, optional
-        Name of the figure file (default: 'comparison_iv_graph').
+    fig_prefix : str, optional
+        Name of the figure file (default: 'comparison_cv_graph').
     n_jobs : int, optional
         Number of jobs to run in parallel (default: -1).
 
@@ -72,39 +72,39 @@ class ModelDeveloper:
         self,
         activity_col: str,
         id_col: str,
-        method: str = "best",
-        add_method: Optional[dict] = None,
-        scoring_target: Optional[str] = None,
+        select_model: str = "best",
+        add_model: Optional[dict] = None,
+        scoring: Optional[str] = None,
         n_splits: int = 10,
         n_repeats: int = 3,
         save_model: bool = True,
         save_pred_result: bool = True,
         pred_result_name: str = "pred_result",
-        save_dir: str = "Project/Model_Development",
-        save_iv_report: bool = False,
-        iv_report_name: str = "comparison_iv_report",
+        save_dir: Optional[str] = "Project/ModelDeveloper",
+        save_cv_report: bool = False,
+        cv_report_name: str = "md_cv_report",
         visualize: Optional[str] = None,
         save_fig: bool = False,
-        fig_name: str = "comparison_iv_graph",
+        fig_prefix: str = "md_cv_graph",
         n_jobs: int = -1,
     ):
         """Initializes the ModelDeveloper with necessary attributes."""
         self.activity_col = activity_col
         self.id_col = id_col
-        self.method = method
-        self.add_method = add_method
-        self.scoring_target = scoring_target
+        self.select_model = select_model
+        self.add_model = add_model
+        self.scoring = scoring
         self.n_splits = n_splits
         self.n_repeats = n_repeats
         self.save_model = save_model
         self.save_pred_result = save_pred_result
         self.pred_result_name = pred_result_name
         self.save_dir = save_dir
-        self.save_iv_report = save_iv_report
-        self.iv_report_name = iv_report_name
+        self.save_cv_report = save_cv_report
+        self.cv_report_name = cv_report_name
         self.visualize = visualize
         self.save_fig = save_fig
-        self.fig_name = fig_name
+        self.fig_prefix = fig_prefix
         self.n_jobs = n_jobs
         self.model = None
         self.task_type = None
@@ -114,7 +114,7 @@ class ModelDeveloper:
 
     def fit(self, data: pd.DataFrame) -> BaseEstimator:
         """
-        Fits a machine learning model based on the specified method.
+        Fits a machine learning model based on the specified model.
 
         Parameters:
         -----------
@@ -130,39 +130,38 @@ class ModelDeveloper:
         y_data = data[self.activity_col]
 
         self.task_type = _get_task_type(data, self.activity_col)
-        self.method_map = _get_method_map(self.task_type, self.add_method, self.n_jobs)
+        self.model_map = _get_model_map(self.task_type, self.add_model, self.n_jobs)
         self.cv = _get_cv_strategy(
             self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
         )
 
-        if self.method == "best":
-            if self.scoring_target is None:
-                self.scoring_target = "f1" if self.task_type == "C" else "r2"
-            comparison_df = iv_report(
+        if self.select_model == "best":
+            self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
+            comparison_df = cross_validation_report(
                 data=data,
                 activity_col=self.activity_col,
                 id_col=self.id_col,
-                add_method=self.add_method,
-                scoring_list=[self.scoring_target],
+                add_model=self.add_model,
+                scoring_list=[self.scoring],
                 n_splits=self.n_splits,
                 n_repeats=self.n_repeats,
                 visualize=self.visualize,
                 save_fig=self.save_fig,
-                fig_name=self.fig_name,
-                save_csv=self.iv_report_name,
-                csv_name=self.iv_report_name,
+                fig_prefix=self.fig_prefix,
+                save_csv=self.save_cv_report,
+                csv_name=self.cv_report_name,
                 save_dir=self.save_dir,
                 n_jobs=self.n_jobs,
             )
 
-            self.method = comparison_df.loc[
-                comparison_df[f"{self.scoring_target}_mean"].idxmax(), "Method"
+            self.select_model = comparison_df.loc[
+                comparison_df[f"{self.scoring}_mean"].idxmax(), "Model"
             ]
-            self.model = self.method_map[self.method].fit(X=X_data, y=y_data)
-        elif self.method in self.method_map:
-            self.model = self.method_map[self.method].fit(X=X_data, y=y_data)
+            self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
+        elif self.select_model in self.model_map:
+            self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
         else:
-            raise ValueError(f"Method '{self.method}' is not recognized.")
+            raise ValueError(f"Model '{self.select_model}' is not recognized.")
 
         if self.save_model:
             with open(f"{self.save_dir}/activity_col.pkl", "wb") as file:
@@ -192,7 +191,7 @@ class ModelDeveloper:
         """
         if self.model is None:
             raise NotFittedError(
-                "ModelDeveloper is not fitted yet. Call 'fit' before using this method."
+                "ModelDeveloper is not fitted yet. Call 'fit' before using this model."
             )
 
         X_data = data.drop([self.activity_col, self.id_col], axis=1)

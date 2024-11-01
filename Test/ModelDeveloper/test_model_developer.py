@@ -47,9 +47,9 @@ class TestModelDeveloper(unittest.TestCase):
         self.model_dev = ModelDeveloper(
             activity_col="Activity",
             id_col="ID",
-            method="best",
-            scoring_target="accuracy",
-            add_method={"NewMethod": RandomForestClassifier()},
+            select_model="best",
+            scoring="accuracy",
+            add_model={"NewModel": RandomForestClassifier()},
         )
 
     def test_fit_method(self):
@@ -85,9 +85,9 @@ class TestModelDeveloper(unittest.TestCase):
         self.assertIn("Predicted values", static_predictions.columns)
         self.assertEqual(static_predictions.shape[0], self.test_data.shape[0])
 
-    def test_fit_invalid_method(self):
-        """Test fitting with an invalid method raises ValueError."""
-        self.model_dev.method = "invalid_method"
+    def test_fit_invalid_model(self):
+        """Test fitting with an invalid model raises ValueError."""
+        self.model_dev.select_model = "invalid_model"
         with self.assertRaises(ValueError):
             self.model_dev.fit(self.train_data)
 

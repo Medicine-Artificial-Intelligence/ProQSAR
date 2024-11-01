@@ -10,8 +10,8 @@ from sklearn.linear_model import Ridge
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_cv_strategy,
     _get_task_type,
-    _get_method_map,
-    _get_iv_scoring_list,
+    _get_model_map,
+    _get_cv_scoring_list,
     _get_ev_scoring_dict,
 )
 
@@ -85,15 +85,15 @@ class TestModelMethods(unittest.TestCase):
         result = _get_task_type(self.reg_data, "Activity")
         self.assertEqual(result, "R")
 
-    def test_get_method_map_classification(self):
-        method_map = _get_method_map("C")
-        self.assertIn("Logistic", method_map)
-        self.assertIn("KNN", method_map)
+    def test_get_model_map_classification(self):
+        model_map = _get_model_map("C")
+        self.assertIn("LogisticRegression", model_map)
+        self.assertIn("KNeighborsClassifier", model_map)
 
-    def test_get_method_map_regression(self):
-        method_map = _get_method_map("R")
-        self.assertIn("Linear", method_map)
-        self.assertIn("ElasticNet", method_map)
+    def test_get_model_map_regression(self):
+        model_map = _get_model_map("R")
+        self.assertIn("LinearRegression", model_map)
+        self.assertIn("ElasticNetCV", model_map)
 
     def test_get_cv_strategy_classification(self):
         cv_strategy = _get_cv_strategy("C")
@@ -103,12 +103,12 @@ class TestModelMethods(unittest.TestCase):
         cv_strategy = _get_cv_strategy("R")
         self.assertIsInstance(cv_strategy, RepeatedKFold)
 
-    def test_get_iv_scoring_list_classification(self):
-        scoring_list = _get_iv_scoring_list("C")
+    def test_get_cv_scoring_list_classification(self):
+        scoring_list = _get_cv_scoring_list("C")
         self.assertIn("roc_auc", scoring_list)
 
-    def test_get_iv_scoring_list_regression(self):
-        scoring_list = _get_iv_scoring_list("R")
+    def test_get_cv_scoring_list_regression(self):
+        scoring_list = _get_cv_scoring_list("R")
         self.assertIn("r2", scoring_list)
 
     def test_get_ev_scoring_dict_classification(self):
@@ -128,10 +128,10 @@ class TestModelMethods(unittest.TestCase):
         self.assertIn("mean_squared_error", scoring_dict)
         self.assertIn("mean_absolute_error", scoring_dict)
 
-    def test_additional_methods_in_method_map(self):
-        add_method = {"CustomModel": Ridge(alpha=1.0)}
-        method_map = _get_method_map("R", add_method=add_method)
-        self.assertIn("CustomModel", method_map)
+    def test_additional_models_in_model_map(self):
+        add_model = {"CustomModel": Ridge(alpha=1.0)}
+        model_map = _get_model_map("R", add_model=add_model)
+        self.assertIn("CustomModel", model_map)
 
     def test_task_type_invalid_data(self):
         invalid_data = self.class_data.copy()
@@ -145,9 +145,9 @@ class TestModelMethods(unittest.TestCase):
         with self.assertRaises(TypeError):
             _get_ev_scoring_dict("C", y_test, y_test_pred)
 
-    def test_iv_scoring_list_invalid_task(self):
+    def test_cv_scoring_list_invalid_task(self):
         with self.assertRaises(ValueError):
-            _get_iv_scoring_list("X")
+            _get_cv_scoring_list("X")
 
     def test_ev_scoring_list_invalid_task(self):
         y_test = np.array([0, 1, 1, 0])

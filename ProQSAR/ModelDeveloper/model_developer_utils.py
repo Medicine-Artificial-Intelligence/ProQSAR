@@ -70,69 +70,77 @@ def _get_task_type(data: pd.DataFrame, activity_col: str) -> str:
         raise ValueError("Insufficient number of categories to determine model type.")
 
 
-def _get_method_map(
+def _get_model_map(
     task_type: str,
-    add_method: Optional[dict] = None,
-    n_jobs: Optional[int] = -1,
+    add_model: Optional[dict] = None,
+    n_jobs: int = -1,
 ) -> dict:
     """
     Retrieves a dictionary mapping model names to their corresponding estimators.
 
     Args:
         task_type (str): 'C' for classification, 'R' for regression.
-        add_method (Optional[dict]): Additional methods to add to the map.
+        add_model (Optional[dict]): Additional models to add to the map.
         n_jobs (Optional[int]): Number of jobs for parallelization.
 
     Returns:
         dict: A dictionary of model names and estimators.
     """
     if task_type == "C":
-        method_map = {
-            "Logistic": LogisticRegression(
+        model_map = {
+            "LogisticRegression": LogisticRegression(
                 max_iter=10000, solver="liblinear", random_state=42, n_jobs=n_jobs
             ),
-            "KNN": KNeighborsClassifier(n_neighbors=20, n_jobs=n_jobs),
-            "SVM": SVC(probability=True, max_iter=10000),
-            "RF": RandomForestClassifier(random_state=42, n_jobs=n_jobs),
-            "ExT": ExtraTreesClassifier(random_state=42, n_jobs=n_jobs),
-            "Ada": AdaBoostClassifier(n_estimators=100, random_state=42),
-            "Grad": GradientBoostingClassifier(random_state=42),
-            "XGB": XGBClassifier(random_state=42, verbosity=0, eval_metric="logloss"),
-            "CatB": CatBoostClassifier(random_state=42, verbose=0),
-            "MLP": MLPClassifier(
+            "KNeighborsClassifier": KNeighborsClassifier(n_neighbors=20, n_jobs=n_jobs),
+            "SVC": SVC(probability=True, max_iter=10000),
+            "RandomForestClassifier": RandomForestClassifier(
+                random_state=42, n_jobs=n_jobs
+            ),
+            "ExtraTreesClassifier": ExtraTreesClassifier(
+                random_state=42, n_jobs=n_jobs
+            ),
+            "AdaBoostClassifier": AdaBoostClassifier(n_estimators=100, random_state=42),
+            "GradientBoostingClassifier": GradientBoostingClassifier(random_state=42),
+            "XGBClassifier": XGBClassifier(
+                random_state=42, verbosity=0, eval_metric="logloss"
+            ),
+            "CatBoostClassifier": CatBoostClassifier(random_state=42, verbose=0),
+            "MLPClassifier": MLPClassifier(
                 alpha=0.01, max_iter=10000, hidden_layer_sizes=(150,), random_state=42
             ),
         }
     elif task_type == "R":
-        method_map = {
-            "Linear": LinearRegression(n_jobs=n_jobs),
-            "KNN": KNeighborsRegressor(n_jobs=n_jobs),
-            "SVM": SVR(),
-            "RF": RandomForestRegressor(random_state=42, n_jobs=n_jobs),
-            "ExT": ExtraTreesRegressor(random_state=42, n_jobs=n_jobs),
-            "Ada": AdaBoostRegressor(random_state=42),
-            "Grad": GradientBoostingRegressor(random_state=42),
-            "XGB": XGBRegressor(
+        model_map = {
+            "LinearRegression": LinearRegression(n_jobs=n_jobs),
+            "KNeighborsRegressor": KNeighborsRegressor(n_jobs=n_jobs),
+            "SVR": SVR(),
+            "RandomForestRegressor": RandomForestRegressor(
+                random_state=42, n_jobs=n_jobs
+            ),
+            "ExtraTreesRegressor": ExtraTreesRegressor(random_state=42, n_jobs=n_jobs),
+            "AdaBoostRegressor": AdaBoostRegressor(random_state=42),
+            "GradientBoostingRegressor": GradientBoostingRegressor(random_state=42),
+            "XGBRegressor": XGBRegressor(
                 random_state=42,
                 verbosity=0,
                 objective="reg:squarederror",
             ),
-            "CatB": CatBoostRegressor(random_state=42, verbose=0),
-            "MLP": MLPRegressor(
+            "CatBoostRegressor": CatBoostRegressor(random_state=42, verbose=0),
+            "MLPRegressor": MLPRegressor(
                 alpha=0.01, max_iter=10000, hidden_layer_sizes=(150,), random_state=42
             ),
             "Ridge": Ridge(),
-            "ElasticNet": ElasticNetCV(cv=5, n_jobs=n_jobs),
+            "ElasticNetCV": ElasticNetCV(cv=5, n_jobs=n_jobs),
         }
     else:
         raise ValueError(
             "Invalid task_type. Please choose 'C' for classification or 'R' for regression."
         )
 
-    if add_method:
-        method_map.update(add_method)
+    if add_model:
+        model_map.update(add_model)
 
-    return method_map
+    return model_map
 
 
 def _get_cv_strategy(
@@ -163,7 +171,7 @@ def _get_cv_strategy(
         )
 
 
-def _get_iv_scoring_list(task_type: str) -> list:
+def _get_cv_scoring_list(task_type: str) -> list:
     """
     Returns a list of scoring metrics based on the task type.
 
