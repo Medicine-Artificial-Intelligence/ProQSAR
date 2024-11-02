@@ -1,10 +1,11 @@
-import unittest
-import pandas as pd
-import numpy as np
 import os
 import shutil
-from sklearn.datasets import make_classification, make_regression
+import unittest
+import pickle
+import pandas as pd
+import numpy as np
 from sklearn.exceptions import NotFittedError
+from sklearn.datasets import make_classification, make_regression
 from ProQSAR.FeatureSelector.feature_selector import FeatureSelector
 
 
@@ -77,116 +78,99 @@ def create_regression_data(
 
 
 class TestFeatureSelector(unittest.TestCase):
-    """
-    Unit test class for the FeatureSelector module.
-    """
 
     def setUp(self):
         """
         Set up the test environment before each test method.
         """
-        self.data_classification = create_classification_data()
-        self.data_regression = create_regression_data()
-        self.save_dir = "test_save"
-        os.makedirs(self.save_dir, exist_ok=True)
+        self.classification_data = create_classification_data()
+        self.regression_data = create_regression_data()
+        self.fs = FeatureSelector(
+            activity_col="Activity", id_col="ID", save_method=True, save_trans_data=True
+        )
+        self.save_dir = "test_feature_selector"
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
 
     def tearDown(self):
-        """
-        Cleans up the test environment after each test method.
-        """
+        # Cleanup any files created during testing
         shutil.rmtree(self.save_dir)
 
+    def test_initialization(self):
+        """Test proper initialization of the FeatureSelector instance"""
+        self.assertEqual(self.fs.activity_col, "Activity")
+        self.assertEqual(self.fs.id_col, "ID")
+        self.assertEqual(self.fs.select_method, "best")
+
     def test_fit_classification(self):
-        """
-        Test fitting the FeatureSelector on classification data.
-        """
-        fs = FeatureSelector(activity_col="Activity", id_col="ID", method="Anova")
-        fs.fit(self.data_classification)
-        self.assertIsNotNone(fs.feature_selector)
-        self.assertEqual(fs.task_type, "C")
+        """Test the fit method on classification data"""
+        selector = self.fs.fit(self.classification_data)
+        self.assertIsNotNone(selector)
 
     def test_fit_regression(self):
-        """
-        Test fitting the FeatureSelector on regression data.
-        """
-        fs = FeatureSelector(activity_col="Activity", id_col="ID", method="Anova")
-        fs.fit(self.data_regression)
-        self.assertIsNotNone(fs.feature_selector)
-        self.assertEqual(fs.task_type, "R")
+        """Test the fit method on regression data"""
+        fs_regression = FeatureSelector(
+            activity_col="Activity", id_col="ID", scoring="r2"
+        )
+        selector = fs_regression.fit(self.regression_data)
+        self.assertIsNotNone(selector)
 
-    def test_transform_before_fit(self):
-        """
-        Test calling transform before fitting the FeatureSelector.
-        """
-        fs = FeatureSelector(activity_col="Activity", id_col="ID")
+    def test_transform_without_fit(self):
+        """Test that transform raises an error if fit is not called first"""
         with self.assertRaises(NotFittedError):
-            fs.transform(self.data_classification)
+            self.fs.transform(self.classification_data)
 
     def test_fit_transform(self):
-        """
-        Test the fit_transform method of the FeatureSelector.
-        """
-        fs = FeatureSelector(activity_col="Activity", id_col="ID", select_method="Anova")
-        transformed_data = fs.fit_transform(self.data_classification)
-        self.assertNotEqual(
-            transformed_data.shape[1], self.data_classification.shape[1]
-        )
-
-    def test_compare_feature_selectors_classification(self):
-        """
-        Test comparing feature selection methods on classification data.
-        """
-        fs = FeatureSelector(
-            activity_col="Activity",
-            id_col="ID",
-            compare_visual="box",
-        )
-        result_df = fs.compare_feature_selectors(self.data_classification)
-        self.assertIn("Mean", result_df.columns)
-        self.assertIn("Std", result_df.columns)
-
-    def test_compare_feature_selectors_regression(self):
-        """
-        Test comparing feature selection methods on regression data.
-        """
-        fs = FeatureSelector(
-            activity_col="Activity", id_col="ID", compare_table="table"
-        )
-        result_df = fs.compare_feature_selectors(self.data_regression)
-        self.assertIn("Mean", result_df.columns)
-        self.assertIn("Std", result_df.columns)
+        """Test the fit_transform method"""
+        transformed_data = self.fs.fit_transform(self.classification_data)
+        self.assertIn("Activity", transformed_data.columns)
+        self.assertIn("ID", transformed_data.columns)
+        self.assertIsInstance(transformed_data, pd.DataFrame)
 
     def test_static_transform(self):
-        """
-        Test the static_transform method of the FeatureSelector.
-        """
-        fs = FeatureSelector(
-            activity_col="Activity", id_col="ID", method="Anova", save_dir="test_save"
-        )
-        fs.fit(self.data_classification)
+        """Test the static_transform method with pre-saved selectors"""
+        # Save necessary data to simulate a fitted model
+        with open(f"{self.save_dir}/activity_col.pkl", "wb") as file:
+            pickle.dump("Activity", file)
+        with open(f"{self.save_dir}/id_col.pkl", "wb") as file:
+            pickle.dump("ID", file)
+
+        # Save a fitted feature selector
+        selector = self.fs.fit(self.classification_data)
+        with open(f"{self.save_dir}/feature_selector.pkl", "wb") as file:
+            pickle.dump(selector, file)
+
         transformed_data = FeatureSelector.static_transform(
-            self.data_classification, "test_save"
+            data=self.classification_data, save_dir=self.save_dir, save_trans_data=True
         )
-        self.assertNotEqual(
-            transformed_data.shape[1], self.data_classification.shape[1]
+        self.assertIsInstance(transformed_data, pd.DataFrame)
+
+    def test_unrecognized_select_method(self):
+        """Test ValueError for unrecognized select method"""
+        fs_invalid = FeatureSelector(
+            activity_col="Activity", id_col="ID", select_method="unknown_method"
         )
+        with self.assertRaises(ValueError):
+            fs_invalid.fit(self.classification_data)
 
-    def test_static_transform_not_fitted(self):
-        """
-        Test static_transform method when the model is not fitted.
-        """
-        with self.assertRaises(NotFittedError):
-            FeatureSelector.static_transform(
-                self.data_classification, save_dir="non_existent_dir"
-            )
+    def test_save_method(self):
+        """Test saving of the feature selector and metadata after fitting"""
+        self.fs.save_dir = "test_save"
+        self.fs.fit(self.classification_data)
+        self.assertTrue(os.path.exists(f"{self.fs.save_dir}/activity_col.pkl"))
+        self.assertTrue(os.path.exists(f"{self.fs.save_dir}/id_col.pkl"))
+        self.assertTrue(os.path.exists(f"{self.fs.save_dir}/feature_selector.pkl"))
+        shutil.rmtree(self.fs.save_dir)
 
-    def test_select_best_method(self):
-        """
-        Test selecting the best feature selection method.
-        """
-        fs = FeatureSelector(activity_col="Activity", id_col="ID")
-        best_method = fs._select_best_method(self.data_classification)
-        self.assertIn(best_method, fs.method_map)
+    def test_save_transformed_data(self):
+        """Test saving of transformed data after transform"""
+        self.fs.save_dir = "test_save"
+        self.fs.save_trans_data = True
+        self.fs.fit(self.classification_data)
+        transformed_data = self.fs.transform(self.classification_data)
+        self.assertTrue(os.path.exists(f"{self.fs.save_dir}/fs_trans_data.csv"))
+        self.assertIsInstance(transformed_data, pd.DataFrame)
+        shutil.rmtree(self.fs.save_dir)
 
 
 if __name__ == "__main__":

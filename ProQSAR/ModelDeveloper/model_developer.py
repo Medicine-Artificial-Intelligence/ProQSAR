@@ -109,8 +109,6 @@ class ModelDeveloper:
         self.model = None
         self.task_type = None
         self.cv = None
-        if save_dir and not os.path.exists(save_dir):
-            os.makedirs(save_dir, exist_ok=True)
 
     def fit(self, data: pd.DataFrame) -> BaseEstimator:
         """
@@ -164,6 +162,8 @@ class ModelDeveloper:
             raise ValueError(f"Model '{self.select_model}' is not recognized.")
 
         if self.save_model:
+            if self.save_dir and not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir, exist_ok=True)
             with open(f"{self.save_dir}/activity_col.pkl", "wb") as file:
                 pickle.dump(self.activity_col, file)
             with open(f"{self.save_dir}/id_col.pkl", "wb") as file:
@@ -208,6 +208,8 @@ class ModelDeveloper:
         self.pred_result = pd.DataFrame(result)
 
         if self.save_pred_result:
+            if self.save_dir and not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir, exist_ok=True)
             self.pred_result.to_csv(f"{self.save_dir}/{self.pred_result_name}.csv")
 
         return self.pred_result

@@ -1,4 +1,5 @@
 import os
+import shutil
 import unittest
 import numpy as np
 import pandas as pd
@@ -124,8 +125,7 @@ class TestModelReports(unittest.TestCase):
         # Ensure the csv file is saved
         self.assertTrue(os.path.exists("test_dir/test_ev_report.csv"))
         # Cleanup created file
-        os.remove("test_dir/test_ev_report.csv")
-        os.rmdir("test_dir")
+        shutil.rmtree("test_dir")
 
     def test_invalid_graph_type(self):
         # Test invalid graph type in _plot_cv_report
@@ -180,8 +180,7 @@ class TestModelReports(unittest.TestCase):
         # Ensure the figure file is saved
         self.assertTrue(os.path.exists("test_dir/test_cv_graph_accuracy_box.png"))
         # Cleanup created file
-        os.remove("test_dir/test_cv_graph_accuracy_box.png")
-        os.rmdir("test_dir")
+        shutil.rmtree("test_dir")
 
 
 if __name__ == "__main__":
