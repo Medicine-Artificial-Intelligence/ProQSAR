@@ -20,11 +20,11 @@ def _iqr_threshold(data: pd.DataFrame) -> Dict[str, Dict[str, float]]:
         iqr_thresholds[col] = {"low": low, "high": high}
     return iqr_thresholds
 
+
 def _impute_nan(
-    data: pd.DataFrame, 
-    iqr_thresholds: Dict[str, Dict[str, float]]
-    ) -> pd.DataFrame:
-    
+    data: pd.DataFrame, iqr_thresholds: Dict[str, Dict[str, float]]
+) -> pd.DataFrame:
+
     nan_data = deepcopy(data)
     for col, thresh in iqr_thresholds.items():
         low = thresh["low"]
@@ -35,11 +35,12 @@ def _impute_nan(
 
     return nan_data
 
+
 def _feature_quality(
     data: pd.DataFrame,
     id_col: Optional[str] = None,
     activity_col: Optional[str] = None,
-    ) -> Tuple[List[str], List[str]]:
+) -> Tuple[List[str], List[str]]:
 
     good, bad = [], []
     cols_to_exclude = [id_col, activity_col]
@@ -50,9 +51,7 @@ def _feature_quality(
         if not temp_data[col].dropna().isin([0, 1]).all()
     ]
 
-    iqr_thresholds = _iqr_threshold(
-        temp_data[non_binary_cols]
-        )
+    iqr_thresholds = _iqr_threshold(temp_data[non_binary_cols])
     for col, thresh in iqr_thresholds.items():
         low = thresh["low"]
         high = thresh["high"]
@@ -65,78 +64,85 @@ def _feature_quality(
 
     return good, bad
 
+
 class IQRHandler:
 
     def __init__(self):
         self.iqr_thresholds = None
-    
+
     def fit(self, data: pd.DataFrame) -> Dict[str, Dict[str, float]]:
 
         self.iqr_thresholds = _iqr_threshold(data)
         return self
-    
+
     def transform(self, data: pd.DataFrame):
 
         if self.iqr_thresholds is None:
             raise ValueError("The 'fit' method must be called before 'transform'.")
-        
+
         transformed_data = deepcopy(data)
-        
+
         for col, thresh in self.iqr_thresholds.items():
             low = thresh["low"]
             high = thresh["high"]
             transformed_data = data[(data[col] >= low) & (data[col] <= high)]
         return transformed_data
-    
+
     def fit_transform(self, data: pd.DataFrame):
-        
+
         self.fit(data)
         return self.transform(data)
 
+
 class WinsorHandler:
-    
+
     def __init__(self):
         self.iqr_thresholds = None
-        
+
     def fit(self, data: pd.DataFrame) -> Dict[str, Dict[str, float]]:
 
         self.iqr_thresholds = _iqr_threshold(data)
         return self
-    
+
     def transform(self, data: pd.DataFrame):
-        
+
         if self.iqr_thresholds is None:
             raise ValueError("The 'fit' method must be called before 'transform'.")
 
         transformed_data = deepcopy(data)
-                        
+
         for col, thresh in self.iqr_thresholds.items():
             low = thresh["low"]
             high = thresh["high"]
-            transformed_data[col] = np.where(transformed_data[col] < low, low, transformed_data[col])
-            transformed_data[col] = np.where(transformed_data[col] > high, high, transformed_data[col])
-            
+            transformed_data[col] = np.where(
+                transformed_data[col] < low, low, transformed_data[col]
+            )
+            transformed_data[col] = np.where(
+                transformed_data[col] > high, high, transformed_data[col]
+            )
+
         return transformed_data
-    
+
     def fit_transform(self, data: pd.DataFrame):
         self.fit(data)
         return self.transform(data)
 
+
 class ImputationHandler:
-    
+
     def __init__(
         self,
         missing_thresh: float = 40.0,
         imputation_strategy: str = "mean",
-        n_neighbors: int = 5
-        ):
-        
+        n_neighbors: int = 5,
+    ):
+
         self.missing_thresh = missing_thresh
         self.imputation_strategy = imputation_strategy
         self.n_neighbors = n_neighbors
         self.iqr_thresholds = None
         self.imputation_handler = None
-        
+
     def fit(self, data: pd.DataFrame) -> Dict[str, Dict[str, float]]:
 
         self.iqr_thresholds = _iqr_threshold(data)
@@ -144,24 +150,24 @@ class ImputationHandler:
         self.imputation_handler = MissingHandler(
             missing_thresh=self.missing_thresh,
             imputation_strategy=self.imputation_strategy,
-            n_neighbors=self.n_neighbors
+            n_neighbors=self.n_neighbors,
         )
         self.imputation_handler.fit(nan_data)
-        
+
         return self
-    
+
     def transform(self, data: pd.DataFrame):
         if self.iqr_thresholds or self.imputation_handler is None:
             raise ValueError("The 'fit' method must be called before 'transform'.")
 
-                
         nan_data = _impute_nan(data, self.iqr_thresholds)
         return self.imputation_handler.transform(nan_data)
 
     def fit_transform(self, data: pd.DataFrame):
         self.fit(data)
         return self.transform(data)
-    
+
+
 class UnivariateOutliersHandler:
     """
     A class for handling univariate outliers in a dataset using various methods.
@@ -197,7 +203,7 @@ class UnivariateOutliersHandler:
         save_method: bool = False,
         save_dir: Optional[str] = "Project/OutlierHandler",
         save_trans_data: bool = False,
-        trans_data_name: str = "uo_trans_data",        
+        trans_data_name: str = "uo_trans_data",
     ):
         self.activity_col = activity_col
         self.id_col = id_col
@@ -231,16 +237,19 @@ class UnivariateOutliersHandler:
             "imputation": ImputationHandler(
                 missing_thresh=self.missing_thresh,
                 imputation_strategy=self.imputation_strategy,
-                n_neighbors=self.n_neighbors),
+                n_neighbors=self.n_neighbors,
+            ),
             "power": PowerTransformer(),
             "normal": QuantileTransformer(output_distribution="normal"),
             "uniform": QuantileTransformer(output_distribution="uniform"),
         }
-        
+
         if self.bad:
             if self.select_method in method_map:
-                self.uni_outlier_handler = method_map[self.select_method].fit(data[self.bad])
-            
+                self.uni_outlier_handler = method_map[self.select_method].fit(
+                    data[self.bad]
+                )
+
             else:
                 raise ValueError(f"Unsupported method: {self.select_method}")
 
@@ -280,8 +289,7 @@ class UnivariateOutliersHandler:
                     transformed_data, self.iqr_thresholds
                 )
                 transformed_data = self.outlier_handler.transform(transformed_data)
-                
-                
+
         elif self.select_method in ["power", "normal", "uniform"]:
             transformed_data[self.bad] = self.outlier_handler.transform(
                 transformed_data[self.bad]
@@ -289,7 +297,7 @@ class UnivariateOutliersHandler:
 
         return transformed_data
 
-############# fit => return self | save => save self =>>> remove static_transform #############
+    ############# fit => return self | save => save self =>>> remove static_transform #############
 
     @staticmethod
     def static_transform(data: pd.DataFrame, save_dir: str) -> pd.DataFrame:
@@ -329,17 +337,13 @@ class UnivariateOutliersHandler:
                 iqr_thresholds = pickle.load(file)
 
             if select_method == "iqr":
-                transformed_data = _apply_iqr(
-                    transformed_data, iqr_thresholds
-                )
+                transformed_data = _apply_iqr(transformed_data, iqr_thresholds)
             elif select_method == "winsorization":
                 transformed_data = _apply_winsorization(
                     transformed_data, iqr_thresholds
                 )
             elif select_method == "imputation":
-                imputed_nan_data = _impute_nan(
-                    transformed_data, iqr_thresholds
-                )
+                imputed_nan_data = _impute_nan(transformed_data, iqr_thresholds)
                 transformed_data = outlier_handler.transform(imputed_nan_data)
         else:
             transformed_data[bad] = outlier_handler.transform(transformed_data[bad])
