@@ -158,14 +158,10 @@ class FeatureSelector:
         if self.save_method:
             if self.save_dir and not os.path.exists(self.save_dir):
                 os.makedirs(self.save_dir, exist_ok=True)
-            with open(f"{self.save_dir}/activity_col.pkl", "wb") as file:
-                pickle.dump(self.activity_col, file)
-            with open(f"{self.save_dir}/id_col.pkl", "wb") as file:
-                pickle.dump(self.id_col, file)
             with open(f"{self.save_dir}/feature_selector.pkl", "wb") as file:
-                pickle.dump(self.feature_selector, file)
+                pickle.dump(self, file)
 
-        return self.feature_selector
+        return self
 
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -209,50 +205,3 @@ class FeatureSelector:
         """
         self.fit(data)
         return self.transform(data)
-
-    @staticmethod
-    def static_transform(
-        data: pd.DataFrame,
-        save_dir: str,
-        save_trans_data: bool = False,
-        trans_data_name: str = "fs_trans_data",
-    ) -> pd.DataFrame:
-        """
-        Transforms data using a previously fitted selector loaded from disk.
-
-        Parameters:
-            data (pd.DataFrame): Input data containing features and target column.
-            save_dir (str): Directory to load the fitted selector and related data.
-            save_trans_data (bool): Whether to save the transformed data to a file.
-            trans_data_name (str): File name for saved transformed data.
-
-        Returns:
-            pd.DataFrame: Transformed data with selected features.
-
-        Raises:
-            NotFittedError: If the feature selector has not been previously fitted and saved.
-        """
-        if not os.path.exists(f"{save_dir}/feature_selector.pkl"):
-            raise NotFittedError(
-                "FeatureSelector is not fitted yet. Call 'fit' before using this method."
-            )
-
-        with open(f"{save_dir}/activity_col.pkl", "rb") as file:
-            activity_col = pickle.load(file)
-        with open(f"{save_dir}/id_col.pkl", "rb") as file:
-            id_col = pickle.load(file)
-        with open(f"{save_dir}/feature_selector.pkl", "rb") as file:
-            feature_selector = pickle.load(file)
-
-        X_data = data.drop(
-            [activity_col, id_col],
-            axis=1,
-            errors="ignore",
-        )
-        data_selected = pd.DataFrame(feature_selector.transform(X_data))
-        transformed_data = pd.concat(
-            [data_selected, data[[id_col, activity_col]]], axis=1
-        )
-        if save_trans_data:
-            transformed_data.to_csv(f"{save_dir}/{trans_data_name}.csv")
-        return transformed_data

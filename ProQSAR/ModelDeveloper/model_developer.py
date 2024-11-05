@@ -164,16 +164,10 @@ class ModelDeveloper:
         if self.save_model:
             if self.save_dir and not os.path.exists(self.save_dir):
                 os.makedirs(self.save_dir, exist_ok=True)
-            with open(f"{self.save_dir}/activity_col.pkl", "wb") as file:
-                pickle.dump(self.activity_col, file)
-            with open(f"{self.save_dir}/id_col.pkl", "wb") as file:
-                pickle.dump(self.id_col, file)
             with open(f"{self.save_dir}/model.pkl", "wb") as file:
-                pickle.dump(self.model, file)
-            with open(f"{self.save_dir}/task_type.pkl", "wb") as file:
-                pickle.dump(self.task_type, file)
+                pickle.dump(self, file)
 
-        return self.model
+        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -213,65 +207,3 @@ class ModelDeveloper:
             self.pred_result.to_csv(f"{self.save_dir}/{self.pred_result_name}.csv")
 
         return self.pred_result
-
-    @staticmethod
-    def static_predict(
-        data: pd.DataFrame,
-        save_dir: str,
-        save_pred_result: bool = True,
-        pred_result_name: str = "pred_result",
-    ) -> pd.DataFrame:
-        """
-        Loads a pre-trained model from disk and predicts outcomes.
-
-        Parameters:
-        -----------
-        data : pd.DataFrame
-            The dataset to predict on, including features, activity, and ID columns.
-        save_dir : str
-            The directory where the model is saved.
-        save_pred_result : bool, optional
-            Whether to save the prediction result (default: True).
-        pred_result_name : str, optional
-            Name of the prediction result file (default: 'pred_result').
-
-        Returns:
-        --------
-        pd.DataFrame
-            A DataFrame containing the predicted outcomes and optionally the probabilities.
-        """
-
-        if not os.path.exists(f"{save_dir}/model.pkl"):
-            raise NotFittedError(
-                "ModelDeveloper is not fitted yet. Call 'fit' before using this method."
-            )
-
-        with open(f"{save_dir}/activity_col.pkl", "rb") as file:
-            activity_col = pickle.load(file)
-        with open(f"{save_dir}/id_col.pkl", "rb") as file:
-            id_col = pickle.load(file)
-        with open(f"{save_dir}/model.pkl", "rb") as file:
-            model = pickle.load(file)
-        with open(f"{save_dir}/task_type.pkl", "rb") as file:
-            task_type = pickle.load(file)
-
-        X_data = data.drop(
-            [activity_col, id_col],
-            axis=1,
-            errors="ignore",
-        )
-        y_pred = model.predict(X_data)
-        result = {
-            "ID": data[id_col].values,
-            "Predicted values": y_pred,
-        }
-        if task_type == "C":
-            y_proba = model.predict_proba(X_data)[:, 1] * 100
-            result["Probability"] = np.round(y_proba, 2)
-
-        pred_result = pd.DataFrame(result)
-
-        if save_pred_result:
-            pred_result.to_csv(f"{save_dir}/{pred_result_name}.csv")
-
-        return pred_result

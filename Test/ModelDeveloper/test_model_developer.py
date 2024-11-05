@@ -65,26 +65,6 @@ class TestModelDeveloper(unittest.TestCase):
         self.assertIn("Predicted values", predictions.columns)
         self.assertEqual(predictions.shape[0], self.test_data.shape[0])
 
-    def test_static_predict(self):
-        """Test static prediction method with a saved model."""
-        self.model_dev.fit(self.train_data)
-        # Save model files for static prediction
-        self.model_dev.save_model = True
-        self.model_dev.save_pred_result = False  # To avoid file creation
-        self.model_dev.fit(self.train_data)  # Save model
-
-        # Create a new ModelDeveloper instance for static prediction
-        static_model_dev = ModelDeveloper(
-            activity_col="Activity", id_col="ID", save_dir=self.model_dev.save_dir
-        )
-
-        # Predict using static_predict method
-        static_predictions = static_model_dev.static_predict(
-            self.test_data, save_dir=self.model_dev.save_dir
-        )
-        self.assertIn("Predicted values", static_predictions.columns)
-        self.assertEqual(static_predictions.shape[0], self.test_data.shape[0])
-
     def test_fit_invalid_model(self):
         """Test fitting with an invalid model raises ValueError."""
         self.model_dev.select_model = "invalid_model"

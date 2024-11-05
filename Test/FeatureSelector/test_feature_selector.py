@@ -127,24 +127,6 @@ class TestFeatureSelector(unittest.TestCase):
         self.assertIn("ID", transformed_data.columns)
         self.assertIsInstance(transformed_data, pd.DataFrame)
 
-    def test_static_transform(self):
-        """Test the static_transform method with pre-saved selectors"""
-        # Save necessary data to simulate a fitted model
-        with open(f"{self.save_dir}/activity_col.pkl", "wb") as file:
-            pickle.dump("Activity", file)
-        with open(f"{self.save_dir}/id_col.pkl", "wb") as file:
-            pickle.dump("ID", file)
-
-        # Save a fitted feature selector
-        selector = self.fs.fit(self.classification_data)
-        with open(f"{self.save_dir}/feature_selector.pkl", "wb") as file:
-            pickle.dump(selector, file)
-
-        transformed_data = FeatureSelector.static_transform(
-            data=self.classification_data, save_dir=self.save_dir, save_trans_data=True
-        )
-        self.assertIsInstance(transformed_data, pd.DataFrame)
-
     def test_unrecognized_select_method(self):
         """Test ValueError for unrecognized select method"""
         fs_invalid = FeatureSelector(
@@ -157,8 +139,6 @@ class TestFeatureSelector(unittest.TestCase):
         """Test saving of the feature selector and metadata after fitting"""
         self.fs.save_dir = "test_save"
         self.fs.fit(self.classification_data)
-        self.assertTrue(os.path.exists(f"{self.fs.save_dir}/activity_col.pkl"))
-        self.assertTrue(os.path.exists(f"{self.fs.save_dir}/id_col.pkl"))
         self.assertTrue(os.path.exists(f"{self.fs.save_dir}/feature_selector.pkl"))
         shutil.rmtree(self.fs.save_dir)
 
