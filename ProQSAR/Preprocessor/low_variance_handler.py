@@ -5,20 +5,25 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.feature_selection import VarianceThreshold
+from sklearn.exceptions import NotFittedError
+from typing import Optional
 
 
 class LowVarianceHandler:
 
     def __init__(
         self,
-        id_col: str,
-        activity_col: str,
+        id_col: Optional[str] = None,
+        activity_col: Optional[str] = None,
         var_thresh: float = 0.05,
+        save_method: bool = True,
         visualize: bool = True,
         save_image: bool = True,
-        image_path: str = "variance_analysis.png",
+        image_name: str = "variance_analysis.png",
         save_dir: str = "Project/VarianceHandler",
-    ) -> None:
+        save_trans_data: bool = False,
+        trans_data_name: str = "lvh_trans_data",
+    ):
         """
         Initialize the LowVarianceHandler.
 
@@ -26,32 +31,37 @@ class LowVarianceHandler:
         - id_col (str): The column name for the ID column.
         - activity_col (str): The column name for the activity column.
         - var_thresh (float): The variance threshold. Default is 0.05.
+        - save_method (bool): Whether to save the fitted missing data handler.
         - visualize (bool): Whether to visualize the variance threshold analysis.
         Default is True.
         - save_image (bool): Whether to save the plot as an image. Default is True.
-        - image_path (str): The path to save the image if save_image is True.
+        - image_name (str): The path to save the image if save_image is True.
         Default is 'variance_analysis.png'.
         - save_dir (str): The directory to save the image and selected columns file.
         Default is "Project/VarianceHandler".
+        - save_trans_data (bool): Whether to save the transformed data.
+        - trans_data_name (str): File name for saved transformed data.
         """
         self.activity_col = activity_col
         self.id_col = id_col
         self.var_thresh = var_thresh
+        self.save_method = save_method
         self.visualize = visualize
         self.save_image = save_image
-        self.image_path = image_path
+        self.image_name = image_name
         self.save_dir = save_dir
-        if save_dir and not os.path.exists(save_dir):
-            os.makedirs(save_dir, exist_ok=True)
+        self.save_trans_data = save_trans_data
+        self.trans_data_name = trans_data_name
+        self.selected_columns = None
 
     @staticmethod
     def variance_threshold_analysis(
         data: pd.DataFrame,
-        id_col: str,
-        activity_col: str,
+        id_col: Optional[str] = None,
+        activity_col: Optional[str] = None,
         set_style: str = "whitegrid",
         save_image: bool = False,
-        image_path: str = "variance_analysis.png",
+        image_name: str = "variance_analysis.png",
         save_dir: str = "Project/VarianceHandler",
     ) -> None:
         """
@@ -64,8 +74,8 @@ class LowVarianceHandler:
         - activity_col (str): The column name for the activity column.
         - set_style (str): The style of the seaborn plot. Default is "whitegrid".
         - save_image (bool): Whether to save the plot as an image. Default is False.
-        - image_path (str): The path to save the image if save_image is True.
-        Default is 'variance_analysis.png'.
+        - image_name (str): The path to save the image if save_image is True.
+          Default is 'variance_analysis.png'.
         - save_dir (str): The directory to save the image if save_image is True.
         Default is "Project/VarianceHandler".
         """
@@ -114,15 +124,18 @@ class LowVarianceHandler:
             plt.show()
 
             if save_image:
-                if not os.path.exists(save_dir):
-                    os.makedirs(save_dir)
-                plt.savefig(os.path.join(save_dir, image_path))
+                if save_dir and not os.path.exists(save_dir):
+                    os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(os.path.join(save_dir, image_name))
         else:
             print("No non-binary columns to apply variance threshold.")
 
     @staticmethod
     def select_features_by_variance(
-        data: pd.DataFrame, activity_col: str, id_col: str, var_thresh: float
+        data: pd.DataFrame,
+        activity_col: Optional[str] = None,
+        id_col: Optional[str] = None,
+        var_thresh: float = 0.05,
     ) -> list:
         """
         Select features from data based on variance threshold.
@@ -158,7 +171,7 @@ class LowVarianceHandler:
 
         return columns_to_exclude + binary_cols + selected_features
 
-    def fit(self, data: pd.DataFrame) -> None:
+    def fit(self, data: pd.DataFrame):
         """
         Fits the variance-related preprocessing steps on the data.
 
@@ -168,37 +181,67 @@ class LowVarianceHandler:
 
         if self.visualize:
             LowVarianceHandler.variance_threshold_analysis(
-                data, self.id_col, self.activity_col, self.save_image
+                data=data,
+                id_col=self.id_col,
+                activity_col=self.activity_col,
+                save_image=self.save_image,
+                image_name=self.image_name,
+                save_dir=self.save_dir,
             )
 
-        selected_columns = LowVarianceHandler.select_features_by_variance(
-            data, self.activity_col, self.id_col, self.var_thresh
+        self.selected_columns = LowVarianceHandler.select_features_by_variance(
+            data=data,
+            activity_col=self.activity_col,
+            id_col=self.id_col,
+            var_thresh=self.var_thresh,
         )
 
-        with open(f"{self.save_dir}/selected_columns.pkl", "wb") as file:
-            pickle.dump(selected_columns, file)
+        if self.save_method:
+            if self.save_dir and not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir, exist_ok=True)
+            with open(f"{self.save_dir}/low_variance_handler.pkl", "wb") as file:
+                pickle.dump(self, file)
 
-    @staticmethod
-    def transform(data: pd.DataFrame, save_dir: str) -> pd.DataFrame:
+        return self
+
+    def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         Transform the data by selecting the pre-determined features.
 
         Parameters:
         - data (pd.DataFrame): The input data.
-        - save_dir (str): The directory where the selected columns file is saved.
 
         Returns:
         - pd.DataFrame: The transformed data with selected features.
         """
-        if os.path.exists(f"{save_dir}/selected_columns.pkl"):
-            with open(f"{save_dir}/selected_columns.pkl", "rb") as file:
-                selected_columns = pickle.load(file)
-        else:
-            raise FileNotFoundError(
-                "LowVarianceHandler must be fitted before transformation."
+        if self.selected_columns is None:
+            raise NotFittedError(
+                "LowVarianceHandler is not fitted yet. call 'fit' before using this method."
             )
 
-        return data[selected_columns]
+        transformed_data = data[self.selected_columns]
+
+        if self.save_trans_data:
+            if self.save_dir and not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir, exist_ok=True)
+            if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
+                base, ext = os.path.splitext(self.trans_data_name)
+                counter = 1
+                new_filename = f"{base} ({counter}){ext}"
+
+                while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
+                    counter += 1
+                    new_filename = f"{base} ({counter}){ext}"
+
+                csv_name = new_filename
+
+            else:
+                csv_name = self.trans_data_name
+
+            transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+            print(f"File have been saved at: {self.save_dir}/{csv_name}.csv")
+
+        return transformed_data
 
     def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -211,4 +254,6 @@ class LowVarianceHandler:
         - pd.DataFrame: The transformed data with selected features.
         """
         self.fit(data)
-        return self.transform(data, self.save_dir)
+        return self.transform(
+            data,
+        )

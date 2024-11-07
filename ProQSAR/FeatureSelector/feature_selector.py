@@ -189,7 +189,22 @@ class FeatureSelector:
         if self.save_trans_data:
             if self.save_dir and not os.path.exists(self.save_dir):
                 os.makedirs(self.save_dir, exist_ok=True)
-            transformed_data.to_csv(f"{self.save_dir}/{self.trans_data_name}.csv")
+            if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
+                base, ext = os.path.splitext(self.trans_data_name)
+                counter = 1
+                new_filename = f"{base} ({counter}){ext}"
+
+                while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
+                    counter += 1
+                    new_filename = f"{base} ({counter}){ext}"
+
+                csv_name = new_filename
+
+            else:
+                csv_name = self.trans_data_name
+
+            transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+            print(f"File have been saved at: {self.save_dir}/{csv_name}.csv")
 
         return transformed_data
 

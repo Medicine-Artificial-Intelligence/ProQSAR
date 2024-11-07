@@ -75,14 +75,14 @@ class TestLowVarianceHandler(unittest.TestCase):
         Test the fit method.
         """
         self.handler.fit(self.data)
-        self.assertTrue(os.path.exists("test_dir/selected_columns.pkl"))
+        self.assertTrue(os.path.exists("test_dir/low_variance_handler.pkl"))
 
     def test_transform(self):
         """
         Test the transform method.
         """
         self.handler.fit(self.data)
-        transformed_data = self.handler.transform(self.data, "test_dir")
+        transformed_data = self.handler.transform(self.data)
         expected_columns = [
             "Activity",
             "ID",

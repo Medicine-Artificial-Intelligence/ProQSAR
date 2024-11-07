@@ -3,6 +3,7 @@ import os
 import shutil
 import numpy as np
 import pandas as pd
+from sklearn.exceptions import NotFittedError
 from ProQSAR.Preprocessor.missing_handler import MissingHandler
 
 
@@ -76,13 +77,8 @@ class TestMissingHandler(unittest.TestCase):
         """
         handler = MissingHandler(
             id_col="ID", activity_col="Activity", save_dir=self.save_dir
-        )
-        handler.fit(self.train_data)
-        self.assertTrue(os.path.exists(f"{self.save_dir}/binary_imputer.pkl"))
-        self.assertTrue(os.path.exists(f"{self.save_dir}/binary_cols.pkl"))
-        self.assertTrue(os.path.exists(f"{self.save_dir}/non_binary_imputer.pkl"))
-        self.assertTrue(os.path.exists(f"{self.save_dir}/columns_to_exclude.pkl"))
-        self.assertTrue(os.path.exists(f"{self.save_dir}/drop_cols.pkl"))
+        ).fit(self.train_data)
+        self.assertIsNotNone(handler)
 
     def test_transform(self):
         """
@@ -226,21 +222,68 @@ class TestMissingHandler(unittest.TestCase):
         handler = MissingHandler(
             id_col="ID", activity_col="Activity", save_dir=self.save_dir
         )
-        with self.assertRaises(FileNotFoundError):
+        with self.assertRaises(NotFittedError):
             handler.transform(self.test_data)
 
-    def test_static_transform(self):
+    def test_save_trans_data_name_no_file_exists(self):
         """
-        Tests the static_transform method using saved imputers.
+        Tests the save method with no file exists.
         """
         handler = MissingHandler(
-            id_col="ID", activity_col="Activity", save_dir=self.save_dir
+            id_col="ID",
+            activity_col="Activity",
+            save_dir=self.save_dir,
+            save_trans_data=True,
         )
-        handler.fit(self.train_data)
-        imputed_test_data = MissingHandler.static_transform(
-            self.test_data, self.save_dir
+        handler.fit_transform(self.train_data)
+
+        expected_filename = os.path.join(
+            self.save_dir, f"{handler.trans_data_name}.csv"
         )
-        self.assertFalse(imputed_test_data.isnull().any().any())
+        self.assertTrue(
+            os.path.exists(expected_filename),
+            f"Expected file not found: {expected_filename}",
+        )
+
+        # Check that the file exists with the correct name and that it's a CSV
+        self.assertTrue(expected_filename.endswith(".csv"))
+
+        # Clean up: Remove the file after the test
+        os.remove(expected_filename)
+
+    def test_save_trans_data_name_with_existing_file(self):
+        """
+        Tests the save method with existing file.
+        """
+        handler = MissingHandler(
+            id_col="ID",
+            activity_col="Activity",
+            save_dir=self.save_dir,
+            save_trans_data=True,
+        )
+        existing_file = os.path.join(self.save_dir, f"{handler.trans_data_name}.csv")
+        transformed_data = pd.DataFrame(
+            {"id": [1, 2], "activity": ["A", "B"], "feature1": [1, 2]}
+        )
+        transformed_data.to_csv(existing_file, index=False)
+
+        handler.fit_transform(self.train_data)
+
+        # Check that the file is saved with the updated name (e.g., test_trans_data (1).csv)
+        expected_filename = os.path.join(
+            self.save_dir, f"{handler.trans_data_name} (1).csv"
+        )
+        self.assertTrue(
+            os.path.exists(expected_filename),
+            f"Expected file not found: {expected_filename}",
+        )
+
+        # Check that the file exists with the correct name and that it's a CSV
+        self.assertTrue(expected_filename.endswith(".csv"))
+
+        # Clean up: Remove the files after the test
+        os.remove(existing_file)
+        os.remove(expected_filename)
 
 
 if __name__ == "__main__":

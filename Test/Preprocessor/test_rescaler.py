@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import os
 import shutil
-import pickle
 from sklearn.preprocessing import (
     MinMaxScaler,
     StandardScaler,
@@ -76,21 +75,17 @@ class TestRescaler(unittest.TestCase):
         """
         self.rescaler.fit(self.train_data)
 
-        self.assertTrue(os.path.exists(f"{self.save_dir}/scaler.pkl"))
-        self.assertTrue(os.path.exists(f"{self.save_dir}/non_binary_cols.pkl"))
-
-        with open(f"{self.save_dir}/non_binary_cols.pkl", "rb") as file:
-            non_binary_cols = pickle.load(file)
-            self.assertIn("Feature1", non_binary_cols)
-            self.assertIn("Feature2", non_binary_cols)
-            self.assertIn("Feature3", non_binary_cols)
+        self.assertTrue(os.path.exists(f"{self.save_dir}/rescaler.pkl"))
+        self.assertIn("Feature1", self.rescaler.non_binary_cols)
+        self.assertIn("Feature2", self.rescaler.non_binary_cols)
+        self.assertIn("Feature3", self.rescaler.non_binary_cols)
 
     def test_transform(self):
         """
         Tests the transform method to ensure data is transformed correctly.
         """
         self.rescaler.fit(self.train_data)
-        transformed_test_data = self.rescaler.transform(self.test_data, self.save_dir)
+        transformed_test_data = self.rescaler.transform(self.test_data)
         self.assertFalse(transformed_test_data.equals(self.test_data))
 
     def test_fit_transform(self):
@@ -116,12 +111,66 @@ class TestRescaler(unittest.TestCase):
         transformed_data = self.rescaler.fit_transform(data)
         self.assertFalse(transformed_data.equals(self.train_data))
 
-    def test_transform_without_fit(self):
+    def test_save_trans_data_name_no_file_exists(self):
         """
-        Tests the transform method without fitting the scaler first.
+        Tests the save method with no file exists.
         """
-        with self.assertRaises(FileNotFoundError):
-            self.rescaler.transform(self.test_data, self.save_dir)
+        rescaler = Rescaler(
+            id_col="ID",
+            activity_col="Activity",
+            save_dir=self.save_dir,
+            save_trans_data=True,
+        )
+        rescaler.fit_transform(self.train_data)
+
+        expected_filename = os.path.join(
+            self.save_dir, f"{rescaler.trans_data_name}.csv"
+        )
+        self.assertTrue(
+            os.path.exists(expected_filename),
+            f"Expected file not found: {expected_filename}",
+        )
+
+        # Check that the file exists with the correct name and that it's a CSV
+        self.assertTrue(expected_filename.endswith(".csv"))
+
+        # Clean up: Remove the file after the test
+        os.remove(expected_filename)
+
+    def test_save_trans_data_name_with_existing_file(self):
+        """
+        Tests the save method with existing file.
+        """
+        rescaler = Rescaler(
+            id_col="ID",
+            activity_col="Activity",
+            save_dir=self.save_dir,
+            save_trans_data=True,
+        )
+        os.makedirs(self.save_dir, exist_ok=True)
+        existing_file = os.path.join(self.save_dir, f"{rescaler.trans_data_name}.csv")
+        transformed_data = pd.DataFrame(
+            {"id": [1, 2], "activity": ["A", "B"], "feature1": [1, 2]}
+        )
+        transformed_data.to_csv(existing_file, index=False)
+
+        rescaler.fit_transform(self.train_data)
+
+        # Check that the file is saved with the updated name (e.g., test_trans_data (1).csv)
+        expected_filename = os.path.join(
+            self.save_dir, f"{rescaler.trans_data_name} (1).csv"
+        )
+        self.assertTrue(
+            os.path.exists(expected_filename),
+            f"Expected file not found: {expected_filename}",
+        )
+
+        # Check that the file exists with the correct name and that it's a CSV
+        self.assertTrue(expected_filename.endswith(".csv"))
+
+        # Clean up: Remove the files after the test
+        os.remove(existing_file)
+        os.remove(expected_filename)
 
 
 if __name__ == "__main__":

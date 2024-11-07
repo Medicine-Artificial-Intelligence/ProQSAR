@@ -1,4 +1,6 @@
 import pandas as pd
+from typing import Optional
+from copy import deepcopy
 from sklearn.preprocessing import (
     MinMaxScaler,
     StandardScaler,
@@ -11,162 +13,199 @@ import os
 
 class Rescaler:
     """
-    A class used to rescale data using different scaling methods.
+    A class to perform rescaling (normalization or standardization) on numerical data columns.
+
+    This class provides functionality for scaling data using different methods such as Min-Max Scaling, 
+    Standard Scaling, or Robust Scaling, and also supports saving the scaling method and transformed data.
 
     Attributes
     ----------
-    id_col : str
-        The column name representing the ID in the data.
-    activity_col : str
-        The column name representing the activity in the data.
-    save_dir : str
-        The directory where the scaler and column information will be saved.
-    scaler_method : str
-        The method used for scaling. Default is "MinMaxScaler".
+    id_col : Optional[str]
+        The column name that contains the unique IDs to exclude from the scaling operation.
+    activity_col : Optional[str]
+        The column name that contains activity labels to exclude from the scaling operation.
+    rescaler_method : str
+        The method used for scaling the data. Options are 'MinMaxScaler', 'StandardScaler', 'RobustScaler', or 'None'.
+    save_method : bool
+        Whether to save the fitted rescaler object after fitting.
+    save_dir : Optional[str]
+        Directory to save the fitted rescaler object. Default is "Project/Rescaler".
+    save_trans_data : bool
+        Whether to save the transformed data to a CSV file.
+    trans_data_name : str
+        The name of the transformed data file to save (if `save_trans_data` is True).
+    non_binary_cols : Optional[list]
+        List of columns that are non-binary and should be rescaled.
+    rescaler : Optional[object]
+        The rescaler object (e.g., MinMaxScaler) fitted to the data.
 
     Methods
     -------
-    fit(data: pd.DataFrame):
-        Fits the scaler to the data.
-    transform(data: pd.DataFrame, save_dir: str) -> pd.DataFrame:
-        Transforms the data using the fitted scaler.
-    fit_transform(data: pd.DataFrame) -> pd.DataFrame:
-        Fits the scaler to the data and then transforms it.
+    fit(data: pd.DataFrame) -> None
+        Fits the rescaler to the data.
+    transform(data: pd.DataFrame) -> pd.DataFrame
+        Transforms the data using the fitted rescaler.
+    fit_transform(data: pd.DataFrame) -> pd.DataFrame
+        Fits the rescaler and transforms the data in one step.
+    _get_scaler(rescaler_method: str) -> object
+        Returns the appropriate scaler object based on the provided rescaling method.
     """
-
+    
     def __init__(
         self,
-        id_col: str,
-        activity_col: str,
-        scaler_method: str = "MinMaxScaler",
-        save_dir: str = "Project/Rescaler",
+        id_col: Optional[str] = None,
+        activity_col: Optional[str] = None,
+        rescaler_method: str = "MinMaxScaler",
+        save_method: bool = True,
+        save_dir: Optional[str] = "Project/Rescaler",
+        save_trans_data: bool = False,
+        trans_data_name: str = "rs_trans_data",
     ):
         """
-        Constructs all the necessary attributes for the Rescaler object.
+        Initializes the Rescaler object.
 
         Parameters
         ----------
-        id_col : str
-            The column name representing the ID in the data.
-        activity_col : str
-            The column name representing the activity in the data.
-        scaler_method : str, optional
-            The method used for scaling (default is "MinMaxScaler").
-        save_dir : str, optional
-            The directory where the scaler and column information will be saved.
+        id_col : Optional[str]
+            The column name containing unique identifiers to exclude from scaling.
+        activity_col : Optional[str]
+            The column name containing activity labels to exclude from scaling.
+        rescaler_method : str, default 'MinMaxScaler'
+            The rescaling method to use. Options are 'MinMaxScaler', 'StandardScaler', 'RobustScaler', or 'None'.
+        save_method : bool, default True
+            Whether to save the fitted rescaler model after fitting.
+        save_dir : Optional[str], default 'Project/Rescaler'
+            Directory where the fitted rescaler model will be saved.
+        save_trans_data : bool, default False
+            Whether to save the transformed data to a CSV file.
+        trans_data_name : str, default 'rs_trans_data'
+            The name for the transformed data file to be saved.
         """
         self.id_col = id_col
         self.activity_col = activity_col
-        self.scaler_method = scaler_method
+        self.rescaler_method = rescaler_method
+        self.save_method = save_method
         self.save_dir = save_dir
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir, exist_ok=True)
+        self.save_trans_data = save_trans_data
+        self.trans_data_name = trans_data_name
+        self.non_binary_cols = None
+        self.rescaler = None
 
     @staticmethod
-    def _get_scaler(scaler_method: str) -> object:
+    def _get_scaler(rescaler_method: str) -> object:
         """
-        Returns the scaler object based on the scaler method provided.
+        Returns the appropriate scaler object based on the provided scaling method.
 
         Parameters
         ----------
-        scaler_method : str
-            The method used for scaling.
+        rescaler_method : str
+            The method for scaling (e.g., 'MinMaxScaler', 'StandardScaler', 'RobustScaler', or 'None').
 
         Returns
         -------
         object
-            The scaler object.
+            The scaler object corresponding to the specified method.
 
         Raises
         ------
         ValueError
-            If the scaler method is not supported.
+            If the provided scaling method is not supported.
         """
-        scalers_dict = {
+        rescalers_dict = {
             "MinMaxScaler": MinMaxScaler(),
             "StandardScaler": StandardScaler(),
             "RobustScaler": RobustScaler(),
             "None": FunctionTransformer(lambda x: x),  # No operation scaler
         }
 
-        scaler = scalers_dict.get(scaler_method)
-        if scaler is None:
+        if rescaler_method in rescalers_dict:
+            rescaler = rescalers_dict[rescaler_method]
+        else:
             raise ValueError(
-                f"Unsupported scaler method {scaler_method}. Choose from"
+                f"Unsupported rescaler_method {rescaler_method}. Choose from"
                 + "'MinMaxScaler', 'StandardScaler', 'RobustScaler', or 'None'."
             )
 
-        return scaler
+        return rescaler
 
     def fit(self, data: pd.DataFrame) -> None:
         """
-        Fits the scaler to the data.
+        Fits the rescaler to the provided data, excluding columns specified by `id_col` and `activity_col`.
 
         Parameters
         ----------
         data : pd.DataFrame
-            The data to fit the scaler to.
+            The data to fit the rescaler to.
+
+        Returns
+        -------
+        None
         """
-        cols_to_exclude = [self.id_col, self.activity_col]
-        temp_data = data.drop(columns=cols_to_exclude)
-        non_binary_cols = [
+        temp_data = data.drop(columns=[self.id_col, self.activity_col])
+        self.non_binary_cols = [
             col
             for col in temp_data.columns
             if not temp_data[col].dropna().isin([0, 1]).all()
         ]
 
-        if non_binary_cols:
-            scaler = self._get_scaler(self.scaler_method)
-            scaler.fit(data[non_binary_cols])
-            with open(f"{self.save_dir}/scaler.pkl", "wb") as file:
-                pickle.dump(scaler, file)
-            with open(f"{self.save_dir}/non_binary_cols.pkl", "wb") as file:
-                pickle.dump(non_binary_cols, file)
+        if self.non_binary_cols:
+            self.rescaler = self._get_scaler(self.rescaler_method).fit(
+                data[self.non_binary_cols]
+            )
 
-        # Mark as fitted
-        with open(f"{self.save_dir}/fitted.pkl", "wb") as file:
-            pickle.dump(True, file)
+        if self.save_method:
+            if self.save_dir and not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir, exist_ok=True)
+            with open(f"{self.save_dir}/rescaler.pkl", "wb") as file:
+                pickle.dump(self, file)
 
-    @staticmethod
-    def transform(data: pd.DataFrame, save_dir: str) -> pd.DataFrame:
+        return self
+
+    def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Transforms the data using the fitted scaler.
+        Transforms the provided data using the fitted rescaler.
 
         Parameters
         ----------
         data : pd.DataFrame
-            The data to transform.
-        save_dir : str
-            The directory where the scaler and column information are saved.
+            The data to transform using the fitted rescaler.
 
         Returns
         -------
         pd.DataFrame
             The transformed data.
-
-        Raises
-        ------
-        FileNotFoundError
-            If the scaler has not been fitted.
         """
-        if not os.path.exists(f"{save_dir}/fitted.pkl"):
-            raise FileNotFoundError("Rescaler method must be fitted before transform.")
+        transformed_data = deepcopy(data)
+        if self.non_binary_cols:
+            transformed_data[self.non_binary_cols] = self.rescaler.transform(
+                data[self.non_binary_cols]
+            )
 
-        non_binary_cols = []
-        scaler = None
-        rescaled_data = data.copy()
-        if os.path.exists(f"{save_dir}/non_binary_cols.pkl"):
-            with open(f"{save_dir}/non_binary_cols.pkl", "rb") as file:
-                non_binary_cols = pickle.load(file)
-            with open(f"{save_dir}/scaler.pkl", "rb") as file:
-                scaler = pickle.load(file)
-            rescaled_data[non_binary_cols] = scaler.transform(data[non_binary_cols])
+        if self.save_trans_data:
+            if self.save_dir and not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir, exist_ok=True)
+            if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
+                base, ext = os.path.splitext(self.trans_data_name)
+                counter = 1
+                new_filename = f"{base} ({counter}){ext}"
 
-        return rescaled_data
+                while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
+                    counter += 1
+                    new_filename = f"{base} ({counter}){ext}"
+
+                csv_name = new_filename
+
+            else:
+                csv_name = self.trans_data_name
+
+            transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+            print(f"File have been saved at: {self.save_dir}/{csv_name}.csv")
+
+        return transformed_data
 
     def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Fits the scaler to the data and then transforms it.
+        Fits the rescaler to the data and then transforms it.
 
         Parameters
         ----------
@@ -179,4 +218,4 @@ class Rescaler:
             The fitted and transformed data.
         """
         self.fit(data)
-        return self.transform(data, self.save_dir)
+        return self.transform(data)

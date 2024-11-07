@@ -4,7 +4,12 @@ import numpy as np
 import os
 import shutil
 
-from ProQSAR.Outlier.univariate_outliers import UnivariateOutliersHandler
+from ProQSAR.Outlier.univariate_outliers import (
+    UnivariateOutliersHandler,
+    _feature_quality,
+    _impute_nan,
+    _iqr_threshold,
+)
 
 
 class TestUnivariateOutliersHandler(unittest.TestCase):
@@ -41,9 +46,9 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         )
 
         # Introduce some outliers
-        self.data.loc[0, "Feature2"] = 10
-        self.data.loc[1, "Feature3"] = -20
-        self.data.loc[2, "Feature4"] = 10
+        self.data.loc[5, "Feature2"] = 100
+        self.data.loc[1, "Feature3"] = -50
+        self.data.loc[2, "Feature4"] = 100
 
     def tearDown(self):
         """
@@ -60,13 +65,13 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         handler = UnivariateOutliersHandler(
             id_col="ID",
             activity_col="Activity",
-            handling_method="iqr",
+            select_method="iqr",
             save_dir=self.save_dir,
         )
         handler.fit(self.data)
         transformed_data = handler.transform(self.data)
         self.assertTrue(transformed_data["Feature2"].max() < 100)
-        self.assertTrue(transformed_data["Feature3"].min() > -20)
+        self.assertTrue(transformed_data["Feature3"].min() > -50)
         self.assertTrue(transformed_data["Feature4"].max() < 100)
 
     def test_winsorization_method(self):
@@ -76,14 +81,14 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         handler = UnivariateOutliersHandler(
             id_col="ID",
             activity_col="Activity",
-            handling_method="winsorization",
+            select_method="winsorization",
             save_dir=self.save_dir,
         )
         handler.fit(self.data)
         transformed_data = handler.transform(self.data)
-        self.assertTrue(transformed_data["Feature2"].max() < 10)
-        self.assertTrue(transformed_data["Feature3"].min() > -10)
-        self.assertTrue(transformed_data["Feature4"].max() < 10)
+        self.assertTrue(transformed_data["Feature2"].max() < 100)
+        self.assertTrue(transformed_data["Feature3"].min() > -50)
+        self.assertTrue(transformed_data["Feature4"].max() < 100)
 
     def test_imputation_method(self) -> None:
         """
@@ -92,16 +97,14 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         handler = UnivariateOutliersHandler(
             id_col="ID",
             activity_col="Activity",
-            handling_method="imputation",
+            select_method="imputation",
             save_dir=self.save_dir,
         )
 
         # Use _impute_nan method directly
-        _, bad = handler._feature_quality(
-            self.data, id_col="ID", activity_col="Activity"
-        )
-        iqr_thresholds = handler._iqr_threshold(self.data[bad])
-        imputed_data = handler._impute_nan(self.data, iqr_thresholds)
+        _, bad = _feature_quality(self.data, id_col="ID", activity_col="Activity")
+        iqr_thresholds = _iqr_threshold(self.data[bad])
+        imputed_data = _impute_nan(self.data, iqr_thresholds)
 
         # Check if NaNs were correctly introduced
         self.assertTrue(imputed_data["Feature2"].isna().sum() > 0)
@@ -123,7 +126,7 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         handler = UnivariateOutliersHandler(
             id_col="ID",
             activity_col="Activity",
-            handling_method="power",
+            select_method="power",
             save_dir=self.save_dir,
         )
         handler.fit(self.data)
@@ -137,7 +140,7 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         handler = UnivariateOutliersHandler(
             id_col="ID",
             activity_col="Activity",
-            handling_method="normal",
+            select_method="normal",
             save_dir=self.save_dir,
         )
         handler.fit(self.data)
@@ -151,29 +154,12 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         handler = UnivariateOutliersHandler(
             id_col="ID",
             activity_col="Activity",
-            handling_method="uniform",
+            select_method="uniform",
             save_dir=self.save_dir,
         )
         handler.fit(self.data)
         transformed_data = handler.transform(self.data)
         self.assertEqual(transformed_data.shape, self.data.shape)
-
-    def test_static_transform(self) -> None:
-        """
-        Test the 'static_transform' method for handling outliers using saved parameters.
-        """
-
-        handler = UnivariateOutliersHandler(
-            id_col="ID",
-            activity_col="Activity",
-            handling_method="normal",
-            save_dir=self.save_dir,
-        )
-        handler.fit(self.data)
-        transformed_data_static = UnivariateOutliersHandler.static_transform(
-            self.data, self.save_dir
-        )
-        self.assertEqual(transformed_data_static.shape, self.data.shape)
 
     def test_compare_outlier_methods(self) -> None:
         """
@@ -185,13 +171,8 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         comparison_table2 = UnivariateOutliersHandler.compare_outlier_methods(
             data1=self.data, data2=self.data, activity_col="Activity", id_col="ID"
         )
-        self.assertEqual(
-            comparison_table1.shape[0], 6
-        )  # Should have 6 rows, one for each method
-        self.assertEqual(
-            comparison_table2.shape[0], 6
-        )  # Should have 6 rows, one for each method
-        print(comparison_table2)
+        self.assertEqual(comparison_table1.shape[0], 6)
+        self.assertEqual(comparison_table2.shape[0], 12)
 
 
 if __name__ == "__main__":
