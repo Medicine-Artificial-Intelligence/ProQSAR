@@ -15,7 +15,7 @@ class Rescaler:
     """
     A class to perform rescaling (normalization or standardization) on numerical data columns.
 
-    This class provides functionality for scaling data using different methods such as Min-Max Scaling, 
+    This class provides functionality for scaling data using different methods such as Min-Max Scaling,
     Standard Scaling, or Robust Scaling, and also supports saving the scaling method and transformed data.
 
     Attributes
@@ -50,7 +50,7 @@ class Rescaler:
     _get_scaler(rescaler_method: str) -> object
         Returns the appropriate scaler object based on the provided rescaling method.
     """
-    
+
     def __init__(
         self,
         id_col: Optional[str] = None,
