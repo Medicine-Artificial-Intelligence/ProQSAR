@@ -161,14 +161,14 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         transformed_data = handler.transform(self.data)
         self.assertEqual(transformed_data.shape, self.data.shape)
 
-    def test_compare_outlier_methods(self) -> None:
+    def test_compare_univariate_methods(self) -> None:
         """
         Test the 'compare_outlier_methods' method to ensure different handling methods are compared correctly.
         """
-        comparison_table1 = UnivariateOutliersHandler.compare_outlier_methods(
+        comparison_table1 = UnivariateOutliersHandler.compare_univariate_methods(
             data1=self.data, activity_col="Activity", id_col="ID"
         )
-        comparison_table2 = UnivariateOutliersHandler.compare_outlier_methods(
+        comparison_table2 = UnivariateOutliersHandler.compare_univariate_methods(
             data1=self.data, data2=self.data, activity_col="Activity", id_col="ID"
         )
         self.assertEqual(comparison_table1.shape[0], 6)

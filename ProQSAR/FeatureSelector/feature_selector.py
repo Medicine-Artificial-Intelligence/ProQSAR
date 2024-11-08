@@ -44,9 +44,6 @@ class FeatureSelector:
             Transforms the data based on the fitted selector.
         fit_transform(data: pd.DataFrame) -> pd.DataFrame:
             Fits and transforms the data in one step.
-        static_transform(data: pd.DataFrame, save_dir: str, save_trans_data: bool = False,
-            trans_data_name: str = "fs_trans_data") -> pd.DataFrame:
-            Transforms data using a previously fitted selector loaded from disk.
     """
 
     def __init__(

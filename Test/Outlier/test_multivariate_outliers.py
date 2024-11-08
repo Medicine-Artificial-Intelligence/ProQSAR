@@ -58,7 +58,7 @@ class TestMultivariateOutliersHandler(unittest.TestCase):
         Test the fit method of the MultivariateOutliersHandler.
         """
         self.handler.fit(self.data)
-        self.assertIsNotNone(self.handler.model)
+        self.assertIsNotNone(self.handler.multi_outlier_handler)
 
     def test_transform_without_fit(self):
         """
@@ -74,31 +74,68 @@ class TestMultivariateOutliersHandler(unittest.TestCase):
         transformed_data = self.handler.fit_transform(self.data)
         self.assertNotEqual(transformed_data.shape[0], self.data.shape[0])
 
-    def test_static_transform_without_model(self):
-        """
-        Test the static_transform method without a saved model.
-        """
-        with self.assertRaises(NotFittedError):
-            MultivariateOutliersHandler.static_transform(self.data, "no_model")
-
-    def test_static_transform_with_model(self):
-        """
-        Test the static_transform method with a saved model.
-        """
-        self.handler.fit(self.data)
-        transformed_data = MultivariateOutliersHandler.static_transform(
-            self.data, self.save_dir
-        )
-        self.assertNotEqual(transformed_data.shape[0], self.data.shape[0])
-
     def test_compare_multivariate_methods(self):
         """
         Test the compare_multivariate_methods method of the MultivariateOutliersHandler.
         """
-        comparison_table = MultivariateOutliersHandler.compare_multivariate_methods(
-            self.data
+        comparison_table1 = MultivariateOutliersHandler.compare_multivariate_methods(
+            self.data, activity_col="Activity", id_col="ID"
         )
-        self.assertEqual(comparison_table.shape[0], 5)
+        comparison_table2 = MultivariateOutliersHandler.compare_multivariate_methods(
+            data1=self.data, data2=self.data, activity_col="Activity", id_col="ID"
+        )
+        self.assertEqual(comparison_table1.shape[0], 5)
+        self.assertEqual(comparison_table2.shape[0], 10)
+
+    def test_save_method(self):
+        """
+        Test the save method functionality by ensuring the model is saved to disk.
+        """
+        self.handler.save_method = True
+        self.handler.fit(self.data)
+        model_path = os.path.join(self.save_dir, "multi_outlier_handler.pkl")
+        self.assertTrue(os.path.exists(model_path))
+
+    def test_transform_data_save(self):
+        """
+        Test the save_trans_data option to ensure transformed data is saved.
+        """
+        self.handler.save_trans_data = True
+        self.handler.fit(self.data)
+        transformed_data = self.handler.transform(self.data)
+        transformed_data_path = os.path.join(
+            self.save_dir, f"{self.handler.trans_data_name}.csv"
+        )
+        self.assertTrue(os.path.exists(transformed_data_path))
+        self.assertEqual(
+            pd.read_csv(transformed_data_path).shape[0], transformed_data.shape[0]
+        )
+
+    def test_invalid_method(self):
+        """
+        Test that an unsupported method raises a ValueError.
+        """
+        self.handler.select_method = "UnsupportedMethod"
+        with self.assertRaises(ValueError):
+            self.handler.fit(self.data)
+
+    def test_novelty_setting_local_outlier_factor(self):
+        """
+        Test novelty setting for LocalOutlierFactor.
+        """
+        self.handler.select_method = "LocalOutlierFactor"
+        self.handler.novelty = True
+        self.handler.fit(self.data)
+        transformed_data = self.handler.transform(self.data)
+        self.assertIsNotNone(transformed_data)
+
+    def test_missing_columns_handling(self):
+        """
+        Test that missing ID and activity columns do not cause an error.
+        """
+        handler_no_cols = MultivariateOutliersHandler(select_method="IsolationForest")
+        handler_no_cols.fit(self.data.drop(columns=["ID", "Activity"]))
+        self.assertIsNotNone(handler_no_cols.multi_outlier_handler)
 
 
 if __name__ == "__main__":

@@ -378,7 +378,9 @@ class UnivariateOutliersHandler:
             data, id_col=self.id_col, activity_col=self.activity_col
         )
         if not self.bad:
-            print("No bad features (outliers) found. Skipping outlier handling.")
+            print(
+                "No bad features (univariate outliers) found. Skipping outlier handling."
+            )
             return self
 
         method_map = {
@@ -424,6 +426,11 @@ class UnivariateOutliersHandler:
             print("No bad features (outliers) to handle. Returning original data.")
             return transformed_data
 
+        if self.uni_outlier_handler is None:
+            raise NotFittedError(
+                "UnivariateOutlierHandler is not fitted yet. Call 'fit' before using this method."
+            )
+
         transformed_data[self.bad] = self.uni_outlier_handler.transform(
             transformed_data[self.bad]
         )
@@ -463,7 +470,7 @@ class UnivariateOutliersHandler:
         return self.transform(data)
 
     @staticmethod
-    def compare_outlier_methods(
+    def compare_univariate_methods(
         data1: pd.DataFrame,
         data2: Optional[pd.DataFrame] = None,
         data1_name: str = "data1",

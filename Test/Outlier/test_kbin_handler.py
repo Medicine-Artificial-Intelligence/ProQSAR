@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import os
 import shutil
-from sklearn.exceptions import NotFittedError
 from ProQSAR.Outlier.kbin_handler import KBinHandler
 
 
@@ -72,8 +71,7 @@ class TestKBinHandler(unittest.TestCase):
 
         self.assertEqual(handler.bad, ["Feature2", "Feature3", "Feature4"])
 
-        self.assertTrue(os.path.exists("test_dir/bad_features.pkl"))
-        self.assertTrue(os.path.exists("test_dir/kbin.pkl"))
+        self.assertTrue(os.path.exists("test_dir/kbin_handler.pkl"))
 
     def test_transform(self):
         """
@@ -94,19 +92,6 @@ class TestKBinHandler(unittest.TestCase):
 
         self.assertEqual(transformed_data.shape[1], 9)
 
-    def test_static_transform(self):
-        """
-        Test the `static_transform` method of KBinHandler.
-
-        Verifies that static transformation works as expected when a model has been fitted
-        and saved. Checks the shape of the transformed data.
-        """
-        handler = KBinHandler(id_col="ID", activity_col="Activity", save_dir="test_dir")
-        transformed_data = handler.fit(self.data)
-        transformed_data = KBinHandler.static_transform(self.data, "test_dir")
-
-        self.assertEqual(transformed_data.shape[1], 9)
-
     def test_fit_transform(self):
         """
         Test the `fit_transform` method of KBinHandler.
@@ -119,16 +104,107 @@ class TestKBinHandler(unittest.TestCase):
 
         self.assertEqual(transformed_data.shape[1], 9)
 
-    def test_static_transform_no_model(self):
+    def test_no_bad_features(self):
         """
-        Test static transformation when no model has been fitted.
-
-        Verifies that a NotFittedError is raised when attempting static transformation
-        without a saved model.
+        Test the fit method when there are no bad features in the data.
         """
+        data_no_outliers = self.data.copy()
+        data_no_outliers.drop(
+            columns=["Feature2", "Feature3", "Feature4"], inplace=True
+        )
 
-        with self.assertRaises(NotFittedError):
-            KBinHandler.static_transform(self.data, "test_dir_no_model")
+        handler = KBinHandler(id_col="ID", activity_col="Activity", n_bins=3)
+        handler.fit(data_no_outliers)
+        self.assertEqual(handler.bad, [])
+        self.assertIsNone(handler.kbin)
+
+    def test_save_transformed_data(self):
+        """
+        Test saving transformed data when `save_trans_data` is enabled.
+        """
+        handler = KBinHandler(
+            id_col="ID",
+            activity_col="Activity",
+            n_bins=3,
+            save_dir=self.save_dir,
+            save_trans_data=True,
+            trans_data_name="test_kbin_trans_data",
+        )
+        handler.fit_transform(self.data)
+        self.assertTrue(os.path.exists(f"{self.save_dir}/test_kbin_trans_data.csv"))
+
+    def test_save_directory_creation(self):
+        """
+        Test that the `save_dir` is created if it doesn't exist.
+        """
+        non_existent_dir = "non_existent_dir"
+        handler = KBinHandler(
+            id_col="ID",
+            activity_col="Activity",
+            n_bins=3,
+            save_dir=non_existent_dir,
+            save_method=True,
+        )
+        handler.fit(self.data)
+        self.assertTrue(os.path.exists(non_existent_dir))
+        shutil.rmtree(non_existent_dir)
+
+    def test_save_trans_data_name_no_file_exists(self):
+        """
+        Tests the save method with no file exists.
+        """
+        handler = KBinHandler(
+            id_col="ID",
+            activity_col="Activity",
+            save_dir=self.save_dir,
+            save_trans_data=True,
+        )
+        handler.fit_transform(self.data)
+
+        expected_filename = os.path.join(
+            self.save_dir, f"{handler.trans_data_name}.csv"
+        )
+        self.assertTrue(
+            os.path.exists(expected_filename),
+            f"Expected file not found: {expected_filename}",
+        )
+
+        self.assertTrue(expected_filename.endswith(".csv"))
+
+        # Clean up: Remove the file after the test
+        os.remove(expected_filename)
+
+    def test_save_trans_data_name_with_existing_file(self):
+        """
+        Tests the save method with existing file.
+        """
+        handler = KBinHandler(
+            id_col="ID",
+            activity_col="Activity",
+            save_dir=self.save_dir,
+            save_trans_data=True,
+        )
+        existing_file = os.path.join(self.save_dir, f"{handler.trans_data_name}.csv")
+        transformed_data = pd.DataFrame(
+            {"id": [1, 2], "activity": ["A", "B"], "feature1": [1, 2]}
+        )
+        transformed_data.to_csv(existing_file, index=False)
+
+        handler.fit_transform(self.data)
+
+        expected_filename = os.path.join(
+            self.save_dir, f"{handler.trans_data_name} (1).csv"
+        )
+        self.assertTrue(
+            os.path.exists(expected_filename),
+            f"Expected file not found: {expected_filename}",
+        )
+
+        self.assertTrue(expected_filename.endswith(".csv"))
+
+        # Clean up: Remove the files after the test
+        os.remove(existing_file)
+        os.remove(expected_filename)
 
 
 if __name__ == "__main__":
