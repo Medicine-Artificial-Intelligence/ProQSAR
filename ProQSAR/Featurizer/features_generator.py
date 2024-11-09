@@ -3,7 +3,7 @@ import numpy as np
 import logging
 from joblib import Parallel, delayed
 from rdkit import Chem
-from ProQSAR.Featurizer.Pubchem import calcPubChemFingerAll
+from ProQSAR.Featurizer.PubChem import calcPubChemFingerAll
 from ProQSAR.Featurizer.featurizer_wrapper import (
     RDKFp,
     ECFPs,
