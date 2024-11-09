@@ -3,6 +3,7 @@ import shutil
 import unittest
 import pandas as pd
 import numpy as np
+from tempfile import TemporaryDirectory
 from sklearn.exceptions import NotFittedError
 from sklearn.datasets import make_classification, make_regression
 from ProQSAR.FeatureSelector.feature_selector import FeatureSelector
@@ -82,18 +83,17 @@ class TestFeatureSelector(unittest.TestCase):
         """
         Set up the test environment before each test method.
         """
+        self.temp_dir = TemporaryDirectory()  # Create a temporary directory
         self.classification_data = create_classification_data()
         self.regression_data = create_regression_data()
         self.fs = FeatureSelector(
             activity_col="Activity", id_col="ID", save_method=True, save_trans_data=True
         )
-        self.save_dir = "test_feature_selector"
-        if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)
+        self.fs.save_dir = self.temp_dir.name  # Use the temporary directory for saving
 
     def tearDown(self):
-        # Cleanup any files created during testing
-        shutil.rmtree(self.save_dir)
+        # Automatically clean up the temporary directory
+        self.temp_dir.cleanup()
 
     def test_initialization(self):
         """Test proper initialization of the FeatureSelector instance"""
@@ -136,21 +136,16 @@ class TestFeatureSelector(unittest.TestCase):
 
     def test_save_method(self):
         """Test saving of the feature selector and metadata after fitting"""
-        self.fs.save_dir = "test_save"
         self.fs.fit(self.classification_data)
-        self.assertTrue(os.path.exists(f"{self.fs.save_dir}/feature_selector.pkl"))
-        shutil.rmtree(self.fs.save_dir)
+        self.assertTrue(os.path.exists(os.path.join(self.fs.save_dir, "feature_selector.pkl")))
 
     def test_save_transformed_data(self):
         """Test saving of transformed data after transform"""
-        self.fs.save_dir = "test_save"
         self.fs.save_trans_data = True
         self.fs.fit(self.classification_data)
         transformed_data = self.fs.transform(self.classification_data)
-        self.assertTrue(os.path.exists(f"{self.fs.save_dir}/fs_trans_data.csv"))
+        self.assertTrue(os.path.exists(os.path.join(self.fs.save_dir, "fs_trans_data.csv")))
         self.assertIsInstance(transformed_data, pd.DataFrame)
-        shutil.rmtree(self.fs.save_dir)
-
 
 if __name__ == "__main__":
     unittest.main()
