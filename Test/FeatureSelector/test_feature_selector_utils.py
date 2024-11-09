@@ -1,6 +1,7 @@
 import unittest
 import pandas as pd
 import numpy as np
+from tempfile import TemporaryDirectory
 from sklearn.datasets import make_classification, make_regression
 from sklearn.feature_selection import (
     SelectKBest,
@@ -84,6 +85,7 @@ class TestFeatureSelectorUtils(unittest.TestCase):
 
     def setUp(self):
         # Generate classification and regression data
+        self.temp_dir = TemporaryDirectory()  
         self.classification_data = create_classification_data()
         self.regression_data = create_regression_data()
         self.activity_col = "Activity"
@@ -97,6 +99,10 @@ class TestFeatureSelectorUtils(unittest.TestCase):
             "LogisticRegression",
         ]
         self.select_methods_reg = ["Anova", "RandomForestRegressor", "LassoCV"]
+    
+    def tearDown(self):
+        # Automatically clean up the temporary directory
+        self.temp_dir.cleanup()
 
     def test_get_method_map_classification(self):
         # Test method map for classification
@@ -188,7 +194,7 @@ class TestFeatureSelectorUtils(unittest.TestCase):
             n_splits=2,
             n_repeats=1,
             save_csv=True,
-            save_dir="test_dir",
+            save_dir=self.temp_dir.name,
             csv_name="test_csv",
         )
         self.assertIsInstance(result_df, pd.DataFrame)

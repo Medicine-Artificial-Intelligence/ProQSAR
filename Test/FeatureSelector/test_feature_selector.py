@@ -1,5 +1,4 @@
 import os
-import shutil
 import unittest
 import pandas as pd
 import numpy as np
@@ -137,15 +136,20 @@ class TestFeatureSelector(unittest.TestCase):
     def test_save_method(self):
         """Test saving of the feature selector and metadata after fitting"""
         self.fs.fit(self.classification_data)
-        self.assertTrue(os.path.exists(os.path.join(self.fs.save_dir, "feature_selector.pkl")))
+        self.assertTrue(
+            os.path.exists(os.path.join(self.fs.save_dir, "feature_selector.pkl"))
+        )
 
     def test_save_transformed_data(self):
         """Test saving of transformed data after transform"""
         self.fs.save_trans_data = True
         self.fs.fit(self.classification_data)
         transformed_data = self.fs.transform(self.classification_data)
-        self.assertTrue(os.path.exists(os.path.join(self.fs.save_dir, "fs_trans_data.csv")))
+        self.assertTrue(
+            os.path.exists(os.path.join(self.fs.save_dir, "fs_trans_data.csv"))
+        )
         self.assertIsInstance(transformed_data, pd.DataFrame)
+
 
 if __name__ == "__main__":
     unittest.main()
