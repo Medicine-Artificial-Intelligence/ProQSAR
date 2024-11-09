@@ -85,7 +85,7 @@ class TestFeatureSelectorUtils(unittest.TestCase):
 
     def setUp(self):
         # Generate classification and regression data
-        self.temp_dir = TemporaryDirectory()  
+        self.temp_dir = TemporaryDirectory()
         self.classification_data = create_classification_data()
         self.regression_data = create_regression_data()
         self.activity_col = "Activity"
@@ -99,7 +99,7 @@ class TestFeatureSelectorUtils(unittest.TestCase):
             "LogisticRegression",
         ]
         self.select_methods_reg = ["Anova", "RandomForestRegressor", "LassoCV"]
-    
+
     def tearDown(self):
         # Automatically clean up the temporary directory
         self.temp_dir.cleanup()
