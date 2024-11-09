@@ -2,3 +2,7 @@ rdkit==2024.3.3
 seaborn==0.13.2
 pandas==2.2.2
 joblib==1.4.2
+scikit-learn==1.5.1
+xgboost==2.1.1
+catboost==1.2.7
+optuna==4.0.0
