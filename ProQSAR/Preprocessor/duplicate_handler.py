@@ -9,7 +9,7 @@ class DuplicateHandler:
         self,
         id_col: Optional[str] = None,
         activity_col: Optional[str] = None,
-        save_method: bool = True,
+        save_method: bool = False,
         save_dir: str = "Project/DuplicateHandler",
         save_trans_data: bool = False,
         trans_data_name: str = "dh_trans_data",

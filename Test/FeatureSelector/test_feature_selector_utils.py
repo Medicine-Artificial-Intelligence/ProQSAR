@@ -1,6 +1,7 @@
 import unittest
 import pandas as pd
 import numpy as np
+import matplotlib
 from tempfile import TemporaryDirectory
 from sklearn.datasets import make_classification, make_regression
 from sklearn.feature_selection import (
@@ -11,6 +12,8 @@ from ProQSAR.FeatureSelector.feature_selector_utils import (
     _get_method_map,
     evaluate_feature_selectors,
 )
+
+matplotlib.use("Agg")
 
 
 def create_classification_data(

@@ -56,7 +56,7 @@ class Rescaler:
         id_col: Optional[str] = None,
         activity_col: Optional[str] = None,
         rescaler_method: str = "MinMaxScaler",
-        save_method: bool = True,
+        save_method: bool = False,
         save_dir: Optional[str] = "Project/Rescaler",
         save_trans_data: bool = False,
         trans_data_name: str = "rs_trans_data",

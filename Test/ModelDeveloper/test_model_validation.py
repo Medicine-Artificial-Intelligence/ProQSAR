@@ -1,14 +1,17 @@
 import os
-import shutil
 import unittest
 import numpy as np
 import pandas as pd
+import matplotlib
+from tempfile import TemporaryDirectory
 from sklearn.datasets import make_classification, make_regression
 from ProQSAR.ModelDeveloper.model_validation import (
     _plot_cv_report,
     cross_validation_report,
     external_validation_report,
 )
+
+matplotlib.use("Agg")
 
 
 def create_classification_data(
@@ -68,9 +71,12 @@ def create_regression_data(
 class TestModelReports(unittest.TestCase):
 
     def setUp(self):
-        # Set up classification and regression data
         self.class_data = create_classification_data()
         self.reg_data = create_regression_data()
+        self.temp_dir = TemporaryDirectory()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
 
     def test_cv_report_classification(self):
         # Test cv_report for classification data
@@ -120,12 +126,10 @@ class TestModelReports(unittest.TestCase):
             scoring_list=["roc_auc", "f1", "recall"],
             save_csv=True,
             csv_name="test_ev_report",
-            save_dir="test_dir",
+            save_dir=self.temp_dir.name,
         )
         # Ensure the csv file is saved
-        self.assertTrue(os.path.exists("test_dir/test_ev_report.csv"))
-        # Cleanup created file
-        shutil.rmtree("test_dir")
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_ev_report.csv"))
 
     def test_invalid_graph_type(self):
         # Test invalid graph type in _plot_cv_report
@@ -175,12 +179,12 @@ class TestModelReports(unittest.TestCase):
             scoring_list=["accuracy"],
             save_fig=True,
             fig_prefix="test_cv_graph",
-            save_dir="test_dir",
+            save_dir=self.temp_dir.name,
         )
         # Ensure the figure file is saved
-        self.assertTrue(os.path.exists("test_dir/test_cv_graph_accuracy_box.png"))
-        # Cleanup created file
-        shutil.rmtree("test_dir")
+        self.assertTrue(
+            os.path.exists(f"{self.temp_dir.name}/test_cv_graph_accuracy_box.png")
+        )
 
 
 if __name__ == "__main__":

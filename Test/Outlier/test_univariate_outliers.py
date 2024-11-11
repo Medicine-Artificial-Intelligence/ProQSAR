@@ -1,9 +1,6 @@
 import unittest
 import pandas as pd
 import numpy as np
-import os
-import shutil
-
 from ProQSAR.Outlier.univariate_outliers import (
     UnivariateOutliersHandler,
     _feature_quality,
@@ -24,11 +21,6 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         Set up the test environment before any test is run.
         Creates a sample dataframe and initializes necessary directories.
         """
-        self.save_dir = "test_outlier_handler"
-        if os.path.exists(self.save_dir):
-            shutil.rmtree(self.save_dir)
-        os.makedirs(self.save_dir)
-
         np.random.seed(42)
 
         self.data = pd.DataFrame(
@@ -50,14 +42,6 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
         self.data.loc[1, "Feature3"] = -50
         self.data.loc[2, "Feature4"] = 100
 
-    def tearDown(self):
-        """
-        Clean up after all tests are run.
-        Deletes the test directory created during setup.
-        """
-        if os.path.exists(self.save_dir):
-            shutil.rmtree(self.save_dir)
-
     def test_iqr_method(self):
         """
         Test the 'iqr' method of outlier handling.
@@ -66,7 +50,6 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             select_method="iqr",
-            save_dir=self.save_dir,
         )
         handler.fit(self.data)
         transformed_data = handler.transform(self.data)
@@ -82,7 +65,6 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             select_method="winsorization",
-            save_dir=self.save_dir,
         )
         handler.fit(self.data)
         transformed_data = handler.transform(self.data)
@@ -98,7 +80,6 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             select_method="imputation",
-            save_dir=self.save_dir,
         )
 
         # Use _impute_nan method directly
@@ -127,7 +108,6 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             select_method="power",
-            save_dir=self.save_dir,
         )
         handler.fit(self.data)
         transformed_data = handler.transform(self.data)
@@ -141,7 +121,6 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             select_method="normal",
-            save_dir=self.save_dir,
         )
         handler.fit(self.data)
         transformed_data = handler.transform(self.data)
@@ -155,7 +134,6 @@ class TestUnivariateOutliersHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             select_method="uniform",
-            save_dir=self.save_dir,
         )
         handler.fit(self.data)
         transformed_data = handler.transform(self.data)

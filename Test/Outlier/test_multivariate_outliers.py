@@ -2,6 +2,7 @@ import unittest
 import pandas as pd
 import numpy as np
 import os
+from tempfile import TemporaryDirectory
 from sklearn.datasets import make_blobs
 from sklearn.exceptions import NotFittedError
 from ProQSAR.Outlier.multivariate_outliers import MultivariateOutliersHandler
@@ -39,19 +40,15 @@ class TestMultivariateOutliersHandler(unittest.TestCase):
         self.data["ID"] = range(1, len(self.data) + 1)
         self.data["Activity"] = np.random.choice([0, 1], size=len(self.data))
 
-        self.save_dir = "test_model_dir"
-        self.handler = MultivariateOutliersHandler(
-            id_col="ID", activity_col="Activity", save_dir=self.save_dir
-        )
+        self.handler = MultivariateOutliersHandler(id_col="ID", activity_col="Activity")
+        self.temp_dir = TemporaryDirectory()
+        self.handler.save_dir = self.temp_dir.name
 
     def tearDown(self):
         """
         Clean up any files created during testing.
         """
-        if os.path.exists(self.save_dir):
-            for file in os.listdir(self.save_dir):
-                os.remove(os.path.join(self.save_dir, file))
-            os.rmdir(self.save_dir)
+        self.temp_dir.cleanup()
 
     def test_fit(self):
         """
@@ -93,7 +90,7 @@ class TestMultivariateOutliersHandler(unittest.TestCase):
         """
         self.handler.save_method = True
         self.handler.fit(self.data)
-        model_path = os.path.join(self.save_dir, "multi_outlier_handler.pkl")
+        model_path = os.path.join(self.temp_dir.name, "multi_outlier_handler.pkl")
         self.assertTrue(os.path.exists(model_path))
 
     def test_transform_data_save(self):
@@ -104,7 +101,7 @@ class TestMultivariateOutliersHandler(unittest.TestCase):
         self.handler.fit(self.data)
         transformed_data = self.handler.transform(self.data)
         transformed_data_path = os.path.join(
-            self.save_dir, f"{self.handler.trans_data_name}.csv"
+            self.temp_dir.name, f"{self.handler.trans_data_name}.csv"
         )
         self.assertTrue(os.path.exists(transformed_data_path))
         self.assertEqual(

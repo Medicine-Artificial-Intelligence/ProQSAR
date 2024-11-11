@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import shutil
+from tempfile import TemporaryDirectory
 from ProQSAR.Outlier.kbin_handler import KBinHandler
 
 
@@ -25,10 +26,7 @@ class TestKBinHandler(unittest.TestCase):
 
         Creates a directory `test_outlier_handler` and populates it with a DataFrame.
         """
-        self.save_dir = "test_dir"
-        if os.path.exists(self.save_dir):
-            shutil.rmtree(self.save_dir)
-        os.makedirs(self.save_dir)
+        self.temp_dir = TemporaryDirectory()
 
         np.random.seed(42)
         self.data = pd.DataFrame(
@@ -54,8 +52,7 @@ class TestKBinHandler(unittest.TestCase):
         """
         Clean up after all tests are run by deleting the temporary directory.
         """
-        if os.path.exists(self.save_dir):
-            shutil.rmtree(self.save_dir)
+        self.temp_dir.cleanup()
 
     def test_fit(self):
         """
@@ -65,13 +62,17 @@ class TestKBinHandler(unittest.TestCase):
         that the necessary files are saved to disk.
         """
         handler = KBinHandler(
-            id_col="ID", activity_col="Activity", n_bins=3, save_dir="test_dir"
+            id_col="ID",
+            activity_col="Activity",
+            n_bins=3,
+            save_dir=self.temp_dir.name,
+            save_method=True,
         )
         handler.fit(self.data)
 
         self.assertEqual(handler.bad, ["Feature2", "Feature3", "Feature4"])
 
-        self.assertTrue(os.path.exists("test_dir/kbin_handler.pkl"))
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/kbin_handler.pkl"))
 
     def test_transform(self):
         """
@@ -86,6 +87,7 @@ class TestKBinHandler(unittest.TestCase):
             n_bins=3,
             encode="ordinal",
             strategy="uniform",
+            save_method=False,
         )
         handler.fit(self.data)
         transformed_data = handler.transform(self.data)
@@ -99,7 +101,9 @@ class TestKBinHandler(unittest.TestCase):
         Verifies that the handler can fit the model and transform the data in one step.
         Checks the shape of the transformed data.
         """
-        handler = KBinHandler(id_col="ID", activity_col="Activity", n_bins=3)
+        handler = KBinHandler(
+            id_col="ID", activity_col="Activity", n_bins=3, save_method=False
+        )
         transformed_data = handler.fit_transform(self.data)
 
         self.assertEqual(transformed_data.shape[1], 9)
@@ -113,7 +117,9 @@ class TestKBinHandler(unittest.TestCase):
             columns=["Feature2", "Feature3", "Feature4"], inplace=True
         )
 
-        handler = KBinHandler(id_col="ID", activity_col="Activity", n_bins=3)
+        handler = KBinHandler(
+            id_col="ID", activity_col="Activity", n_bins=3, save_method=False
+        )
         handler.fit(data_no_outliers)
         self.assertEqual(handler.bad, [])
         self.assertIsNone(handler.kbin)
@@ -126,12 +132,15 @@ class TestKBinHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             n_bins=3,
-            save_dir=self.save_dir,
+            save_dir=self.temp_dir.name,
             save_trans_data=True,
             trans_data_name="test_kbin_trans_data",
+            save_method=True,
         )
         handler.fit_transform(self.data)
-        self.assertTrue(os.path.exists(f"{self.save_dir}/test_kbin_trans_data.csv"))
+        self.assertTrue(
+            os.path.exists(f"{self.temp_dir.name}/test_kbin_trans_data.csv")
+        )
 
     def test_save_directory_creation(self):
         """
@@ -156,13 +165,13 @@ class TestKBinHandler(unittest.TestCase):
         handler = KBinHandler(
             id_col="ID",
             activity_col="Activity",
-            save_dir=self.save_dir,
+            save_dir=self.temp_dir.name,
             save_trans_data=True,
         )
         handler.fit_transform(self.data)
 
         expected_filename = os.path.join(
-            self.save_dir, f"{handler.trans_data_name}.csv"
+            self.temp_dir.name, f"{handler.trans_data_name}.csv"
         )
         self.assertTrue(
             os.path.exists(expected_filename),
@@ -170,9 +179,6 @@ class TestKBinHandler(unittest.TestCase):
         )
 
         self.assertTrue(expected_filename.endswith(".csv"))
-
-        # Clean up: Remove the file after the test
-        os.remove(expected_filename)
 
     def test_save_trans_data_name_with_existing_file(self):
         """
@@ -181,10 +187,12 @@ class TestKBinHandler(unittest.TestCase):
         handler = KBinHandler(
             id_col="ID",
             activity_col="Activity",
-            save_dir=self.save_dir,
+            save_dir=self.temp_dir.name,
             save_trans_data=True,
         )
-        existing_file = os.path.join(self.save_dir, f"{handler.trans_data_name}.csv")
+        existing_file = os.path.join(
+            self.temp_dir.name, f"{handler.trans_data_name}.csv"
+        )
         transformed_data = pd.DataFrame(
             {"id": [1, 2], "activity": ["A", "B"], "feature1": [1, 2]}
         )
@@ -193,7 +201,7 @@ class TestKBinHandler(unittest.TestCase):
         handler.fit_transform(self.data)
 
         expected_filename = os.path.join(
-            self.save_dir, f"{handler.trans_data_name} (1).csv"
+            self.temp_dir.name, f"{handler.trans_data_name} (1).csv"
         )
         self.assertTrue(
             os.path.exists(expected_filename),
@@ -201,10 +209,6 @@ class TestKBinHandler(unittest.TestCase):
         )
 
         self.assertTrue(expected_filename.endswith(".csv"))
-
-        # Clean up: Remove the files after the test
-        os.remove(existing_file)
-        os.remove(expected_filename)
 
 
 if __name__ == "__main__":

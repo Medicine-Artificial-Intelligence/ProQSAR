@@ -2,10 +2,13 @@ import os
 import unittest
 import pandas as pd
 import numpy as np
+import matplotlib
 from tempfile import TemporaryDirectory
 from sklearn.exceptions import NotFittedError
 from sklearn.datasets import make_classification, make_regression
 from ProQSAR.FeatureSelector.feature_selector import FeatureSelector
+
+matplotlib.use("Agg")
 
 
 def create_classification_data(

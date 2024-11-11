@@ -2,7 +2,7 @@ import unittest
 import pandas as pd
 import numpy as np
 import os
-import shutil
+from tempfile import TemporaryDirectory
 from sklearn.preprocessing import (
     MinMaxScaler,
     StandardScaler,
@@ -44,17 +44,19 @@ class TestRescaler(unittest.TestCase):
         """
         self.train_data = create_sample_data()
         self.test_data = create_sample_data()
-        self.save_dir = "test_scaler_dir"
+        self.temp_dir = TemporaryDirectory()
         self.rescaler = Rescaler(
-            id_col="ID", activity_col="Activity", save_dir=self.save_dir
+            id_col="ID",
+            activity_col="Activity",
+            save_dir=self.temp_dir.name,
+            save_method=True,
         )
 
     def tearDown(self):
         """
         Cleans up the test environment after each test.
         """
-        if os.path.exists(self.save_dir):
-            shutil.rmtree(self.save_dir)
+        self.temp_dir.cleanup()
 
     def test_get_scaler(self):
         """
@@ -75,7 +77,7 @@ class TestRescaler(unittest.TestCase):
         """
         self.rescaler.fit(self.train_data)
 
-        self.assertTrue(os.path.exists(f"{self.save_dir}/rescaler.pkl"))
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/rescaler.pkl"))
         self.assertIn("Feature1", self.rescaler.non_binary_cols)
         self.assertIn("Feature2", self.rescaler.non_binary_cols)
         self.assertIn("Feature3", self.rescaler.non_binary_cols)
@@ -118,13 +120,13 @@ class TestRescaler(unittest.TestCase):
         rescaler = Rescaler(
             id_col="ID",
             activity_col="Activity",
-            save_dir=self.save_dir,
+            save_dir=self.temp_dir.name,
             save_trans_data=True,
         )
         rescaler.fit_transform(self.train_data)
 
         expected_filename = os.path.join(
-            self.save_dir, f"{rescaler.trans_data_name}.csv"
+            self.temp_dir.name, f"{rescaler.trans_data_name}.csv"
         )
         self.assertTrue(
             os.path.exists(expected_filename),
@@ -134,9 +136,6 @@ class TestRescaler(unittest.TestCase):
         # Check that the file exists with the correct name and that it's a CSV
         self.assertTrue(expected_filename.endswith(".csv"))
 
-        # Clean up: Remove the file after the test
-        os.remove(expected_filename)
-
     def test_save_trans_data_name_with_existing_file(self):
         """
         Tests the save method with existing file.
@@ -144,11 +143,12 @@ class TestRescaler(unittest.TestCase):
         rescaler = Rescaler(
             id_col="ID",
             activity_col="Activity",
-            save_dir=self.save_dir,
+            save_dir=self.temp_dir.name,
             save_trans_data=True,
         )
-        os.makedirs(self.save_dir, exist_ok=True)
-        existing_file = os.path.join(self.save_dir, f"{rescaler.trans_data_name}.csv")
+        existing_file = os.path.join(
+            self.temp_dir.name, f"{rescaler.trans_data_name}.csv"
+        )
         transformed_data = pd.DataFrame(
             {"id": [1, 2], "activity": ["A", "B"], "feature1": [1, 2]}
         )
@@ -158,7 +158,7 @@ class TestRescaler(unittest.TestCase):
 
         # Check that the file is saved with the updated name (e.g., test_trans_data (1).csv)
         expected_filename = os.path.join(
-            self.save_dir, f"{rescaler.trans_data_name} (1).csv"
+            self.temp_dir.name, f"{rescaler.trans_data_name} (1).csv"
         )
         self.assertTrue(
             os.path.exists(expected_filename),
@@ -167,10 +167,6 @@ class TestRescaler(unittest.TestCase):
 
         # Check that the file exists with the correct name and that it's a CSV
         self.assertTrue(expected_filename.endswith(".csv"))
-
-        # Clean up: Remove the files after the test
-        os.remove(existing_file)
-        os.remove(expected_filename)
 
 
 if __name__ == "__main__":

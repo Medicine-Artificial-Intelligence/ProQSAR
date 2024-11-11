@@ -1,8 +1,8 @@
 import unittest
 import os
-import shutil
 import numpy as np
 import pandas as pd
+from tempfile import TemporaryDirectory
 from sklearn.exceptions import NotFittedError
 from ProQSAR.Preprocessor.missing_handler import MissingHandler
 
@@ -62,21 +62,21 @@ class TestMissingHandler(unittest.TestCase):
         """
         self.train_data = create_sample_data()
         self.test_data = create_sample_data()
-        self.save_dir = "temp_save_dir"
-        os.makedirs(self.save_dir, exist_ok=True)
+        self.temp_dir = TemporaryDirectory()
 
     def tearDown(self):
         """
         Cleans up the test environment after each test method.
         """
-        shutil.rmtree(self.save_dir)
+        self.temp_dir.cleanup()
 
     def test_fit(self):
         """
         Tests the fit method of MissingHandler.
         """
         handler = MissingHandler(
-            id_col="ID", activity_col="Activity", save_dir=self.save_dir
+            id_col="ID",
+            activity_col="Activity",
         ).fit(self.train_data)
         self.assertIsNotNone(handler)
 
@@ -84,9 +84,7 @@ class TestMissingHandler(unittest.TestCase):
         """
         Tests the transform method of MissingHandler.
         """
-        handler = MissingHandler(
-            id_col="ID", activity_col="Activity", save_dir=self.save_dir
-        )
+        handler = MissingHandler(id_col="ID", activity_col="Activity")
         handler.fit(self.train_data)
         imputed_test_data = handler.transform(self.test_data)
         self.assertFalse(imputed_test_data.isnull().any().any())
@@ -95,9 +93,7 @@ class TestMissingHandler(unittest.TestCase):
         """
         Tests the fit_transform method with default (mean) imputation strategy.
         """
-        handler = MissingHandler(
-            id_col="ID", activity_col="Activity", save_dir=self.save_dir
-        )
+        handler = MissingHandler(id_col="ID", activity_col="Activity")
         imputed_train_data = handler.fit_transform(self.train_data)
         self.assertFalse(imputed_train_data.isnull().any().any())
 
@@ -110,7 +106,6 @@ class TestMissingHandler(unittest.TestCase):
             activity_col="Activity",
             imputation_strategy="knn",
             n_neighbors=3,
-            save_dir=self.save_dir,
         )
         imputed_train_data = handler.fit_transform(self.train_data)
         self.assertFalse(imputed_train_data.isnull().any().any())
@@ -123,7 +118,6 @@ class TestMissingHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             imputation_strategy="median",
-            save_dir=self.save_dir,
         )
         imputed_train_data = handler.fit_transform(self.train_data)
         self.assertFalse(imputed_train_data.isnull().any().any())
@@ -136,7 +130,6 @@ class TestMissingHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             imputation_strategy="mode",
-            save_dir=self.save_dir,
         )
         imputed_train_data = handler.fit_transform(self.train_data)
         self.assertFalse(imputed_train_data.isnull().any().any())
@@ -149,7 +142,6 @@ class TestMissingHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             imputation_strategy="mice",
-            save_dir=self.save_dir,
         )
         imputed_train_data = handler.fit_transform(self.train_data)
         self.assertFalse(imputed_train_data.isnull().any().any())
@@ -162,7 +154,6 @@ class TestMissingHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             missing_thresh=40,
-            save_dir=self.save_dir,
         )
         imputed_train_data = handler.fit_transform(self.train_data)
         imputed_test_data = handler.transform(self.test_data)
@@ -179,9 +170,7 @@ class TestMissingHandler(unittest.TestCase):
         binary_cols = [f"Feature{i}" for i in range(1, 6)]
         train_no_binary = self.train_data.drop(columns=binary_cols)
 
-        handler = MissingHandler(
-            id_col="ID", activity_col="Activity", save_dir=self.save_dir
-        )
+        handler = MissingHandler(id_col="ID", activity_col="Activity")
 
         imputed_train_data = handler.fit_transform(train_no_binary)
 
@@ -194,9 +183,7 @@ class TestMissingHandler(unittest.TestCase):
         non_binary_cols = [f"Feature{i}" for i in range(6, 11)]
         train_only_binary = self.train_data.drop(columns=non_binary_cols)
 
-        handler = MissingHandler(
-            id_col="ID", activity_col="Activity", save_dir=self.save_dir
-        )
+        handler = MissingHandler(id_col="ID", activity_col="Activity")
 
         imputed_train_data = handler.fit_transform(train_only_binary)
 
@@ -210,7 +197,6 @@ class TestMissingHandler(unittest.TestCase):
             id_col="ID",
             activity_col="Activity",
             imputation_strategy="unsupported_imputer",
-            save_dir=self.save_dir,
         )
         with self.assertRaises(ValueError):
             handler.fit(self.train_data)
@@ -219,9 +205,7 @@ class TestMissingHandler(unittest.TestCase):
         """
         Tests the transform method without fitting the imputation models first.
         """
-        handler = MissingHandler(
-            id_col="ID", activity_col="Activity", save_dir=self.save_dir
-        )
+        handler = MissingHandler(id_col="ID", activity_col="Activity")
         with self.assertRaises(NotFittedError):
             handler.transform(self.test_data)
 
@@ -232,13 +216,13 @@ class TestMissingHandler(unittest.TestCase):
         handler = MissingHandler(
             id_col="ID",
             activity_col="Activity",
-            save_dir=self.save_dir,
+            save_dir=self.temp_dir.name,
             save_trans_data=True,
         )
         handler.fit_transform(self.train_data)
 
         expected_filename = os.path.join(
-            self.save_dir, f"{handler.trans_data_name}.csv"
+            self.temp_dir.name, f"{handler.trans_data_name}.csv"
         )
         self.assertTrue(
             os.path.exists(expected_filename),
@@ -248,9 +232,6 @@ class TestMissingHandler(unittest.TestCase):
         # Check that the file exists with the correct name and that it's a CSV
         self.assertTrue(expected_filename.endswith(".csv"))
 
-        # Clean up: Remove the file after the test
-        os.remove(expected_filename)
-
     def test_save_trans_data_name_with_existing_file(self):
         """
         Tests the save method with existing file.
@@ -258,10 +239,12 @@ class TestMissingHandler(unittest.TestCase):
         handler = MissingHandler(
             id_col="ID",
             activity_col="Activity",
-            save_dir=self.save_dir,
+            save_dir=self.temp_dir.name,
             save_trans_data=True,
         )
-        existing_file = os.path.join(self.save_dir, f"{handler.trans_data_name}.csv")
+        existing_file = os.path.join(
+            self.temp_dir.name, f"{handler.trans_data_name}.csv"
+        )
         transformed_data = pd.DataFrame(
             {"id": [1, 2], "activity": ["A", "B"], "feature1": [1, 2]}
         )
@@ -271,7 +254,7 @@ class TestMissingHandler(unittest.TestCase):
 
         # Check that the file is saved with the updated name (e.g., test_trans_data (1).csv)
         expected_filename = os.path.join(
-            self.save_dir, f"{handler.trans_data_name} (1).csv"
+            self.temp_dir.name, f"{handler.trans_data_name} (1).csv"
         )
         self.assertTrue(
             os.path.exists(expected_filename),
@@ -280,10 +263,6 @@ class TestMissingHandler(unittest.TestCase):
 
         # Check that the file exists with the correct name and that it's a CSV
         self.assertTrue(expected_filename.endswith(".csv"))
-
-        # Clean up: Remove the files after the test
-        os.remove(existing_file)
-        os.remove(expected_filename)
 
 
 if __name__ == "__main__":

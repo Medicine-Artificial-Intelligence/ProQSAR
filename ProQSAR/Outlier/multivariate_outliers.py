@@ -67,9 +67,6 @@ class MultivariateOutliersHandler:
         self.multi_outlier_handler = None
         self.features = None
 
-        if save_dir and not os.path.exists(save_dir):
-            os.makedirs(save_dir, exist_ok=True)
-
     def fit(self, data: pd.DataFrame) -> None:
         """
         Fits the selected outlier detection model to the provided data.

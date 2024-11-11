@@ -1,8 +1,8 @@
 import unittest
 import pandas as pd
 import numpy as np
-import shutil
 import os
+from tempfile import TemporaryDirectory
 from ProQSAR.Preprocessor.duplicate_handler import DuplicateHandler
 
 
@@ -44,17 +44,16 @@ class TestDuplicateHandler(unittest.TestCase):
         """
         self.train_data = create_sample_data()
         self.test_data = create_sample_data()
-        self.save_dir = "temp_save_dir"
-        os.makedirs(self.save_dir, exist_ok=True)
+        self.temp_dir = TemporaryDirectory()
         self.handler = DuplicateHandler(
-            id_col="ID", activity_col="Activity", save_dir=self.save_dir
+            id_col="ID", activity_col="Activity", save_dir=self.temp_dir.name
         )
 
     def tearDown(self):
         """
         Clean up the test environment by removing the temporary save directory.
         """
-        shutil.rmtree(self.save_dir)
+        self.temp_dir.cleanup()
 
     def test_fit(self):
         """
@@ -102,13 +101,13 @@ class TestDuplicateHandler(unittest.TestCase):
         handler = DuplicateHandler(
             id_col="ID",
             activity_col="Activity",
-            save_dir=self.save_dir,
+            save_dir=self.temp_dir.name,
             save_trans_data=True,
         )
         handler.fit_transform(self.train_data)
 
         expected_filename = os.path.join(
-            self.save_dir, f"{handler.trans_data_name}.csv"
+            self.temp_dir.name, f"{handler.trans_data_name}.csv"
         )
         self.assertTrue(
             os.path.exists(expected_filename),
@@ -118,9 +117,6 @@ class TestDuplicateHandler(unittest.TestCase):
         # Check that the file exists with the correct name and that it's a CSV
         self.assertTrue(expected_filename.endswith(".csv"))
 
-        # Clean up: Remove the file after the test
-        os.remove(expected_filename)
-
     def test_save_trans_data_name_with_existing_file(self):
         """
         Tests the save method with existing file.
@@ -128,10 +124,12 @@ class TestDuplicateHandler(unittest.TestCase):
         handler = DuplicateHandler(
             id_col="ID",
             activity_col="Activity",
-            save_dir=self.save_dir,
+            save_dir=self.temp_dir.name,
             save_trans_data=True,
         )
-        existing_file = os.path.join(self.save_dir, f"{handler.trans_data_name}.csv")
+        existing_file = os.path.join(
+            self.temp_dir.name, f"{handler.trans_data_name}.csv"
+        )
         transformed_data = pd.DataFrame(
             {"id": [1, 2], "activity": ["A", "B"], "feature1": [1, 2]}
         )
@@ -141,7 +139,7 @@ class TestDuplicateHandler(unittest.TestCase):
 
         # Check that the file is saved with the updated name (e.g., test_trans_data (1).csv)
         expected_filename = os.path.join(
-            self.save_dir, f"{handler.trans_data_name} (1).csv"
+            self.temp_dir.name, f"{handler.trans_data_name} (1).csv"
         )
         self.assertTrue(
             os.path.exists(expected_filename),
@@ -150,10 +148,6 @@ class TestDuplicateHandler(unittest.TestCase):
 
         # Check that the file exists with the correct name and that it's a CSV
         self.assertTrue(expected_filename.endswith(".csv"))
-
-        # Clean up: Remove the files after the test
-        os.remove(existing_file)
-        os.remove(expected_filename)
 
 
 if __name__ == "__main__":

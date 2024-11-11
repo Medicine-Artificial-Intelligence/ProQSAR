@@ -1,6 +1,7 @@
 import unittest
 import pandas as pd
 import numpy as np
+from tempfile import TemporaryDirectory
 from sklearn.datasets import make_classification
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import train_test_split
@@ -51,6 +52,11 @@ class TestModelDeveloper(unittest.TestCase):
             scoring="accuracy",
             add_model={"NewModel": RandomForestClassifier()},
         )
+        self.temp_dir = TemporaryDirectory()
+        self.model_dev.save_dir = self.temp_dir.name
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
 
     def test_fit_method(self):
         """Test fitting the model."""

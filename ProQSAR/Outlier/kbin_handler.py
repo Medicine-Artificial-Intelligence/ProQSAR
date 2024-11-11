@@ -36,7 +36,7 @@ class KBinHandler:
         n_bins: int = 3,
         encode: str = "ordinal",
         strategy: str = "quantile",
-        save_method: bool = True,
+        save_method: bool = False,
         save_dir: Optional[str] = "Project/OutlierHandler",
         save_trans_data: bool = False,
         trans_data_name: str = "kbin_trans_data",

@@ -281,6 +281,7 @@ class ImputationHandler:
             missing_thresh=self.missing_thresh,
             imputation_strategy=self.imputation_strategy,
             n_neighbors=self.n_neighbors,
+            save_method=None,
         )
         self.imputation_handler.fit(nan_data)
 

@@ -2,7 +2,11 @@ import unittest
 import pandas as pd
 import numpy as np
 import os
+import matplotlib
+from tempfile import TemporaryDirectory
 from ProQSAR.Preprocessor.low_variance_handler import LowVarianceHandler
+
+matplotlib.use("Agg")
 
 
 class TestLowVarianceHandler(unittest.TestCase):
@@ -25,23 +29,22 @@ class TestLowVarianceHandler(unittest.TestCase):
                 "Feature7": np.random.normal(0, np.sqrt(1.0), 20),
             }
         )
+        self.temp_dir = TemporaryDirectory()
         self.handler = LowVarianceHandler(
             activity_col="Activity",
             id_col="ID",
             var_thresh=0.05,
             visualize=False,
             save_image=False,
-            save_dir="test_dir",
+            save_dir=self.temp_dir.name,
+            save_method=True,
         )
 
     def tearDown(self):
         """
         Clean up the test directory after tests.
         """
-        if os.path.exists("test_dir"):
-            for file in os.listdir("test_dir"):
-                os.remove(os.path.join("test_dir", file))
-            os.rmdir("test_dir")
+        self.temp_dir.cleanup()
 
     def test_variance_threshold_analysis(self):
         """
@@ -75,7 +78,9 @@ class TestLowVarianceHandler(unittest.TestCase):
         Test the fit method.
         """
         self.handler.fit(self.data)
-        self.assertTrue(os.path.exists("test_dir/low_variance_handler.pkl"))
+        self.assertTrue(
+            os.path.exists(f"{self.temp_dir.name}/low_variance_handler.pkl")
+        )
 
     def test_transform(self):
         """
@@ -129,7 +134,8 @@ class TestLowVarianceHandler(unittest.TestCase):
             var_thresh=5,  # High threshold to ensure no non-binary features meet it
             visualize=False,
             save_image=False,
-            save_dir="test_dir",
+            save_dir=self.temp_dir.name,
+            save_method=True,
         )
         transformed_data = handler_high_thresh.fit_transform(self.data)
         expected_columns = ["Activity", "ID", "Feature1", "Feature2"]

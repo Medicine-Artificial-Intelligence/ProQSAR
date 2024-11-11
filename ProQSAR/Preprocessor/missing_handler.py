@@ -17,7 +17,7 @@ class MissingHandler:
         missing_thresh: float = 40.0,
         imputation_strategy: str = "mean",
         n_neighbors: int = 5,
-        save_method: bool = True,
+        save_method: bool = False,
         save_dir: Optional[str] = "Project/MissingHandler",
         save_trans_data: bool = False,
         trans_data_name: str = "mh_trans_data",
