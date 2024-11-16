@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import logging
+import os
 from joblib import Parallel, delayed
 from rdkit import Chem
 from ProQSAR.Featurizer.PubChem import calcPubChemFingerAll
@@ -122,17 +123,17 @@ class FeatureGenerator:
         self,
         df: Union[pd.DataFrame, List[Dict[str, Any]]],
         feature_types: List[str] = ["RDK5"],
-    ) -> pd.DataFrame:
+    ) -> Dict[str, pd.DataFrame]:
         """
         Generates features for molecules contained in a DataFrame or a list of dictionaries using parallel processing.
 
         Parameters:
         - df (Union[pd.DataFrame, List[Dict[str, Any]]]): The input data as either
-        a DataFrame or a list of dictionaries.
+          a DataFrame or a list of dictionaries.
         - feature_types (List[str]): Types of features to generate.
 
         Returns:
-        - pd.DataFrame: A DataFrame containing the original data augmented with new features.
+        - Dict[str, pd.DataFrame]: A dictionary where keys are feature types and values are DataFrames with expanded fingerprints.
 
         Raises:
         - ValueError: If the input data type is neither a pandas DataFrame nor a list of dictionaries.
@@ -154,5 +155,23 @@ class FeatureGenerator:
             )
             for record in data
         )
+        results = pd.DataFrame(results)
 
-        return pd.DataFrame(results)
+        feature_dfs = {}
+
+        for feature_type in feature_types:
+            fp_df = pd.DataFrame(np.stack(results[feature_type]), index=results.index)
+            feature_df = pd.concat(
+                [results[[self.ID_col, self.activity_col]], fp_df], axis=1
+            )
+
+            if self.save_dir:
+                if not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+
+                save_path = os.path.join(self.save_dir, f"{feature_type}.csv")
+                feature_df.to_csv(save_path, index=False)
+
+            feature_dfs[feature_type] = feature_df
+
+        return feature_dfs

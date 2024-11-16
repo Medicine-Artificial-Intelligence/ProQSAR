@@ -77,11 +77,11 @@ class TestFeatureGenerator(unittest.TestCase):
             {"mol": [self.mol, self.mol], "activity": [1, 0], "ID": ["M001", "M002"]}
         )
         feature_types = ["RDK5"]
-        result_df = self.feature_gen.generate_features(df, feature_types)
+        result = self.feature_gen.generate_features(df, feature_types)
 
         # Check the results
-        self.assertIsInstance(result_df, pd.DataFrame)
-        self.assertTrue("RDK5" in result_df.columns)
+        self.assertIsInstance(result["RDK5"], pd.DataFrame)
+        self.assertTrue("RDK5" in result)
 
     def test_generate_features_with_list(self):
         # Test with list input
@@ -90,11 +90,11 @@ class TestFeatureGenerator(unittest.TestCase):
             {"mol": self.mol, "activity": 0, "ID": "M002"},
         ]
         feature_types = ["RDK5"]
-        result_df = self.feature_gen.generate_features(data, feature_types)
+        result = self.feature_gen.generate_features(data, feature_types)
 
         # Check the results
-        self.assertIsInstance(result_df, pd.DataFrame)
-        self.assertTrue("RDK5" in result_df.columns)
+        self.assertIsInstance(result["RDK5"], pd.DataFrame)
+        self.assertTrue("RDK5" in result)
 
 
 if __name__ == "__main__":
