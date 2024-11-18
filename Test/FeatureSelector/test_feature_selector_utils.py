@@ -146,10 +146,10 @@ class TestFeatureSelectorUtils(unittest.TestCase):
             n_jobs=3,
         )
         self.assertIsInstance(result_df, pd.DataFrame)
-        self.assertIn("FeatureSelector", result_df.columns)
-        self.assertIn("accuracy_mean", result_df.columns)
-        self.assertIn("f1_mean", result_df.columns)
-        self.assertEqual(len(result_df), len(self.select_methods_class))
+        self.assertIn("Anova", result_df.columns)
+        self.assertIn("accuracy_mean", result_df.index)
+        self.assertIn("f1_mean", result_df.index)
+        self.assertEqual(result_df.shape[1], len(self.select_methods_class))
 
     def test_evaluate_feature_selectors_regression(self):
         # Evaluate feature selectors for regression dataset
@@ -167,10 +167,10 @@ class TestFeatureSelectorUtils(unittest.TestCase):
             n_jobs=3,
         )
         self.assertIsInstance(result_df, pd.DataFrame)
-        self.assertIn("FeatureSelector", result_df.columns)
-        self.assertIn("r2_mean", result_df.columns)
-        self.assertIn("neg_mean_squared_error_mean", result_df.columns)
-        self.assertEqual(len(result_df), len(self.select_methods_reg))
+        self.assertIn("RandomForestRegressor", result_df.columns)
+        self.assertIn("r2_mean", result_df.index)
+        self.assertIn("neg_mean_squared_error_mean", result_df.index)
+        self.assertEqual(result_df.shape[1], len(self.select_methods_reg))
 
     def test_evaluate_feature_selectors_invalid_method(self):
         # Test for invalid method in evaluation

@@ -125,7 +125,8 @@ class FeatureGenerator:
         feature_types: List[str] = ["RDK5"],
     ) -> Dict[str, pd.DataFrame]:
         """
-        Generates features for molecules contained in a DataFrame or a list of dictionaries using parallel processing.
+        Generates features for molecules contained in a DataFrame or a list of dictionaries
+        using parallel processing.
 
         Parameters:
         - df (Union[pd.DataFrame, List[Dict[str, Any]]]): The input data as either
@@ -133,7 +134,8 @@ class FeatureGenerator:
         - feature_types (List[str]): Types of features to generate.
 
         Returns:
-        - Dict[str, pd.DataFrame]: A dictionary where keys are feature types and values are DataFrames with expanded fingerprints.
+        - Dict[str, pd.DataFrame]: A dictionary where keys are feature types and values are DataFrames
+        with expanded fingerprints.
 
         Raises:
         - ValueError: If the input data type is neither a pandas DataFrame nor a list of dictionaries.

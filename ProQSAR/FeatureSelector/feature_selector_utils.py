@@ -224,7 +224,8 @@ def evaluate_feature_selectors(
 
         result.append(method_result)
 
-    result_df = pd.DataFrame(result)
+    result_df = pd.DataFrame(result).set_index("FeatureSelector").T
+    result_df.columns.name = ""
 
     if visualize:
         _plot_cv_report(

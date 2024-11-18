@@ -51,25 +51,25 @@ def _plot_cv_report(
     for metric in scoring_list:
         plt.figure(figsize=(25, 10))
 
-        score_columns = [
-            col for col in report_df.columns if col.startswith(f"{metric}_fold")
+        fold_scores = report_df.loc[
+            [row for row in report_df.index if row.startswith(f"{metric}_fold")]
         ]
-        melted_result = report_df.melt(
-            id_vars=[xlabel],
-            value_vars=score_columns,
-            var_name="Score",
+        melted_result = fold_scores.reset_index().melt(
+            id_vars=["index"],
+            var_name="Model",
             value_name="Value",
         )
+        melted_result.rename(columns={"index": "Fold"}, inplace=True)
 
         if graph_type == "box":
             plot = sns.boxplot(
-                x=xlabel,
+                x="Model",
                 y="Value",
                 data=melted_result,
                 showmeans=True,
                 width=0.5,
                 palette="plasma",
-                hue=xlabel,
+                hue="Model",
                 meanprops={
                     "marker": "o",
                     "markerfacecolor": "red",
@@ -80,23 +80,23 @@ def _plot_cv_report(
             )
         elif graph_type == "bar":
             plot = sns.barplot(
-                x=xlabel,
+                x="Model",
                 y="Value",
                 data=melted_result,
                 errorbar="sd",
                 palette="plasma",
-                hue=xlabel,
+                hue="Model",
                 width=0.5,
                 color="black",
             )
         elif graph_type == "violin":
             plot = sns.violinplot(
-                x=xlabel,
+                x="Model",
                 y="Value",
                 data=melted_result,
                 inner=None,
                 palette="plasma",
-                hue=xlabel,
+                hue="Model",
             )
             sns.stripplot(
                 x=xlabel,
@@ -116,12 +116,13 @@ def _plot_cv_report(
         plot.set_ylabel(f"{metric.capitalize()}", fontsize=14)
 
         # Adding the mean values to the plot
-        for i, row in report_df.iterrows():
-            position = 0.05 if graph_type == "bar" else (row[f"{metric}_mean"] + 0.015)
+        mean_values = report_df.loc[f"{metric}_mean"]
+        for i, mean_val in enumerate(mean_values):
+            position = 0.05 if graph_type == "bar" else (mean_val + 0.015)
             plot.text(
                 i,
                 position,
-                str(row[f"{metric}_mean"]),
+                f"{mean_val:.3f}",
                 horizontalalignment="center",
                 size="x-large",
                 color="w",
@@ -240,7 +241,8 @@ def cross_validation_report(
 
         result.append(model_result)
 
-    cv_df = pd.DataFrame(result)
+    cv_df = pd.DataFrame(result).set_index("Model").T
+    cv_df.columns.name = ""
 
     if visualize:
         _plot_cv_report(
@@ -345,7 +347,7 @@ def external_validation_report(
                 else:
                     raise ValueError(f"'{metric}' is not recognized.")
 
-    ev_df = pd.DataFrame(ev_score).T
+    ev_df = pd.DataFrame(ev_score)
 
     if save_csv:
         if save_dir and not os.path.exists(save_dir):
