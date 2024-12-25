@@ -26,7 +26,7 @@ class StatisticalAnalysis:
         filtered_dfs = []
 
         for scoring in scoring_list:
-            score_df = report_df[report_df.index.str.startswith(f"{scoring}_fold")]
+            score_df = deepcopy(report_df[report_df.index.str.startswith(f"{scoring}_fold")])
             score_df["scoring"] = scoring
             filtered_dfs.append(score_df)
 
@@ -123,14 +123,14 @@ class StatisticalAnalysis:
         sns.set_context("notebook", font_scale=1.5)
         sns.set_style("whitegrid")
 
-        fig, axes = plt.subplots(2, scoring_list, figsize=(20, 10))
+        fig, axes = plt.subplots(2, len(scoring_list), figsize=(40, 10))
 
         for i, scoring in enumerate(scoring_list):
             ax = axes[0, i]
             sns.histplot(
                 df_norm[df_norm["scoring"] == scoring]["value"], kde=True, ax=ax
             )
-            ax.set_title(f"{scoring}", fontsize=16)
+            ax.set_title(f"{scoring.upper()}", fontsize=16)
 
         for i, scoring in enumerate(scoring_list):
             ax = axes[1, i]
@@ -165,9 +165,12 @@ class StatisticalAnalysis:
         sns.set_context("notebook")
         sns.set_theme(rc={"figure.figsize": (4, 3)}, font_scale=1.5)
         sns.set_style("whitegrid")
+        
+        num_rows = round(len(scoring_list)/2)
         figure, axes = plt.subplots(
-            1, len(scoring_list), sharex=False, sharey=False, figsize=(28, 8)
+            num_rows, 2, sharex=False, sharey=False, figsize=(3*len(report_df["method"].unique()), 7*num_rows)
         )
+        axes = axes.flatten() #Turn 2D array to 1D array
 
         for i, scoring in enumerate(scoring_list):
             if select_test == "AnovaRM":
@@ -194,13 +197,32 @@ class StatisticalAnalysis:
                 hue="method",
                 ax=axes[i],
                 data=scoring_data,
-                palette="Set2",
+                palette="plasma",
                 legend=False,
+                width=.5
             )
             ax.set_title(f"p={p_value:.1e}")
             ax.set_xlabel("")
             ax.set_ylabel(scoring.upper())
-
+            
+            
+            #Wrap labels
+            labels = [item.get_text() for item in ax.get_xticklabels()]
+            new_labels = []
+            for label in labels:
+                if "Regression" in label:
+                    new_label = label.replace("Regression", "\nRegression")
+                elif "Regressor" in label:
+                    new_label = label.replace("Regressor", "\nRegressor")
+                elif "Classifier" in label:
+                    new_label = label.replace("Classifier", "\nClassifier")
+                else:
+                    new_label = label
+                new_labels.append(new_label)
+            ax.set_xticks(list(range(0, len(labels))))
+            ax.set_xticklabels(new_labels)
+            ax.tick_params(axis="both", labelsize=12)
+                
         plt.tight_layout()
 
     @staticmethod
@@ -219,20 +241,14 @@ class StatisticalAnalysis:
                 )
         elif isinstance(scoring_list, str):
             scoring_list = [scoring_list]
-
+        
         # Precompute posthoc Conover-Friedman results for each metric
-        pc_results = {
-            scoring: sp.posthoc_conover_friedman(
-                report_df[report_df["scoring"] == scoring],
-                y_col="value",
-                group_col="method",
-                block_col="cv_cycle",
-                p_adjust="holm",
-                melted=True,
-            )
-            for scoring in scoring_list
-        }
-
+        pc_results = {}
+        for scoring in scoring_list:
+            scoring_df_filtered = report_df[report_df["scoring"] == scoring]
+            scoring_df_wide = scoring_df_filtered.pivot(index="cv_cycle", columns="method", values="value")
+            pc_results[scoring] = sp.posthoc_conover_friedman(scoring_df_wide, p_adjust="holm")
+        
         def make_sign_plots(scoring_list, pc_results):
             heatmap_args = {
                 "linewidths": 0.25,
@@ -241,31 +257,39 @@ class StatisticalAnalysis:
                 "square": True,
             }
             sns.set_theme(rc={"figure.figsize": (4, 3)}, font_scale=1.5)
+            
+            num_rows = round(len(scoring_list)/2)
             figure, axes = plt.subplots(
-                1, len(scoring_list), sharex=False, sharey=True, figsize=(26, 8)
+                num_rows, 2, sharex=False, sharey=False, figsize=(20, 8*num_rows)
             )
+        
+            axes = axes.flatten() #Turn 2D array to 1D array
+                   
             for i, scoring in enumerate(scoring_list):
                 pc = pc_results[scoring]
                 sub_ax, sub_c = sp.sign_plot(
                     pc, **heatmap_args, ax=axes[i], xticklabels=True
                 )
                 sub_ax.set_title(scoring.upper())
+                sub_ax.tick_params(axis="both", labelsize=12)
             plt.tight_layout()
 
         def make_critical_difference_diagrams(scoring_list, pc_results):
             figure, axes = plt.subplots(
-                len(scoring_list), 1, sharex=True, sharey=False, figsize=(16, 10)
+                len(scoring_list), 1, sharex=True, sharey=False, figsize=(20, 4*len(scoring_list))
             )
             for i, scoring in enumerate(scoring_list):
                 avg_rank = (
-                    report_df.groupby("cv_cycle")[scoring]
+                    report_df[report_df["scoring"] == scoring].groupby("cv_cycle")["value"]
                     .rank(pct=True)
-                    .groupby(report_df.Method)
+                    .groupby(report_df.method)
                     .mean()
                 )
                 pc = pc_results[scoring]
                 sp.critical_difference_diagram(avg_rank, pc, ax=axes[i])
                 axes[i].set_title(scoring.upper())
+                axes[i].tick_params(axis="y", labelsize=8)
+                
             plt.tight_layout()
 
         if plot is None or plot == "sign_plot":
@@ -300,16 +324,16 @@ class StatisticalAnalysis:
 
         tukey_results = {}
 
-        for metric in scoring_list:
-            if direction_dict and metric in direction_dict:
-                sort_order = direction_dict[metric]
-                df_means = report_df.groupby("method").mean(numeric_only=True).sort_values(metric, ascending=(sort_order == 'minimize'))
+        for scoring in scoring_list:
+            if direction_dict and scoring in direction_dict:
+                sort_order = direction_dict[scoring]
+                df_means = report_df.groupby("method").mean(numeric_only=True).sort_values(scoring, ascending=(sort_order == 'minimize'))
             else:
                 df_means = report_df.groupby("method").mean(numeric_only=True)
 
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
-                aov = pg.rm_anova(dv='value', within='method', subject='cv_cycle', data=report_df[report_df['scoring'] == metric], detailed=True)
+                aov = pg.rm_anova(dv='value', within='method', subject='cv_cycle', data=report_df[report_df['scoring'] == scoring], detailed=True)
 
             mse = aov.loc[1, 'MS']
             df_resid = aov.loc[1, 'DF']
@@ -332,8 +356,8 @@ class StatisticalAnalysis:
             for i, method1 in enumerate(methods):
                 for j, method2 in enumerate(methods):
                     if i < j:
-                        group1 = report_df[report_df['method'] == method1][metric]
-                        group2 = report_df[report_df['method'] == method2][metric]
+                        group1 = report_df[report_df['method'] == method1][scoring]
+                        group2 = report_df[report_df['method'] == method2][scoring]
                         mean_diff = group1.mean() - group2.mean()
                         studentized_range = np.abs(mean_diff) / tukey_se
                         adjusted_p = qsturng(studentized_range * np.sqrt(2), n_groups, df_resid)
@@ -353,28 +377,28 @@ class StatisticalAnalysis:
                 "pc": pc
             }
 
-        def make_mcs_plot(metric_ls, tukey_results):
-            fig, axes = plt.subplots(1, len(metric_ls), figsize=(20, 10))
-            for i, metric in enumerate(metric_ls):
-                result = tukey_results[metric]
+        def make_mcs_plot(scoring_list, tukey_results):
+            fig, axes = plt.subplots(1, len(scoring_list), figsize=(20, 10))
+            for i, scoring in enumerate(scoring_list):
+                result = tukey_results[scoring]
                 pc = result["pc"]
                 effect_size = result["df_means_diff"]
-                means = result["df_means"][metric]
+                means = result["df_means"][scoring]
                 sns.heatmap(effect_size, annot=True, fmt='.2f', ax=axes[i], cmap="coolwarm")
-                axes[i].set_title(metric.upper())
+                axes[i].set_title(scoring.upper())
             plt.tight_layout()
 
-        def make_ci_plot(metric_ls, tukey_results):
-            fig, axes = plt.subplots(len(metric_ls), 1, figsize=(8, 2 * len(metric_ls)))
-            for i, metric in enumerate(metric_ls):
-                result = tukey_results[metric]
+        def make_ci_plot(scoring_list, tukey_results):
+            fig, axes = plt.subplots(len(scoring_list), 1, figsize=(8, 2 * len(scoring_list)))
+            for i, scoring in enumerate(scoring_list):
+                result = tukey_results[scoring]
                 result_tab = result["result_tab"]
                 result_err = np.array([result_tab['meandiff'] - result_tab['lower'],
                                     result_tab['upper'] - result_tab['meandiff']])
                 sns.pointplot(x=result_tab.meandiff, y=result_tab.index, ax=axes[i])
                 axes[i].errorbar(y=result_tab.index, x=result_tab['meandiff'], xerr=result_err, fmt='o', capsize=5)
                 axes[i].axvline(0, ls="--", lw=3)
-                axes[i].set_title(metric.upper())
+                axes[i].set_title(scoring.upper())
             plt.tight_layout()
 
         if plot is None or plot == 'mcs_plot':
