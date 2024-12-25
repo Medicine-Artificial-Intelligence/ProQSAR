@@ -346,7 +346,7 @@ class StatisticalAnalysis:
                         df_means_diff.loc[method2, method1] = -mean_diff
                         row_idx += 1
 
-            tukey_results[metric] = {
+            tukey_results[scoring] = {
                 "result_tab": result_tab,
                 "df_means": df_means,
                 "df_means_diff": df_means_diff,
