@@ -1,4 +1,5 @@
 import os
+import math
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -18,7 +19,6 @@ def _plot_cv_report(
     report_df: pd.DataFrame,
     scoring_list: List[str],
     graph_type: Optional[str] = "box",
-    xlabel: str = "Model",
     save_fig: bool = False,
     fig_prefix: str = "cv_graph",
     save_dir: str = "Project/ModelDevelopment",
@@ -45,27 +45,37 @@ def _plot_cv_report(
     --------
     None
     """
-
+    
+    sns.set_context("notebook")
     sns.set_style("whitegrid")
 
-    for metric in scoring_list:
-        plt.figure(figsize=(25, 10))
+    nrow = math.ceil(len(scoring_list) / 2)
+    
+    nmethod = len(report_df.columns.unique())
 
-        fold_scores = report_df.loc[
-            [row for row in report_df.index if row.startswith(f"{metric}_fold")]
-        ]
-        melted_result = fold_scores.reset_index().melt(
-            id_vars=["index"],
+    figure, axes = plt.subplots(
+            nrow, 2, sharex=False, sharey=False, figsize=(3 * nmethod, 7 * nrow)
+        )
+    axes = axes.flatten()  # Turn 2D array to 1D array
+
+    for i, metric in enumerate(scoring_list):
+
+        # Select only rows that correspond to the current metric
+        metric_rows = report_df.xs(metric, level="scoring")
+
+        # Melt the DataFrame to long format for plotting
+        melted_result = metric_rows.reset_index().melt(
+            id_vars=["cv_cycle"],
             var_name="Model",
             value_name="Value",
         )
-        melted_result.rename(columns={"index": "Fold"}, inplace=True)
-
+        
         if graph_type == "box":
             plot = sns.boxplot(
                 x="Model",
                 y="Value",
                 data=melted_result,
+                ax=axes[i],
                 showmeans=True,
                 width=0.5,
                 palette="plasma",
@@ -75,7 +85,7 @@ def _plot_cv_report(
                     "markerfacecolor": "red",
                     "markeredgecolor": "black",
                 },
-                medianprops={"color": "red", "linewidth": 2},
+                medianprops={"color": "red", "linewidth": 1.5},
                 boxprops={"edgecolor": "w"},
             )
         elif graph_type == "bar":
@@ -83,6 +93,7 @@ def _plot_cv_report(
                 x="Model",
                 y="Value",
                 data=melted_result,
+                ax=axes[i],
                 errorbar="sd",
                 palette="plasma",
                 hue="Model",
@@ -94,14 +105,16 @@ def _plot_cv_report(
                 x="Model",
                 y="Value",
                 data=melted_result,
+                ax=axes[i],
                 inner=None,
                 palette="plasma",
                 hue="Model",
             )
             sns.stripplot(
-                x=xlabel,
+                x="Model",
                 y="Value",
                 data=melted_result,
+                ax=axes[i],
                 color="white",
                 size=5,
                 jitter=True,
@@ -111,32 +124,39 @@ def _plot_cv_report(
                 f"Invalid graph type '{graph_type}'. Choose 'box', 'bar' or 'violin'."
             )
 
-        plot.set_title(f"Cross-Validated Model Performance, on {metric}", fontsize=14)
-        plot.set_xlabel(xlabel, fontsize=14)
-        plot.set_ylabel(f"{metric.capitalize()}", fontsize=14)
-
-        # Adding the mean values to the plot
-        mean_values = report_df.loc[f"{metric}_mean"]
-        for i, mean_val in enumerate(mean_values):
-            position = 0.05 if graph_type == "bar" else (mean_val + 0.015)
-            plot.text(
-                i,
-                position,
-                f"{mean_val:.3f}",
-                horizontalalignment="center",
-                size="x-large",
-                color="w",
-                weight="semibold",
-            )
-
+        plot.set_xlabel("")
+        plot.set_ylabel(f"{metric.upper()}", fontsize=12)
+        
+        # Wrap labels
+        labels = [item.get_text() for item in plot.get_xticklabels()]
+        new_labels = []
+        for label in labels:
+            if "Regression" in label:
+                new_label = label.replace("Regression", "\nRegression")
+            elif "Regressor" in label:
+                new_label = label.replace("Regressor", "\nRegressor")
+            elif "Classifier" in label:
+                new_label = label.replace("Classifier", "\nClassifier")
+            else:
+                new_label = label
+            new_labels.append(new_label)
+        plot.set_xticks(list(range(0, len(labels))))
+        plot.set_xticklabels(new_labels)
+        plot.tick_params(axis="both", labelsize=12)
+            
+    # If there are less plots than cells in the grid, hide the remaining cells
+    if (len(scoring_list) % 2) != 0:
+        for i in range(len(scoring_list), nrow * 2):
+            axes[i].set_visible(False)
+                
         if save_fig:
             if save_dir and not os.path.exists(save_dir):
                 os.makedirs(save_dir, exist_ok=True)
             plt.savefig(
                 f"{save_dir}/{fig_prefix}_{metric}_{graph_type}.png",
-                dpi=300,
+                dpi=300, bbox_inches="tight"
             )
-
+            
     plt.show()
 
 
@@ -147,9 +167,10 @@ def cross_validation_report(
     add_model: Optional[dict] = None,
     select_model: Optional[List[str]] = None,
     scoring_list: Optional[List[str]] = None,
-    n_splits: int = 10,
-    n_repeats: int = 3,
+    n_splits: int = 5,
+    n_repeats: int = 5,
     visualize: Optional[str] = None,
+    include_stats: bool = True,
     save_fig: bool = False,
     save_csv: bool = False,
     fig_prefix: str = "cv_graph",
@@ -229,20 +250,41 @@ def cross_validation_report(
             scoring=scoring_list,
             n_jobs=n_jobs,
         )
+                
+        # Collect fold scores for each cycle
+        for cycle in range(n_splits * n_repeats):
+            for metric in scoring_list:
+                model_result = {
+                    "scoring": metric,
+                    "cv_cycle": cycle + 1,
+                    name: scores[f"test_{metric}"][cycle],
+                }
+                result.append(model_result)
 
-        model_result = {"Model": name}
-        for metric in scoring_list:
-            metric_scores = scores[f"test_{metric}"]
-            model_result[f"{metric}_mean"] = round(np.mean(metric_scores), 3)
-            model_result[f"{metric}_std"] = round(np.std(metric_scores), 3)
-            model_result[f"{metric}_median"] = round(np.median(metric_scores), 3)
-            for i, score in enumerate(metric_scores):
-                model_result[f"{metric}_fold{i+1}"] = score
+        # Optionally add mean, std, and median for each model and scoring metric
+        if include_stats:
+            for metric in scoring_list:
+                metric_scores = scores[f"test_{metric}"]
+                result.append({
+                    "scoring": metric,
+                    "cv_cycle": "mean",
+                    name: round(np.mean(metric_scores), 3),
+                })
+                result.append({
+                    "scoring": metric,
+                    "cv_cycle": "std",
+                    name: round(np.std(metric_scores), 3),
+                })
+                result.append({
+                    "scoring": metric,
+                    "cv_cycle": "median",
+                    name: round(np.median(metric_scores), 3),
+                })
 
-        result.append(model_result)
+    # Create a DataFrame in wide format
+    cv_df = pd.DataFrame(result)
+    cv_df = cv_df.set_index(["scoring", "cv_cycle"]).sort_index()
 
-    cv_df = pd.DataFrame(result).set_index("Model").T
-    cv_df.columns.name = ""
 
     if visualize:
         _plot_cv_report(
