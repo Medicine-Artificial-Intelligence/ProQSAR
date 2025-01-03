@@ -25,7 +25,7 @@ from sklearn.ensemble import (
 )
 from sklearn.linear_model import LogisticRegression, LassoCV
 from xgboost import XGBClassifier, XGBRegressor
-from ProQSAR.ModelDeveloper.model_validation import _plot_cv_report
+from ProQSAR.ModelDeveloper.model_validation import ModelValidation
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_task_type,
     _get_cv_strategy,
@@ -125,9 +125,10 @@ def evaluate_feature_selectors(
     add_method: Optional[dict[str, object]] = None,
     select_method: Optional[List[str]] = None,
     scoring_list: Optional[List[str]] = None,
-    n_splits: int = 10,
-    n_repeats: int = 3,
-    visualize: Optional[str] = None,
+    n_splits: int = 5,
+    n_repeats: int = 5,
+    include_stats: bool = True,
+    visualize: Optional[Union[str, List[str]]] = None,
     save_fig: bool = False,
     save_csv: bool = False,
     fig_prefix: str = "fs_graph",
@@ -213,31 +214,66 @@ def evaluate_feature_selectors(
             model, selected_X, y_data, cv=cv, scoring=scoring_list, n_jobs=n_jobs
         )
 
-        method_result = {"FeatureSelector": name}
-        for metric in scoring_list:
-            metric_scores = scores[f"test_{metric}"]
-            method_result[f"{metric}_mean"] = round(np.mean(metric_scores), 3)
-            method_result[f"{metric}_std"] = round(np.std(metric_scores), 3)
-            method_result[f"{metric}_median"] = round(np.median(metric_scores), 3)
-            for i, score in enumerate(metric_scores):
-                method_result[f"{metric}_fold{i+1}"] = score
+        # Collect fold scores for each cycle
+        for cycle in range(n_splits * n_repeats):
+            for metric in scoring_list:
+                model_result = {
+                    "scoring": metric,
+                    "cv_cycle": cycle + 1,
+                    "method": name,
+                    "value": scores[f"test_{metric}"][cycle],
+                    }
+                result.append(model_result)
+            # Optionally add mean, std, and median for each model and scoring metric
+        if include_stats:
+            for metric in scoring_list:
+                metric_scores = scores[f"test_{metric}"]
+                result.append({
+                    "scoring": metric,
+                    "cv_cycle": "mean",
+                    "model": name,
+                    "value": round(np.mean(metric_scores), 3),
+                })
+                result.append({
+                    "scoring": metric,
+                    "cv_cycle": "std",
+                    "model": name,
+                    "value": round(np.std(metric_scores), 3),
+                })
+                result.append({
+                    "scoring": metric,
+                    "cv_cycle": "median",
+                    "model": name,
+                    "value": round(np.median(metric_scores), 3),
+                })
+    # Create a DataFrame in wide format
+    result_df = pd.DataFrame(result)
+    
+    # Pivot the DataFrame so that each model becomes a separate column
+    result_df = result_df.pivot_table(
+        index=["scoring", "cv_cycle"],
+        columns="model",
+        values="value",
+        aggfunc="first"
+    )
+    # Sort index and columns to maintain a consistent order
+    result_df = result_df.sort_index(axis=0).sort_index(axis=1)
 
-        result.append(method_result)
-
-    result_df = pd.DataFrame(result).set_index("FeatureSelector").T
-    result_df.columns.name = ""
-
-    if visualize:
-        _plot_cv_report(
-            report_df=result_df,
-            scoring_list=scoring_list,
-            graph_type=visualize,
-            save_fig=save_fig,
-            fig_prefix=fig_prefix,
-            save_dir=save_dir,
-            xlabel="FeatureSelector",
-        )
-
+    # Visualization if requested
+    if visualize is not None:
+        if isinstance(visualize, str):
+            visualize = [visualize]  
+            
+        for graph_type in visualize:
+            ModelValidation._plot_cv_report(
+                report_df=result_df,
+                scoring_list=scoring_list,
+                graph_type=graph_type,
+                save_fig=save_fig,
+                fig_prefix=fig_prefix,
+                save_dir=save_dir,
+            )
+            
     if save_csv:
         if save_dir and not os.path.exists(save_dir):
             os.makedirs(save_dir, exist_ok=True)

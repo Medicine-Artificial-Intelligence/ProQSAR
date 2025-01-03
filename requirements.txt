@@ -8,5 +8,5 @@ catboost==1.2.7
 optuna==4.0.0
 numpy==1.26.4
 matplotlib==3.9.2
-scikit-posthocs==0.7.0
+scikit-posthocs==0.11.2
 pingouin==0.5.5

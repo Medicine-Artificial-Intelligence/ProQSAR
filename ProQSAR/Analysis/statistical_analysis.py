@@ -18,7 +18,12 @@ import scikit_posthocs as sp
 class StatisticalAnalysis:
 
     @staticmethod
-    def extract_scoring_dfs(report_df: pd.DataFrame, scoring_list: Union[list, str], method_list: Union[list, str], melt: bool = False):
+    def extract_scoring_dfs(
+        report_df: pd.DataFrame,
+        scoring_list: Union[list, str],
+        method_list: Union[list, str],
+        melt: bool = False,
+    ):
 
         if isinstance(scoring_list, str):
             scoring_list = [scoring_list]
@@ -29,13 +34,13 @@ class StatisticalAnalysis:
             score_df = deepcopy(
                 report_df[report_df.index.str.startswith(f"{scoring}_fold")]
             )
-            score_df = score_df[method_list] # Select only the columns in method_list
+            score_df = score_df[method_list]  # Select only the columns in method_list
             score_df["scoring"] = scoring
             filtered_dfs.append(score_df)
 
         scoring_dfs = pd.concat(filtered_dfs)
         scoring_dfs.reset_index().rename(columns={"index": "cv_cycle"}, inplace=True)
-        
+
         # Melt the dataframe to long format
         if melt:
             scoring_dfs.melt(
@@ -48,7 +53,6 @@ class StatisticalAnalysis:
     def check_variance_homogeneity(
         report_df: pd.DataFrame,
         scoring_list: Optional[Union[list, str]] = None,
-        
         levene_test: bool = True,
     ):
 
