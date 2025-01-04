@@ -86,10 +86,6 @@ class ModelValidation:
                     width=0.5,
                     palette="plasma",
                     hue="method",
-                    meanprops={
-                        "markerfacecolor": "red",
-                        "markeredgecolor": "red",
-                    },
                 )
             elif graph_type == "bar":
                 plot = sns.barplot(
@@ -267,7 +263,7 @@ class ModelValidation:
                     model_result = {
                         "scoring": metric,
                         "cv_cycle": cycle + 1,
-                        "model": name,
+                        "method": name,
                         "value": scores[f"test_{metric}"][cycle],
                     }
                     result.append(model_result)
@@ -280,7 +276,7 @@ class ModelValidation:
                         {
                             "scoring": metric,
                             "cv_cycle": "mean",
-                            "model": name,
+                            "method": name,
                             "value": round(np.mean(metric_scores), 3),
                         }
                     )
@@ -288,7 +284,7 @@ class ModelValidation:
                         {
                             "scoring": metric,
                             "cv_cycle": "std",
-                            "model": name,
+                            "method": name,
                             "value": round(np.std(metric_scores), 3),
                         }
                     )
@@ -296,7 +292,7 @@ class ModelValidation:
                         {
                             "scoring": metric,
                             "cv_cycle": "median",
-                            "model": name,
+                            "method": name,
                             "value": round(np.median(metric_scores), 3),
                         }
                     )
@@ -307,7 +303,7 @@ class ModelValidation:
         # Pivot the DataFrame so that each model becomes a separate column
         cv_df = cv_df.pivot_table(
             index=["scoring", "cv_cycle"],
-            columns="model",
+            columns="method",
             values="value",
             aggfunc="first",
         )

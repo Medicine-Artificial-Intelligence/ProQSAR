@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
-from typing import Optional, List
+from typing import Optional, List, Union
 from sklearn.model_selection import (
     cross_validate,
 )
@@ -231,19 +231,19 @@ def evaluate_feature_selectors(
                 result.append({
                     "scoring": metric,
                     "cv_cycle": "mean",
-                    "model": name,
+                    "method": name,
                     "value": round(np.mean(metric_scores), 3),
                 })
                 result.append({
                     "scoring": metric,
                     "cv_cycle": "std",
-                    "model": name,
+                    "method": name,
                     "value": round(np.std(metric_scores), 3),
                 })
                 result.append({
                     "scoring": metric,
                     "cv_cycle": "median",
-                    "model": name,
+                    "method": name,
                     "value": round(np.median(metric_scores), 3),
                 })
     # Create a DataFrame in wide format
@@ -252,7 +252,7 @@ def evaluate_feature_selectors(
     # Pivot the DataFrame so that each model becomes a separate column
     result_df = result_df.pivot_table(
         index=["scoring", "cv_cycle"],
-        columns="model",
+        columns="method",
         values="value",
         aggfunc="first"
     )

@@ -20,57 +20,68 @@ class StatisticalAnalysis:
     @staticmethod
     def extract_scoring_dfs(
         report_df: pd.DataFrame,
-        scoring_list: Union[list, str],
-        method_list: Union[list, str],
+        scoring_list: Optional[Union[list, str]] = None,
+        method_list: Optional[Union[list, str]] = None,
         melt: bool = False,
     ):
-
         if isinstance(scoring_list, str):
             scoring_list = [scoring_list]
+
+        if scoring_list is None:
+            scoring_list = report_df.index.get_level_values("scoring").unique()
+
+        if isinstance(method_list, str):
+            method_list = [method_list]
+
+        if method_list is None:
+            method_list = report_df.columns.tolist()
 
         filtered_dfs = []
 
         for scoring in scoring_list:
             score_df = deepcopy(
-                report_df[report_df.index.str.startswith(f"{scoring}_fold")]
+                report_df[report_df.index.get_level_values("scoring") == scoring]
             )
             score_df = score_df[method_list]  # Select only the columns in method_list
-            score_df["scoring"] = scoring
             filtered_dfs.append(score_df)
 
         scoring_dfs = pd.concat(filtered_dfs)
-        scoring_dfs.reset_index().rename(columns={"index": "cv_cycle"}, inplace=True)
+        scoring_dfs = scoring_dfs[
+            ~scoring_dfs.index.get_level_values("cv_cycle").isin(
+                ["mean", "median", "std"]
+            )
+        ]
+        scoring_dfs = scoring_dfs.sort_index(axis=0).sort_index(axis=1)
 
         # Melt the dataframe to long format
         if melt:
-            scoring_dfs.melt(
+            scoring_dfs.reset_index(inplace=True)
+            scoring_dfs = scoring_dfs.melt(
                 id_vars=["scoring", "cv_cycle"], var_name="method", value_name="value"
             )
 
-        return scoring_dfs
+        return scoring_dfs, scoring_list, method_list
 
     @staticmethod
     def check_variance_homogeneity(
         report_df: pd.DataFrame,
         scoring_list: Optional[Union[list, str]] = None,
+        method_list: Optional[Union[list, str]] = None,
         levene_test: bool = True,
     ):
 
-        if scoring_list is None:
-            if "scoring" in report_df.columns:
-                scoring_list = report_df["scoring"].unique().tolist()  # Convert to list
-            else:
-                raise ValueError(
-                    "The 'scoring' column is not present in the DataFrame."
-                )
-        elif isinstance(scoring_list, str):
-            scoring_list = [scoring_list]
+        report_new, scoring_list, _ = StatisticalAnalysis.extract_scoring_dfs(
+            report_df=report_df,
+            scoring_list=scoring_list,
+            method_list=method_list,
+            melt=True,
+        )
 
         result = []
 
         for scoring in scoring_list:
             # Filter data for the current metric
-            scoring_data = report_df[report_df["scoring"] == scoring]
+            scoring_data = report_new[report_new["scoring"] == scoring]
 
             # Calculate variance fold difference
             variances_by_method = scoring_data.groupby("method")["value"].var()
@@ -97,7 +108,9 @@ class StatisticalAnalysis:
 
     @staticmethod
     def check_normality(
-        report_df: pd.DataFrame, scoring_list: Optional[Union[list, str]] = None
+        report_df: pd.DataFrame,
+        scoring_list: Optional[Union[list, str]] = None,
+        method_list: Optional[Union[list, str]] = None,
     ):
         """
         Check the normality of the scoring metrics in the report DataFrame.
@@ -114,18 +127,15 @@ class StatisticalAnalysis:
             None: Displays histograms and Q-Q plots for each scoring metric.
         """
 
-        if scoring_list is None:
-            if "scoring" in report_df.columns:
-                scoring_list = report_df["scoring"].unique().tolist()  # Convert to list
-            else:
-                raise ValueError(
-                    "The 'scoring' column is not present in the DataFrame."
-                )
-        elif isinstance(scoring_list, str):
-            scoring_list = [scoring_list]
+        report_new, scoring_list, _ = StatisticalAnalysis.extract_scoring_dfs(
+            report_df=report_df,
+            scoring_list=scoring_list,
+            method_list=method_list,
+            melt=True,
+        )
 
         # Normalize values by subtracting the mean for each method
-        df_norm = deepcopy(report_df)
+        df_norm = deepcopy(report_new)
         df_norm["value"] = df_norm.groupby(["method", "scoring"])["value"].transform(
             lambda x: x - x.mean()
         )
@@ -133,20 +143,19 @@ class StatisticalAnalysis:
         sns.set_context("notebook")
         sns.set_style("whitegrid")
 
-        fig, axes = plt.subplots(2, len(scoring_list), figsize=(40, 10))
+        fig, axes = plt.subplots(
+            2, len(scoring_list), figsize=(5 * len(scoring_list), 10)
+        )
 
         for i, scoring in enumerate(scoring_list):
             ax = axes[0, i]
-            sns.histplot(
-                df_norm[df_norm["scoring"] == scoring]["value"], kde=True, ax=ax
-            )
+            scoring_data = df_norm[df_norm["scoring"] == scoring]["value"]
+            sns.histplot(scoring_data, kde=True, ax=ax)
             ax.set_title(f"{scoring.upper()}", fontsize=16)
 
-        for i, scoring in enumerate(scoring_list):
-            ax = axes[1, i]
-            scoring_data = df_norm[df_norm["scoring"] == scoring]["value"]
-            stats.probplot(scoring_data, dist="norm", plot=ax)
-            ax.set_title("")
+            ax2 = axes[1, i]
+            stats.probplot(scoring_data, dist="norm", plot=ax2)
+            ax2.set_title("")
 
         plt.tight_layout()
 
@@ -154,18 +163,16 @@ class StatisticalAnalysis:
     def test(
         report_df: pd.DataFrame,
         scoring_list: Optional[Union[list, str]] = None,
+        method_list: Optional[Union[list, str]] = None,
         select_test: str = "AnovaRM",
+        showmeans: bool = True,
     ):
-
-        if scoring_list is None:
-            if "scoring" in report_df.columns:
-                scoring_list = report_df["scoring"].unique().tolist()  # Convert to list
-            else:
-                raise ValueError(
-                    "The 'scoring' column is not present in the DataFrame."
-                )
-        elif isinstance(scoring_list, str):
-            scoring_list = [scoring_list]
+        report_new, scoring_list, method_list = StatisticalAnalysis.extract_scoring_dfs(
+            report_df=report_df,
+            scoring_list=scoring_list,
+            method_list=method_list,
+            melt=True,
+        )
 
         if select_test not in ["AnovaRM", "friedman"]:
             raise ValueError(
@@ -176,7 +183,7 @@ class StatisticalAnalysis:
         sns.set_style("whitegrid")
 
         nrow = math.ceil(len(scoring_list) / 2)
-        nmethod = len(report_df["method"].unique())
+        nmethod = len(method_list)
 
         figure, axes = plt.subplots(
             nrow, 2, sharex=False, sharey=False, figsize=(3 * nmethod, 7 * nrow)
@@ -185,7 +192,7 @@ class StatisticalAnalysis:
 
         for i, scoring in enumerate(scoring_list):
             if select_test == "AnovaRM":
-                scoring_data = report_df[report_df["scoring"] == scoring]
+                scoring_data = report_new[report_new["scoring"] == scoring]
                 model = AnovaRM(
                     data=scoring_data,
                     depvar="value",
@@ -204,6 +211,7 @@ class StatisticalAnalysis:
                 x="method",
                 hue="method",
                 ax=axes[i],
+                showmeans=showmeans,
                 data=scoring_data,
                 palette="plasma",
                 legend=False,
@@ -241,29 +249,33 @@ class StatisticalAnalysis:
     def posthoc_conover_friedman(
         report_df: pd.DataFrame,
         scoring_list: Optional[Union[list, str]] = None,
+        method_list: Optional[Union[list, str]] = None,
         plot: Optional[Union[list, str]] = None,
     ):
 
-        if scoring_list is None:
-            if "scoring" in report_df.columns:
-                scoring_list = report_df["scoring"].unique().tolist()
-            else:
-                raise ValueError(
-                    "The 'scoring' column is not present in the DataFrame."
-                )
-        elif isinstance(scoring_list, str):
-            scoring_list = [scoring_list]
+        report_new, scoring_list, method_list = StatisticalAnalysis.extract_scoring_dfs(
+            report_df=report_df,
+            scoring_list=scoring_list,
+            method_list=method_list,
+            melt=False,
+        )
 
         # Precompute posthoc Conover-Friedman results for each metric
         pc_results = {}
+        rank_results = {}
+
         for scoring in scoring_list:
-            scoring_df_filtered = report_df[report_df["scoring"] == scoring]
-            scoring_df_wide = scoring_df_filtered.pivot(
-                index="cv_cycle", columns="method", values="value"
-            )
+            scoring_df_filtered = report_new[
+                report_new.index.get_level_values("scoring") == scoring
+            ]
+            scoring_df_filtered.reset_index(level="scoring", drop=True, inplace=True)
             pc_results[scoring] = sp.posthoc_conover_friedman(
-                scoring_df_wide, p_adjust="holm"
+                scoring_df_filtered, p_adjust="holm"
             )
+            # Compute the mean rank for each method
+            rank_results[scoring] = scoring_df_filtered.rank(
+                axis=1, method="average", pct=True
+            ).mean(axis=0)
 
         def make_sign_plots(scoring_list, pc_results):
             heatmap_args = {
@@ -275,7 +287,6 @@ class StatisticalAnalysis:
             sns.set_context("notebook")
             sns.set_style("whitegrid")
 
-            nmethod = len(report_df["method"].unique())
             figure, axes = plt.subplots(
                 1,
                 len(scoring_list),
@@ -293,7 +304,7 @@ class StatisticalAnalysis:
                 )
                 sub_ax.set_title(scoring.upper(), fontsize=16)
 
-        def make_critical_difference_diagrams(scoring_list, pc_results):
+        def make_critical_difference_diagrams(scoring_list, pc_results, rank_results):
             sns.set_context("notebook")
             sns.set_style("whitegrid")
             figure, axes = plt.subplots(
@@ -305,14 +316,8 @@ class StatisticalAnalysis:
             )
             axes = [axes] if len(scoring_list) == 1 else axes
             for i, scoring in enumerate(scoring_list):
-                avg_rank = (
-                    report_df[report_df["scoring"] == scoring]
-                    .groupby("cv_cycle")["value"]
-                    .rank(pct=True)
-                    .groupby(report_df.method)
-                    .mean()
-                )
                 pc = pc_results[scoring]
+                avg_rank = rank_results[scoring]
                 sp.critical_difference_diagram(avg_rank, pc, ax=axes[i])
                 axes[i].set_title(scoring.upper(), fontsize=16)
 
@@ -322,7 +327,34 @@ class StatisticalAnalysis:
             make_sign_plots(scoring_list, pc_results)
 
         if plot is None or plot == "ccd":
-            make_critical_difference_diagrams(scoring_list, pc_results)
+            make_critical_difference_diagrams(scoring_list, pc_results, rank_results)
+
+        return pc_results, rank_results
+
+    def posthoc_conover_friedman2(
+        report_df: pd.DataFrame,
+        scoring_list: Optional[Union[list, str]] = None,
+        method_list: Optional[Union[list, str]] = None,
+        plot: Optional[Union[list, str]] = None,
+    ):
+
+        report_new, scoring_list, method_list = StatisticalAnalysis.extract_scoring_dfs(
+            report_df=report_df,
+            scoring_list=scoring_list,
+            method_list=method_list,
+            melt=False,
+        )
+
+        # Precompute posthoc Conover-Friedman results for each metric
+        pc_results = {}
+        for scoring in scoring_list:
+            scoring_df_filtered = report_new[
+                report_new.index.get_level_values("scoring") == scoring
+            ]
+            scoring_df_filtered.reset_index(level="scoring", drop=True, inplace=True)
+            pc_results[scoring] = sp.posthoc_conover_friedman(
+                scoring_df_filtered, p_adjust="holm"
+            )
 
         return pc_results
 
@@ -331,6 +363,7 @@ class StatisticalAnalysis:
     def posthoc_tukeyhsd(
         report_df: pd.DataFrame,
         scoring_list: Optional[Union[list, str]] = None,
+        method_list: Optional[Union[list, str]] = None,
         plot: Optional[Union[list, str]] = None,
         alpha: float = 0.05,
         direction_dict: Optional[dict] = None,
@@ -345,15 +378,13 @@ class StatisticalAnalysis:
         alpha (float): Significance level for the test. Default is 0.05.
         direction_dict (Optional[dict]): Dictionary indicating whether to minimize or maximize each metric.
         """
-        if scoring_list is None:
-            if "scoring" in report_df.columns:
-                scoring_list = report_df["scoring"].unique().tolist()
-            else:
-                raise ValueError(
-                    "The 'scoring' column is not present in the DataFrame."
-                )
-        elif isinstance(scoring_list, str):
-            scoring_list = [scoring_list]
+
+        report_new, scoring_list, method_list = StatisticalAnalysis.extract_scoring_dfs(
+            report_df=report_df,
+            scoring_list=scoring_list,
+            method_list=method_list,
+            melt=True,
+        )
 
         tukey_results = {}
 
@@ -361,12 +392,12 @@ class StatisticalAnalysis:
             if direction_dict and scoring in direction_dict:
                 sort_order = direction_dict[scoring]
                 df_means = (
-                    report_df.groupby("method")
+                    report_new.groupby("method")
                     .mean(numeric_only=True)
-                    .sort_values(scoring, ascending=(sort_order == "minimize"))
+                    .sort_values(scoring, ascending=(sort_order == "minimize")) # The ascending parameter is set to True if sort_order is "minimize"
                 )
             else:
-                df_means = report_df.groupby("method").mean(numeric_only=True)
+                df_means = report_new.groupby("method").mean(numeric_only=True)
 
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -374,7 +405,7 @@ class StatisticalAnalysis:
                     dv="value",
                     within="method",
                     subject="cv_cycle",
-                    data=report_df[report_df["scoring"] == scoring],
+                    data=report_new[report_new["scoring"] == scoring],
                     detailed=True,
                 )
 
@@ -383,7 +414,7 @@ class StatisticalAnalysis:
 
             methods = df_means.index
             n_groups = len(methods)
-            n_per_group = report_df["method"].value_counts().mean()
+            n_per_group = report_new["method"].value_counts().mean()
 
             tukey_se = np.sqrt(2 * mse / n_per_group)
             q = qsturng(1 - alpha, n_groups, df_resid)
@@ -401,8 +432,8 @@ class StatisticalAnalysis:
             for i, method1 in enumerate(methods):
                 for j, method2 in enumerate(methods):
                     if i < j:
-                        group1 = report_df[report_df["method"] == method1][scoring]
-                        group2 = report_df[report_df["method"] == method2][scoring]
+                        group1 = report_new[report_new["method"] == method1][scoring]
+                        group2 = report_new[report_new["method"] == method2][scoring]
                         mean_diff = group1.mean() - group2.mean()
                         studentized_range = np.abs(mean_diff) / tukey_se
                         adjusted_p = qsturng(
@@ -431,44 +462,6 @@ class StatisticalAnalysis:
                 "pc": pc,
             }
 
-        def make_mcs_plot(scoring_list, tukey_results):
-            fig, axes = plt.subplots(1, len(scoring_list), figsize=(20, 10))
-            for i, scoring in enumerate(scoring_list):
-                result = tukey_results[scoring]
-                pc = result["pc"]
-                effect_size = result["df_means_diff"]
-                means = result["df_means"][scoring]
-                sns.heatmap(
-                    effect_size, annot=True, fmt=".2f", ax=axes[i], cmap="coolwarm"
-                )
-                axes[i].set_title(scoring.upper())
-            plt.tight_layout()
-
-        def make_ci_plot(scoring_list, tukey_results):
-            fig, axes = plt.subplots(
-                len(scoring_list), 1, figsize=(8, 2 * len(scoring_list))
-            )
-            for i, scoring in enumerate(scoring_list):
-                result = tukey_results[scoring]
-                result_tab = result["result_tab"]
-                result_err = np.array(
-                    [
-                        result_tab["meandiff"] - result_tab["lower"],
-                        result_tab["upper"] - result_tab["meandiff"],
-                    ]
-                )
-                sns.pointplot(x=result_tab.meandiff, y=result_tab.index, ax=axes[i])
-                axes[i].errorbar(
-                    y=result_tab.index,
-                    x=result_tab["meandiff"],
-                    xerr=result_err,
-                    fmt="o",
-                    capsize=5,
-                )
-                axes[i].axvline(0, ls="--", lw=3)
-                axes[i].set_title(scoring.upper())
-            plt.tight_layout()
-
         if plot is None or plot == "mcs_plot":
             make_mcs_plot(scoring_list, tukey_results)
 
@@ -476,3 +469,147 @@ class StatisticalAnalysis:
             make_ci_plot(scoring_list, tukey_results)
 
         return tukey_results
+
+    def mcs_plot(pc, effect_size, means, labels=True, cmap=None, cbar_ax_bbox=None,
+                ax=None, show_diff=True, cell_text_size=16, axis_text_size=12,
+                show_cbar=True, reverse_cmap=False, vlim=None, **kwargs):
+
+
+        for key in ['cbar', 'vmin', 'vmax', 'center']:
+            if key in kwargs:
+                del kwargs[key]
+
+        if not cmap:
+            cmap = "coolwarm"
+        if reverse_cmap:
+            cmap = cmap + "_r"
+
+        significance = pc.copy().astype(object)
+        significance[(pc < 0.001) & (pc >= 0)] = '***'
+        significance[(pc < 0.01) & (pc >= 0.001)] = '**'
+        significance[(pc < 0.05) & (pc >= 0.01)] = '*'
+        significance[(pc >= 0.05)] = ''
+
+        np.fill_diagonal(significance.values, '')
+
+        # Create a DataFrame for the annotations
+        if show_diff:
+            annotations = effect_size.round(3).astype(str) + significance
+        else:
+            annotations = significance
+
+        hax = sns.heatmap(effect_size, cmap=cmap, annot=annotations, fmt='', cbar=show_cbar, ax=ax,
+                        annot_kws={"size": cell_text_size},
+                        vmin=-2*vlim if vlim else None, vmax=2*vlim if vlim else None, **kwargs)
+
+        if labels:
+            label_list = list(means.index)
+            x_label_list = [x + f'\n{means.loc[x].round(2)}' for x in label_list]
+            y_label_list = [x + f'\n{means.loc[x].round(2)}\n' for x in label_list]
+            hax.set_xticklabels(x_label_list, size=axis_text_size, ha='center', va='top', rotation=0,
+                                rotation_mode='anchor')
+            hax.set_yticklabels(y_label_list, size=axis_text_size, ha='center', va='center', rotation=90,
+                                rotation_mode='anchor')
+
+        hax.set_xlabel('')
+        hax.set_ylabel('')
+
+        return hax
+
+
+    def make_mcs_plot_grid(df, stats, group_col, alpha=.05,
+                        figsize=(20, 10), direction_dict={}, effect_dict={}, show_diff=True,
+                        cell_text_size=16, axis_text_size=12, title_text_size=16, sort_axes=False):
+
+        nrow = math.ceil(len(stats) / 3)
+        fig, ax = plt.subplots(nrow, 3, figsize=figsize)
+
+        # Set defaults
+        for key in ['r2', 'rho', 'prec', 'recall', 'mae', 'mse']:
+            direction_dict.setdefault(key, 'maximize' if key in ['r2', 'rho', 'prec', 'recall'] else 'minimize')
+
+        for key in ['r2', 'rho', 'prec', 'recall']:
+            effect_dict.setdefault(key, 0.1)
+
+        direction_dict = {k.lower(): v for k, v in direction_dict.items()}
+        effect_dict = {k.lower(): v for k, v in effect_dict.items()}
+
+        for i, stat in enumerate(stats):
+            stat = stat.lower()
+
+            row = i // 3
+            col = i % 3
+
+            if stat not in direction_dict:
+                raise ValueError(f"Stat '{stat}' is missing in direction_dict. Please set its value.")
+            if stat not in effect_dict:
+                raise ValueError(f"Stat '{stat}' is missing in effect_dict. Please set its value.")
+
+            reverse_cmap = False
+            if direction_dict[stat] == 'minimize':
+                reverse_cmap = True
+
+            _, df_means, df_means_diff, pc = StatisticalAnalysis.posthoc_tukeyhsd(df, stat, group_col, alpha,
+                                                        sort_axes, direction_dict)
+
+            hax = mcs_plot(pc, effect_size=df_means_diff, means=df_means[stat],
+                        show_diff=show_diff, ax=ax[row, col], cbar=True,
+                        cell_text_size=cell_text_size, axis_text_size=axis_text_size,
+                        reverse_cmap=reverse_cmap, vlim=effect_dict[stat])
+            hax.set_title(stat.upper(), fontsize=title_text_size)
+
+        # If there are less plots than cells in the grid, hide the remaining cells
+        if (len(stats) % 3) != 0:
+            for i in range(len(stats), nrow * 3):
+                row = i // 3
+                col = i % 3
+                ax[row, col].set_visible(False)
+
+        plt.tight_layout()
+
+    def ci_plot(result_tab, ax_in, name):
+        """
+        Create a confidence interval plot for the given result table.
+
+        Parameters:
+        result_tab (pd.DataFrame): DataFrame containing the results with columns 'meandiff', 'lower', and 'upper'.
+        ax_in (matplotlib.axes.Axes): The axes on which to plot the confidence intervals.
+        name (str): The title of the plot.
+
+        Returns:
+        None
+        """
+        result_err = np.array([result_tab['meandiff'] - result_tab['lower'],
+                            result_tab['upper'] - result_tab['meandiff']])
+        sns.set(rc={'figure.figsize': (6, 2)})
+        sns.set_context('notebook')
+        sns.set_style('whitegrid')
+        ax = sns.pointplot(x=result_tab.meandiff, y=result_tab.index, marker='o', linestyle='', ax=ax_in)
+        ax.errorbar(y=result_tab.index, x=result_tab['meandiff'], xerr=result_err, fmt='o', capsize=5)
+        ax.axvline(0, ls="--", lw=3)
+        ax.set_xlabel("Mean Difference")
+        ax.set_ylabel("")
+        ax.set_title(name)
+        ax.set_xlim(-0.2, 0.2) 
+
+
+    def make_ci_plot_grid(df_in, metric_list, group_col="method"):
+        """
+        Create a grid of confidence interval plots for multiple metrics using Tukey HSD test results.
+
+        Parameters:
+        df_in (pd.DataFrame): Input dataframe containing the data.
+        metric_list (list of str): List of metric column names to create confidence interval plots for.
+        group_col (str): The column name indicating the groups. Default is "method".
+
+        Returns:
+        None
+        """
+        figure, axes = plt.subplots(len(metric_list), 1, figsize=(8, 2 * len(metric_list)), sharex=False)
+        if not isinstance(axes, np.ndarray):
+            axes = np.array([axes])
+        for i, metric in enumerate(metric_list):
+            df_tukey, _, _, _ = rm_tukey_hsd(df_in, metric, group_col=group_col)
+            ci_plot(df_tukey, ax_in=axes[i], name=metric)
+        figure.suptitle("Multiple Comparison of Means\nTukey HSD, FWER=0.05")
+        plt.tight_layout()
