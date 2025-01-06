@@ -4,6 +4,7 @@ import pandas as pd
 import pingouin as pg
 import seaborn as sns
 import math
+import os
 import warnings
 from copy import deepcopy
 from scipy import stats
@@ -36,9 +37,15 @@ class StatisticalAnalysis:
         if method_list is None:
             method_list = report_df.columns.tolist()
 
+        scoring_list = [scoring.lower() for scoring in scoring_list]
+
         filtered_dfs = []
 
         for scoring in scoring_list:
+            if scoring not in report_df.index.get_level_values("scoring").unique():
+                raise ValueError(
+                    f"Invalid scoring value: {scoring}."
+                )
             score_df = deepcopy(
                 report_df[report_df.index.get_level_values("scoring") == scoring]
             )
@@ -68,6 +75,9 @@ class StatisticalAnalysis:
         scoring_list: Optional[Union[list, str]] = None,
         method_list: Optional[Union[list, str]] = None,
         levene_test: bool = True,
+        save_csv: bool = True,
+        save_dir: str = "Project/Analysis",
+        csv_name: str = "check_variance_homogeneity"
     ):
 
         report_new, scoring_list, _ = StatisticalAnalysis.extract_scoring_dfs(
@@ -104,6 +114,11 @@ class StatisticalAnalysis:
 
         result_df = pd.DataFrame(result).set_index("scoring")
 
+        if save_csv:
+            if save_dir and not os.path.exists(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            result_df.to_csv(f"{save_dir}/{csv_name}.csv")
+
         return result_df
 
     @staticmethod
@@ -111,22 +126,10 @@ class StatisticalAnalysis:
         report_df: pd.DataFrame,
         scoring_list: Optional[Union[list, str]] = None,
         method_list: Optional[Union[list, str]] = None,
+        save_fig: bool = True,
+        save_dir: str = "Project/Analysis",
+        fig_name: str = "check_normality"
     ):
-        """
-        Check the normality of the scoring metrics in the report DataFrame.
-
-        This method normalizes values by subtracting the mean for each method,
-        and then visualizes the distribution of the scoring metrics through histograms
-        and Q-Q plots to assess normality.
-
-        Parameters:
-            report_df (pd.DataFrame): DataFrame containing scoring metrics for different methods.
-            scoring (list | str): Scoring metric(s) to check normality (e.g., 'precision', 'f1', 'roc_auc').
-
-        Returns:
-            None: Displays histograms and Q-Q plots for each scoring metric.
-        """
-
         report_new, scoring_list, _ = StatisticalAnalysis.extract_scoring_dfs(
             report_df=report_df,
             scoring_list=scoring_list,
@@ -158,6 +161,15 @@ class StatisticalAnalysis:
             ax2.set_title("")
 
         plt.tight_layout()
+        if save_fig:
+            if save_dir and not os.path.exists(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(
+                f"{save_dir}/{fig_name}.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
+
 
     @staticmethod
     def test(
@@ -166,6 +178,9 @@ class StatisticalAnalysis:
         method_list: Optional[Union[list, str]] = None,
         select_test: str = "AnovaRM",
         showmeans: bool = True,
+        save_fig: bool = True,
+        save_dir: str = "Project/Analysis",
+        fig_name: Optional[str] = None
     ):
         report_new, scoring_list, method_list = StatisticalAnalysis.extract_scoring_dfs(
             report_df=report_df,
@@ -191,8 +206,8 @@ class StatisticalAnalysis:
         axes = axes.flatten()  # Turn 2D array to 1D array
 
         for i, scoring in enumerate(scoring_list):
+            scoring_data = report_new[report_new["scoring"] == scoring]
             if select_test == "AnovaRM":
-                scoring_data = report_new[report_new["scoring"] == scoring]
                 model = AnovaRM(
                     data=scoring_data,
                     depvar="value",
@@ -245,12 +260,25 @@ class StatisticalAnalysis:
 
         plt.tight_layout()
 
+        fig_name = fig_name or select_test
+        if save_fig:
+            if save_dir and not os.path.exists(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(
+                f"{save_dir}/{fig_name}.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
+
     @staticmethod
     def posthoc_conover_friedman(
         report_df: pd.DataFrame,
         scoring_list: Optional[Union[list, str]] = None,
         method_list: Optional[Union[list, str]] = None,
         plot: Optional[Union[list, str]] = None,
+        save_fig: bool = True,
+        save_result: bool = True,
+        save_dir: str = "Project/Analysis"
     ):
 
         report_new, scoring_list, method_list = StatisticalAnalysis.extract_scoring_dfs(
@@ -277,7 +305,12 @@ class StatisticalAnalysis:
                 axis=1, method="average", pct=True
             ).mean(axis=0)
 
-        def make_sign_plots(scoring_list, pc_results):
+            if save_result:
+                if save_dir and not os.path.exists(save_dir):
+                    os.makedirs(save_dir, exist_ok=True)
+                pc_results[scoring].to_csv(f"{save_dir}/cofried_pc_{scoring}.csv")
+
+        def make_sign_plots(scoring_list, pc_results, save_fig, save_dir):
             heatmap_args = {
                 "linewidths": 0.25,
                 "linecolor": "0.5",
@@ -295,7 +328,8 @@ class StatisticalAnalysis:
                 figsize=(6 * len(scoring_list), 10),
             )
 
-            axes = [axes] if len(scoring_list) == 1 else axes
+            if not isinstance(axes, np.ndarray):
+                axes = np.array([axes])
 
             for i, scoring in enumerate(scoring_list):
                 pc = pc_results[scoring]
@@ -304,7 +338,16 @@ class StatisticalAnalysis:
                 )
                 sub_ax.set_title(scoring.upper(), fontsize=16)
 
-        def make_critical_difference_diagrams(scoring_list, pc_results, rank_results):
+            if save_fig:
+                if save_dir and not os.path.exists(save_dir):
+                    os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(
+                    f"{save_dir}/cofried_sign_plot.png",
+                    dpi=300,
+                    bbox_inches="tight",
+                )
+
+        def make_critical_difference_diagrams(scoring_list, pc_results, rank_results, save_fig, save_dir):
             sns.set_context("notebook")
             sns.set_style("whitegrid")
             figure, axes = plt.subplots(
@@ -314,7 +357,9 @@ class StatisticalAnalysis:
                 sharey=False,
                 figsize=(20, 3 * len(scoring_list)),
             )
-            axes = [axes] if len(scoring_list) == 1 else axes
+            if not isinstance(axes, np.ndarray):
+                axes = np.array([axes])
+
             for i, scoring in enumerate(scoring_list):
                 pc = pc_results[scoring]
                 avg_rank = rank_results[scoring]
@@ -322,16 +367,27 @@ class StatisticalAnalysis:
                 axes[i].set_title(scoring.upper(), fontsize=16)
 
             plt.tight_layout()
+            if save_fig:
+                if save_dir and not os.path.exists(save_dir):
+                    os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(
+                    f"{save_dir}/cofried_ccd.png",
+                    dpi=300,
+                    bbox_inches="tight",
+                )
 
+        if plot not in ["sign", "ccd", None]:
+            raise ValueError(
+                f"Invalid plot type: {plot}. Please choose 'sign' or 'ccd'."
+            )
         if plot is None or plot == "sign":
-            make_sign_plots(scoring_list, pc_results)
+            make_sign_plots(scoring_list, pc_results, save_fig, save_dir)
 
         if plot is None or plot == "ccd":
-            make_critical_difference_diagrams(scoring_list, pc_results, rank_results)
+            make_critical_difference_diagrams(scoring_list, pc_results, rank_results, save_fig, save_dir)
 
         return pc_results, rank_results
 
-    ########## refine code ###########
     @staticmethod
     def posthoc_tukeyhsd(
         report_df: pd.DataFrame,
@@ -339,28 +395,13 @@ class StatisticalAnalysis:
         method_list: Optional[Union[list, str]] = None,
         plot: Optional[Union[list, str]] = None,
         alpha: float = 0.05,
-        direction_dict = {},
-        effect_dict = {},
+        direction_dict: dict = {},
+        effect_dict: dict = {},
+        save_fig: bool = True,
+        save_result: bool = True,
+        save_dir: str = "Project/Analysis"
+
     ):
-        """
-        Perform Tukey HSD test and generate corresponding plots.
-
-        Parameters:
-        report_df (pd.DataFrame): Dataframe containing the report data.
-        scoring_list (Optional[Union[list, str]]): List or string of metrics to be analyzed. If None, all metrics are analyzed.
-        plot (Optional[Union[list, str]]): Type of plot to generate. Options are 'mcs_plot', 'ci_plot'. If None, both plots are generated.
-        alpha (float): Significance level for the test. Default is 0.05.
-        direction_dict (Optional[dict]): Dictionary indicating whether to minimize or maximize each metric.
-        """
-        # Set defaults
-        for key in scoring_list:
-            direction_dict.setdefault(key, 'maximize' if key != "max_error" else 'minimize')
-
-        for key in scoring_list:
-            effect_dict.setdefault(key, 0.1)
-
-        direction_dict = {k.lower(): v for k, v in direction_dict.items()}
-        effect_dict = {k.lower(): v for k, v in effect_dict.items()}
 
         report_new, scoring_list, method_list = StatisticalAnalysis.extract_scoring_dfs(
             report_df=report_df,
@@ -369,16 +410,38 @@ class StatisticalAnalysis:
             melt=True,
         )
 
+        # Set defaults
+        for key in scoring_list:
+            direction_dict.setdefault(
+                key, "maximize" if key != "max_error" else "minimize"
+            )
+
+        for key in scoring_list:
+            effect_dict.setdefault(key, 0.1)
+
+        direction_dict = {k.lower(): v for k, v in direction_dict.items()}
+        effect_dict = {k.lower(): v for k, v in effect_dict.items()}
+
         tukey_results = {}
 
         for scoring in scoring_list:
             if direction_dict and scoring in direction_dict:
-                if direction_dict[scoring] == 'maximize':
-                    df_means = report_new.groupby("method").mean(numeric_only=True).sort_values(scoring, ascending=False)
-                elif direction_dict[scoring] == 'minimize':
-                    df_means = report_new.groupby("method").mean(numeric_only=True).sort_values(scoring, ascending=True)
+                if direction_dict[scoring] == "maximize":
+                    df_means = (
+                        report_new.groupby("method")
+                        .mean(numeric_only=True)
+                        .sort_values("value", ascending=False)
+                    )
+                elif direction_dict[scoring] == "minimize":
+                    df_means = (
+                        report_new.groupby("method")
+                        .mean(numeric_only=True)
+                        .sort_values("value", ascending=True)
+                    )
                 else:
-                    raise ValueError("Invalid direction. Expected 'maximize' or 'minimize'.")
+                    raise ValueError(
+                        "Invalid direction. Expected 'maximize' or 'minimize'."
+                    )
             else:
                 df_means = report_new.groupby("method").mean(numeric_only=True)
 
@@ -419,7 +482,9 @@ class StatisticalAnalysis:
                         group2 = report_new[report_new["method"] == method2]["value"]
                         mean_diff = group1.mean() - group2.mean()
                         studentized_range = np.abs(mean_diff) / tukey_se
-                        adjusted_p = psturng(studentized_range * np.sqrt(2), n_groups, df_resid)
+                        adjusted_p = psturng(
+                            studentized_range * np.sqrt(2), n_groups, df_resid
+                        )
                         if isinstance(adjusted_p, np.ndarray):
                             adjusted_p = adjusted_p[0]
                         lower = mean_diff - (q / np.sqrt(2) * tukey_se)
@@ -443,7 +508,7 @@ class StatisticalAnalysis:
             result_tab["group1_mean"] = result_tab["group1"].map(df_means["value"])
             result_tab["group2_mean"] = result_tab["group2"].map(df_means["value"])
 
-            result_tab.index = result_tab['group1'] + ' - ' + result_tab['group2']
+            result_tab.index = result_tab["group1"] + " - " + result_tab["group2"]
 
             tukey_results[scoring] = {
                 "result_tab": result_tab,
@@ -451,27 +516,54 @@ class StatisticalAnalysis:
                 "df_means_diff": df_means_diff,
                 "pc": pc,
             }
+            if save_result:
+                if save_dir and not os.path.exists(save_dir):
+                    os.makedirs(save_dir, exist_ok=True)
+                result_tab.to_csv(f"{save_dir}/tukey_result_tab_{scoring}.csv")
+                df_means.to_csv(f"{save_dir}/tukey_df_means_{scoring}.csv")
+                df_means_diff.to_csv(f"{save_dir}/tukey_df_means_diff_{scoring}.csv")
+                pc.to_csv(f"{save_dir}/tukey_pc_{scoring}.csv")
 
         if plot is None or plot == "mcs_plot":
             StatisticalAnalysis._make_mcs_plot_grid(
-                tukey_results, 
-                scoring_list, 
-                method_list, 
+                tukey_results,
+                scoring_list,
+                method_list,
                 direction_dict,
-                effect_dict)
+                effect_dict,
+                show_diff=True,
+                save_fig=save_fig,
+                save_dir=save_dir
+            )
 
-        #if plot is None or plot == "ci_plot":
-        #    make_ci_plot(scoring_list, tukey_results)
+        if plot is None or plot == "ci_plot":
+            StatisticalAnalysis._make_ci_plot_grid(
+                tukey_results, 
+                scoring_list,
+                save_fig=save_fig,
+                save_dir=save_dir)
 
         return tukey_results
 
+    @staticmethod
+    def _mcs_plot(
+        pc,
+        effect_size,
+        means,
+        labels=True,
+        cmap=None,
+        cbar_ax_bbox=None,
+        ax=None,
+        show_diff=True,
+        cell_text_size=16,
+        axis_text_size=12,
+        show_cbar=True,
+        reverse_cmap=False,
+        vlim=None,
+        **kwargs,
+    ):
 
-    def _mcs_plot(pc, effect_size, means, labels=True, cmap=None, cbar_ax_bbox=None,
-                ax=None, show_diff=True, cell_text_size=16, axis_text_size=12,
-                show_cbar=True, reverse_cmap=False, vlim=None, **kwargs):
-
-
-        for key in ['cbar', 'vmin', 'vmax', 'center']:
+        for key in ["cbar", "vmin", "vmax", "center"]:
             if key in kwargs:
                 del kwargs[key]
 
@@ -481,12 +573,12 @@ class StatisticalAnalysis:
             cmap = cmap + "_r"
 
         significance = pc.copy().astype(object)
-        significance[(pc < 0.001) & (pc >= 0)] = '***'
-        significance[(pc < 0.01) & (pc >= 0.001)] = '**'
-        significance[(pc < 0.05) & (pc >= 0.01)] = '*'
-        significance[(pc >= 0.05)] = ''
+        significance[(pc < 0.001) & (pc >= 0)] = "***"
+        significance[(pc < 0.01) & (pc >= 0.001)] = "**"
+        significance[(pc < 0.05) & (pc >= 0.01)] = "*"
+        significance[(pc >= 0.05)] = ""
 
-        np.fill_diagonal(significance.values, '')
+        np.fill_diagonal(significance.values, "")
 
         # Create a DataFrame for the annotations
         if show_diff:
@@ -494,38 +586,66 @@ class StatisticalAnalysis:
         else:
             annotations = significance
 
-        hax = sns.heatmap(effect_size, cmap=cmap, annot=annotations, fmt='', cbar=show_cbar, ax=ax,
-                        annot_kws={"size": cell_text_size},
-                        vmin=-2*vlim if vlim else None, vmax=2*vlim if vlim else None, **kwargs)
+        hax = sns.heatmap(
+            effect_size,
+            cmap=cmap,
+            annot=annotations,
+            fmt="",
+            cbar=show_cbar,
+            ax=ax,
+            annot_kws={"size": cell_text_size},
+            vmin=-2 * vlim if vlim else None,
+            vmax=2 * vlim if vlim else None,
+            **kwargs,
+        )
 
         if labels:
             label_list = list(means.index)
-            x_label_list = [x + f'\n{means.loc[x].round(2)}' for x in label_list]
-            y_label_list = [x + f'\n{means.loc[x].round(2)}\n' for x in label_list]
-            hax.set_xticklabels(x_label_list, size=axis_text_size, ha='center', va='top', rotation=0,
-                                rotation_mode='anchor')
-            hax.set_yticklabels(y_label_list, size=axis_text_size, ha='center', va='center', rotation=90,
-                                rotation_mode='anchor')
+            x_label_list = [
+                x + f"\n{means.loc[x].values[0].round(2)}" for x in label_list
+            ]
+            y_label_list = [
+                x + f"\n{means.loc[x].values[0].round(2)}\n" for x in label_list
+            ]
+            hax.set_xticklabels(
+                x_label_list,
+                size=axis_text_size,
+                ha="center",
+                va="top",
+                rotation=0,
+                rotation_mode="anchor",
+            )
+            hax.set_yticklabels(
+                y_label_list,
+                size=axis_text_size,
+                ha="center",
+                va="center",
+                rotation=90,
+                rotation_mode="anchor",
+            )
 
-        hax.set_xlabel('')
-        hax.set_ylabel('')
+        hax.set_xlabel("")
+        hax.set_ylabel("")
 
         return hax
 
-#df to tukey_results
-#stats to scoring_list
-#group_col to "method"
+    @staticmethod
+    def _make_mcs_plot_grid(
+        tukey_results,
+        scoring_list,
+        method_list,
+        direction_dict={},
+        effect_dict={},
+        show_diff=True,
+        save_fig=True,
+        save_dir="Project/Analysis"
+    ):
 
- #def _make_mcs_plot_grid(df, stats, group_col, alpha=.05,
-#                        figsize=(20, 10), direction_dict={}, effect_dict={}, show_diff=True,
-#                        cell_text_size=16, axis_text_size=12, title_text_size=16, sort_axes=False):
-    def _make_mcs_plot_grid(tukey_results, scoring_list, method_list, 
-                        direction_dict={}, effect_dict={}, show_diff=True,
-                        ):
-        
         # Set defaults
         for key in scoring_list:
-            direction_dict.setdefault(key, 'maximize' if key != "max_error" else 'minimize')
+            direction_dict.setdefault(
+                key, "maximize" if key != "max_error" else "minimize"
+            )
 
         for key in scoring_list:
             effect_dict.setdefault(key, 0.1)
@@ -535,135 +655,112 @@ class StatisticalAnalysis:
 
         nrow = math.ceil(len(scoring_list) / 3)
         nmethod = len(method_list)
-        fig, ax = plt.subplots(nrow, 3, figsize=(3 * nmethod, 3 * nmethod * nrow))
+        fig, ax = plt.subplots(nrow, 3, figsize=(7.8 * nmethod, 2.3 * nmethod * nrow))
+
+        ax = ax.flatten()
 
         for i, scoring in enumerate(scoring_list):
             stat = scoring.lower()
 
-            row = i // 3
-            col = i % 3
-
             if scoring not in direction_dict:
-                raise ValueError(f"Stat '{scoring}' is missing in direction_dict. Please set its value.")
+                raise ValueError(
+                    f"Stat '{scoring}' is missing in direction_dict. Please set its value."
+                )
             if scoring not in effect_dict:
-                raise ValueError(f"Stat '{scoring}' is missing in effect_dict. Please set its value.")
+                raise ValueError(
+                    f"Stat '{scoring}' is missing in effect_dict. Please set its value."
+                )
 
             reverse_cmap = False
-            if direction_dict[scoring] == 'minimize':
+            if direction_dict[scoring] == "minimize":
                 reverse_cmap = True
 
             df_means = tukey_results[scoring]["df_means"]
             df_means_diff = tukey_results[scoring]["df_means_diff"]
             pc = tukey_results[scoring]["pc"]
 
-            hax = StatisticalAnalysis._mcs_plot(pc, effect_size=df_means_diff, means=df_means,
-                        show_diff=show_diff, ax=ax[row, col], cbar=True,
-                        cell_text_size=16, axis_text_size=12,
-                        reverse_cmap=reverse_cmap, vlim=effect_dict[scoring])
+            hax = StatisticalAnalysis._mcs_plot(
+                pc,
+                effect_size=df_means_diff,
+                means=df_means,
+                show_diff=show_diff,
+                ax=ax[i],
+                cbar=True,
+                cell_text_size=16,
+                axis_text_size=12,
+                reverse_cmap=reverse_cmap,
+                vlim=effect_dict[scoring],
+            )
             hax.set_title(scoring.upper(), fontsize=16)
 
         # If there are less plots than cells in the grid, hide the remaining cells
         if (len(scoring_list) % 3) != 0:
             for i in range(len(scoring_list), nrow * 3):
-                row = i // 3
-                col = i % 3
-                ax[row, col].set_visible(False)
+                ax[i].set_visible(False)
 
         plt.tight_layout()
 
-    def _make_mcs_plot_grid2(df, stats, group_col, alpha=.05,
-                        figsize=(20, 10), direction_dict={}, effect_dict={}, show_diff=True,
-                        cell_text_size=16, axis_text_size=12, title_text_size=16, sort_axes=False):
+        if save_fig:
+            if save_dir and not os.path.exists(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(
+                f"{save_dir}/tukey_mcs.png",
+                dpi=300,
+                bbox_inches="tight",
+            )
 
-        nrow = math.ceil(len(stats) / 3)
-        fig, ax = plt.subplots(nrow, 3, figsize=figsize)
+    @staticmethod
+    def _make_ci_plot_grid(tukey_results, scoring_list, save_fig, save_dir):
 
-        # Set defaults
-        for key in ['r2', 'rho', 'prec', 'recall', 'mae', 'mse']:
-            direction_dict.setdefault(key, 'maximize' if key in ['r2', 'rho', 'prec', 'recall'] else 'minimize')
+        figure, axes = plt.subplots(
+            len(scoring_list), 1, figsize=(12, 3 * len(scoring_list)), sharex=False
+        )
 
-        for key in ['r2', 'rho', 'prec', 'recall']:
-            effect_dict.setdefault(key, 0.1)
-
-        direction_dict = {k.lower(): v for k, v in direction_dict.items()}
-        effect_dict = {k.lower(): v for k, v in effect_dict.items()}
-
-        for i, stat in enumerate(stats):
-            stat = stat.lower()
-
-            row = i // 3
-            col = i % 3
-
-            if stat not in direction_dict:
-                raise ValueError(f"Stat '{stat}' is missing in direction_dict. Please set its value.")
-            if stat not in effect_dict:
-                raise ValueError(f"Stat '{stat}' is missing in effect_dict. Please set its value.")
-
-            reverse_cmap = False
-            if direction_dict[stat] == 'minimize':
-                reverse_cmap = True
-
-            _, df_means, df_means_diff, pc = StatisticalAnalysis.posthoc_tukeyhsd(df, stat, group_col, alpha,
-                                                        sort_axes, direction_dict)
-
-            hax = StatisticalAnalysis._mcs_plot(pc, effect_size=df_means_diff, means=df_means[stat],
-                        show_diff=show_diff, ax=ax[row, col], cbar=True,
-                        cell_text_size=cell_text_size, axis_text_size=axis_text_size,
-                        reverse_cmap=reverse_cmap, vlim=effect_dict[stat])
-            hax.set_title(stat.upper(), fontsize=title_text_size)
-
-        # If there are less plots than cells in the grid, hide the remaining cells
-        if (len(stats) % 3) != 0:
-            for i in range(len(stats), nrow * 3):
-                row = i // 3
-                col = i % 3
-                ax[row, col].set_visible(False)
-
-        plt.tight_layout()
-
-    def ci_plot(result_tab, ax_in, name):
-        """
-        Create a confidence interval plot for the given result table.
-
-        Parameters:
-        result_tab (pd.DataFrame): DataFrame containing the results with columns 'meandiff', 'lower', and 'upper'.
-        ax_in (matplotlib.axes.Axes): The axes on which to plot the confidence intervals.
-        name (str): The title of the plot.
-
-        Returns:
-        None
-        """
-        result_err = np.array([result_tab['meandiff'] - result_tab['lower'],
-                            result_tab['upper'] - result_tab['meandiff']])
-        sns.set(rc={'figure.figsize': (6, 2)})
-        sns.set_context('notebook')
-        sns.set_style('whitegrid')
-        ax = sns.pointplot(x=result_tab.meandiff, y=result_tab.index, marker='o', linestyle='', ax=ax_in)
-        ax.errorbar(y=result_tab.index, x=result_tab['meandiff'], xerr=result_err, fmt='o', capsize=5)
-        ax.axvline(0, ls="--", lw=3)
-        ax.set_xlabel("Mean Difference")
-        ax.set_ylabel("")
-        ax.set_title(name)
-        ax.set_xlim(-0.2, 0.2) 
-
-
-    def make_ci_plot_grid(df_in, metric_list, group_col="method"):
-        """
-        Create a grid of confidence interval plots for multiple metrics using Tukey HSD test results.
-
-        Parameters:
-        df_in (pd.DataFrame): Input dataframe containing the data.
-        metric_list (list of str): List of metric column names to create confidence interval plots for.
-        group_col (str): The column name indicating the groups. Default is "method".
-
-        Returns:
-        None
-        """
-        figure, axes = plt.subplots(len(metric_list), 1, figsize=(8, 2 * len(metric_list)), sharex=False)
         if not isinstance(axes, np.ndarray):
             axes = np.array([axes])
-        for i, metric in enumerate(metric_list):
-            df_tukey, _, _, _ = rm_tukey_hsd(df_in, metric, group_col=group_col)
-            ci_plot(df_tukey, ax_in=axes[i], name=metric)
-        figure.suptitle("Multiple Comparison of Means\nTukey HSD, FWER=0.05")
+
+        for i, scoring in enumerate(scoring_list):
+            result_tab = tukey_results[scoring]["result_tab"]
+
+            result_err = np.array(
+                [
+                    result_tab["meandiff"] - result_tab["lower"],
+                    result_tab["upper"] - result_tab["meandiff"],
+                ]
+            )
+            sns.set_context("notebook")
+            sns.set_style("whitegrid")
+            ax = sns.pointplot(
+                x=result_tab.meandiff,
+                y=result_tab.index,
+                marker="o",
+                linestyle="",
+                ax=axes[i],
+                color="red",
+                markersize=5,
+            )
+            ax.errorbar(
+                y=result_tab.index,
+                x=result_tab["meandiff"],
+                xerr=result_err,
+                fmt="ro",
+                capsize=4,
+                ecolor="red",
+                markerfacecolor="red",
+            )
+            ax.axvline(0, ls="--", lw=3, color="#ADD3ED")
+            ax.set_xlabel("Mean Difference")
+            ax.set_ylabel("")
+            ax.set_title(scoring.upper())
+            ax.set_xlim(-0.3, 0.3)
+            ax.grid(True, axis="x")
         plt.tight_layout()
+
+        if save_fig:
+            if save_dir and not os.path.exists(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(
+                f"{save_dir}/tukey_ci.png",
+                dpi=300,
+                bbox_inches="tight",
+            )

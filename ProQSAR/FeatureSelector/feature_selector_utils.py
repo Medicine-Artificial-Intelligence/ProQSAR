@@ -232,19 +232,19 @@ def evaluate_feature_selectors(
                     "scoring": metric,
                     "cv_cycle": "mean",
                     "method": name,
-                    "value": round(np.mean(metric_scores), 3),
+                    "value": np.mean(metric_scores),
                 })
                 result.append({
                     "scoring": metric,
                     "cv_cycle": "std",
                     "method": name,
-                    "value": round(np.std(metric_scores), 3),
+                    "value": np.std(metric_scores),
                 })
                 result.append({
                     "scoring": metric,
                     "cv_cycle": "median",
                     "method": name,
-                    "value": round(np.median(metric_scores), 3),
+                    "value": np.median(metric_scores),
                 })
     # Create a DataFrame in wide format
     result_df = pd.DataFrame(result)

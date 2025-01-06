@@ -277,7 +277,7 @@ class ModelValidation:
                             "scoring": metric,
                             "cv_cycle": "mean",
                             "method": name,
-                            "value": round(np.mean(metric_scores), 3),
+                            "value": np.mean(metric_scores),
                         }
                     )
                     result.append(
@@ -285,7 +285,7 @@ class ModelValidation:
                             "scoring": metric,
                             "cv_cycle": "std",
                             "method": name,
-                            "value": round(np.std(metric_scores), 3),
+                            "value": np.std(metric_scores),
                         }
                     )
                     result.append(
@@ -293,7 +293,7 @@ class ModelValidation:
                             "scoring": metric,
                             "cv_cycle": "median",
                             "method": name,
-                            "value": round(np.median(metric_scores), 3),
+                            "value": np.median(metric_scores),
                         }
                     )
 
