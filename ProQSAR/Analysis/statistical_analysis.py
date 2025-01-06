@@ -331,33 +331,6 @@ class StatisticalAnalysis:
 
         return pc_results, rank_results
 
-    def posthoc_conover_friedman2(
-        report_df: pd.DataFrame,
-        scoring_list: Optional[Union[list, str]] = None,
-        method_list: Optional[Union[list, str]] = None,
-        plot: Optional[Union[list, str]] = None,
-    ):
-
-        report_new, scoring_list, method_list = StatisticalAnalysis.extract_scoring_dfs(
-            report_df=report_df,
-            scoring_list=scoring_list,
-            method_list=method_list,
-            melt=False,
-        )
-
-        # Precompute posthoc Conover-Friedman results for each metric
-        pc_results = {}
-        for scoring in scoring_list:
-            scoring_df_filtered = report_new[
-                report_new.index.get_level_values("scoring") == scoring
-            ]
-            scoring_df_filtered.reset_index(level="scoring", drop=True, inplace=True)
-            pc_results[scoring] = sp.posthoc_conover_friedman(
-                scoring_df_filtered, p_adjust="holm"
-            )
-
-        return pc_results
-
     ########## refine code ###########
     @staticmethod
     def posthoc_tukeyhsd(
@@ -366,7 +339,8 @@ class StatisticalAnalysis:
         method_list: Optional[Union[list, str]] = None,
         plot: Optional[Union[list, str]] = None,
         alpha: float = 0.05,
-        direction_dict: Optional[dict] = None,
+        direction_dict = {},
+        effect_dict = {},
     ):
         """
         Perform Tukey HSD test and generate corresponding plots.
@@ -378,6 +352,15 @@ class StatisticalAnalysis:
         alpha (float): Significance level for the test. Default is 0.05.
         direction_dict (Optional[dict]): Dictionary indicating whether to minimize or maximize each metric.
         """
+        # Set defaults
+        for key in scoring_list:
+            direction_dict.setdefault(key, 'maximize' if key != "max_error" else 'minimize')
+
+        for key in scoring_list:
+            effect_dict.setdefault(key, 0.1)
+
+        direction_dict = {k.lower(): v for k, v in direction_dict.items()}
+        effect_dict = {k.lower(): v for k, v in effect_dict.items()}
 
         report_new, scoring_list, method_list = StatisticalAnalysis.extract_scoring_dfs(
             report_df=report_df,
@@ -390,12 +373,12 @@ class StatisticalAnalysis:
 
         for scoring in scoring_list:
             if direction_dict and scoring in direction_dict:
-                sort_order = direction_dict[scoring]
-                df_means = (
-                    report_new.groupby("method")
-                    .mean(numeric_only=True)
-                    .sort_values(scoring, ascending=(sort_order == "minimize")) # The ascending parameter is set to True if sort_order is "minimize"
-                )
+                if direction_dict[scoring] == 'maximize':
+                    df_means = report_new.groupby("method").mean(numeric_only=True).sort_values(scoring, ascending=False)
+                elif direction_dict[scoring] == 'minimize':
+                    df_means = report_new.groupby("method").mean(numeric_only=True).sort_values(scoring, ascending=True)
+                else:
+                    raise ValueError("Invalid direction. Expected 'maximize' or 'minimize'.")
             else:
                 df_means = report_new.groupby("method").mean(numeric_only=True)
 
@@ -432,13 +415,13 @@ class StatisticalAnalysis:
             for i, method1 in enumerate(methods):
                 for j, method2 in enumerate(methods):
                     if i < j:
-                        group1 = report_new[report_new["method"] == method1][scoring]
-                        group2 = report_new[report_new["method"] == method2][scoring]
+                        group1 = report_new[report_new["method"] == method1]["value"]
+                        group2 = report_new[report_new["method"] == method2]["value"]
                         mean_diff = group1.mean() - group2.mean()
                         studentized_range = np.abs(mean_diff) / tukey_se
-                        adjusted_p = qsturng(
-                            studentized_range * np.sqrt(2), n_groups, df_resid
-                        )
+                        adjusted_p = psturng(studentized_range * np.sqrt(2), n_groups, df_resid)
+                        if isinstance(adjusted_p, np.ndarray):
+                            adjusted_p = adjusted_p[0]
                         lower = mean_diff - (q / np.sqrt(2) * tukey_se)
                         upper = mean_diff + (q / np.sqrt(2) * tukey_se)
                         result_tab.loc[row_idx] = [
@@ -455,6 +438,13 @@ class StatisticalAnalysis:
                         df_means_diff.loc[method2, method1] = -mean_diff
                         row_idx += 1
 
+            df_means_diff = df_means_diff.astype(float)
+
+            result_tab["group1_mean"] = result_tab["group1"].map(df_means["value"])
+            result_tab["group2_mean"] = result_tab["group2"].map(df_means["value"])
+
+            result_tab.index = result_tab['group1'] + ' - ' + result_tab['group2']
+
             tukey_results[scoring] = {
                 "result_tab": result_tab,
                 "df_means": df_means,
@@ -463,14 +453,20 @@ class StatisticalAnalysis:
             }
 
         if plot is None or plot == "mcs_plot":
-            make_mcs_plot(scoring_list, tukey_results)
+            StatisticalAnalysis._make_mcs_plot_grid(
+                tukey_results, 
+                scoring_list, 
+                method_list, 
+                direction_dict,
+                effect_dict)
 
-        if plot is None or plot == "ci_plot":
-            make_ci_plot(scoring_list, tukey_results)
+        #if plot is None or plot == "ci_plot":
+        #    make_ci_plot(scoring_list, tukey_results)
 
         return tukey_results
 
-    def mcs_plot(pc, effect_size, means, labels=True, cmap=None, cbar_ax_bbox=None,
+
+    def _mcs_plot(pc, effect_size, means, labels=True, cmap=None, cbar_ax_bbox=None,
                 ax=None, show_diff=True, cell_text_size=16, axis_text_size=12,
                 show_cbar=True, reverse_cmap=False, vlim=None, **kwargs):
 
@@ -516,8 +512,66 @@ class StatisticalAnalysis:
 
         return hax
 
+#df to tukey_results
+#stats to scoring_list
+#group_col to "method"
 
-    def make_mcs_plot_grid(df, stats, group_col, alpha=.05,
+ #def _make_mcs_plot_grid(df, stats, group_col, alpha=.05,
+#                        figsize=(20, 10), direction_dict={}, effect_dict={}, show_diff=True,
+#                        cell_text_size=16, axis_text_size=12, title_text_size=16, sort_axes=False):
+    def _make_mcs_plot_grid(tukey_results, scoring_list, method_list, 
+                        direction_dict={}, effect_dict={}, show_diff=True,
+                        ):
+        
+        # Set defaults
+        for key in scoring_list:
+            direction_dict.setdefault(key, 'maximize' if key != "max_error" else 'minimize')
+
+        for key in scoring_list:
+            effect_dict.setdefault(key, 0.1)
+
+        direction_dict = {k.lower(): v for k, v in direction_dict.items()}
+        effect_dict = {k.lower(): v for k, v in effect_dict.items()}
+
+        nrow = math.ceil(len(scoring_list) / 3)
+        nmethod = len(method_list)
+        fig, ax = plt.subplots(nrow, 3, figsize=(3 * nmethod, 3 * nmethod * nrow))
+
+        for i, scoring in enumerate(scoring_list):
+            stat = scoring.lower()
+
+            row = i // 3
+            col = i % 3
+
+            if scoring not in direction_dict:
+                raise ValueError(f"Stat '{scoring}' is missing in direction_dict. Please set its value.")
+            if scoring not in effect_dict:
+                raise ValueError(f"Stat '{scoring}' is missing in effect_dict. Please set its value.")
+
+            reverse_cmap = False
+            if direction_dict[scoring] == 'minimize':
+                reverse_cmap = True
+
+            df_means = tukey_results[scoring]["df_means"]
+            df_means_diff = tukey_results[scoring]["df_means_diff"]
+            pc = tukey_results[scoring]["pc"]
+
+            hax = StatisticalAnalysis._mcs_plot(pc, effect_size=df_means_diff, means=df_means,
+                        show_diff=show_diff, ax=ax[row, col], cbar=True,
+                        cell_text_size=16, axis_text_size=12,
+                        reverse_cmap=reverse_cmap, vlim=effect_dict[scoring])
+            hax.set_title(scoring.upper(), fontsize=16)
+
+        # If there are less plots than cells in the grid, hide the remaining cells
+        if (len(scoring_list) % 3) != 0:
+            for i in range(len(scoring_list), nrow * 3):
+                row = i // 3
+                col = i % 3
+                ax[row, col].set_visible(False)
+
+        plt.tight_layout()
+
+    def _make_mcs_plot_grid2(df, stats, group_col, alpha=.05,
                         figsize=(20, 10), direction_dict={}, effect_dict={}, show_diff=True,
                         cell_text_size=16, axis_text_size=12, title_text_size=16, sort_axes=False):
 
@@ -552,7 +606,7 @@ class StatisticalAnalysis:
             _, df_means, df_means_diff, pc = StatisticalAnalysis.posthoc_tukeyhsd(df, stat, group_col, alpha,
                                                         sort_axes, direction_dict)
 
-            hax = mcs_plot(pc, effect_size=df_means_diff, means=df_means[stat],
+            hax = StatisticalAnalysis._mcs_plot(pc, effect_size=df_means_diff, means=df_means[stat],
                         show_diff=show_diff, ax=ax[row, col], cbar=True,
                         cell_text_size=cell_text_size, axis_text_size=axis_text_size,
                         reverse_cmap=reverse_cmap, vlim=effect_dict[stat])
