@@ -540,6 +540,7 @@ class StatisticalAnalysis:
             StatisticalAnalysis._make_ci_plot_grid(
                 tukey_results, 
                 scoring_list,
+                method_list,
                 save_fig=save_fig,
                 save_dir=save_dir)
 
@@ -704,16 +705,18 @@ class StatisticalAnalysis:
             if save_dir and not os.path.exists(save_dir):
                 os.makedirs(save_dir, exist_ok=True)
             plt.savefig(
-                f"{save_dir}/tukey_mcs.png",
+                f"{save_dir}/tukey_mcs.pdf",
                 dpi=300,
                 bbox_inches="tight",
             )
 
     @staticmethod
-    def _make_ci_plot_grid(tukey_results, scoring_list, save_fig, save_dir):
+    def _make_ci_plot_grid(tukey_results, scoring_list, method_list, save_fig, save_dir):
 
+        nmethod = len(method_list)
+        ncouple = nmethod*(nmethod-1) // 2
         figure, axes = plt.subplots(
-            len(scoring_list), 1, figsize=(12, 3 * len(scoring_list)), sharex=False
+            len(scoring_list), 1, figsize=(12, .35 * ncouple * len(scoring_list)), sharex=False
         )
 
         if not isinstance(axes, np.ndarray):
@@ -752,7 +755,7 @@ class StatisticalAnalysis:
             ax.set_xlabel("Mean Difference")
             ax.set_ylabel("")
             ax.set_title(scoring.upper())
-            ax.set_xlim(-0.3, 0.3)
+            ax.set_xlim(-0.5, 0.5)
             ax.grid(True, axis="x")
         plt.tight_layout()
 
@@ -760,7 +763,7 @@ class StatisticalAnalysis:
             if save_dir and not os.path.exists(save_dir):
                 os.makedirs(save_dir, exist_ok=True)
             plt.savefig(
-                f"{save_dir}/tukey_ci.png",
+                f"{save_dir}/tukey_ci.pdf",
                 dpi=300,
                 bbox_inches="tight",
             )
