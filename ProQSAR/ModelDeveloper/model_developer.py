@@ -11,7 +11,7 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_model_map,
     _get_cv_strategy,
 )
-from ProQSAR.ModelDeveloper.model_validation import cross_validation_report
+from ProQSAR.ModelDeveloper.model_validation import ModelValidation
 
 
 class ModelDeveloper:
@@ -109,6 +109,7 @@ class ModelDeveloper:
         self.model = None
         self.task_type = None
         self.cv = None
+        self.classes_ = None
 
     def fit(self, data: pd.DataFrame) -> BaseEstimator:
         """
@@ -135,7 +136,7 @@ class ModelDeveloper:
 
         if self.select_model == "best":
             self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
-            comparison_df = cross_validation_report(
+            comparison_df = ModelValidation.cross_validation_report(
                 data=data,
                 activity_col=self.activity_col,
                 id_col=self.id_col,
@@ -161,6 +162,7 @@ class ModelDeveloper:
         else:
             raise ValueError(f"Model '{self.select_model}' is not recognized.")
 
+        self.classes_ = self.model.classes_ if self.task_type == "C" else None
         if self.save_model:
             if self.save_dir and not os.path.exists(self.save_dir):
                 os.makedirs(self.save_dir, exist_ok=True)
@@ -188,7 +190,7 @@ class ModelDeveloper:
                 "ModelDeveloper is not fitted yet. Call 'fit' before using this model."
             )
 
-        X_data = data.drop([self.activity_col, self.id_col], axis=1)
+        X_data = data.drop([self.activity_col, self.id_col], axis=1, errors='ignore')
         y_pred = self.model.predict(X_data)
         result = {
             "ID": data[self.id_col].values,
@@ -196,8 +198,9 @@ class ModelDeveloper:
         }
 
         if self.task_type == "C":
-            y_proba = self.model.predict_proba(X_data)[:, 1] * 100
-            result["Probability"] = np.round(y_proba, 2)
+            y_proba = self.model.predict_proba(X_data)
+            result[f"Probability for class {self.classes_[0]}"] = y_proba[:, 0]
+            result[f"Probability for class {self.classes_[1]}"] = y_proba[:, 1]
 
         self.pred_result = pd.DataFrame(result)
 
