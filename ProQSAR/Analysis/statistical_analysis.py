@@ -165,7 +165,7 @@ class StatisticalAnalysis:
             if save_dir and not os.path.exists(save_dir):
                 os.makedirs(save_dir, exist_ok=True)
             plt.savefig(
-                f"{save_dir}/{fig_name}.png",
+                f"{save_dir}/{fig_name}.pdf",
                 dpi=300,
                 bbox_inches="tight",
             )
@@ -265,7 +265,7 @@ class StatisticalAnalysis:
             if save_dir and not os.path.exists(save_dir):
                 os.makedirs(save_dir, exist_ok=True)
             plt.savefig(
-                f"{save_dir}/{fig_name}.png",
+                f"{save_dir}/{fig_name}.pdf",
                 dpi=300,
                 bbox_inches="tight",
             )
@@ -342,7 +342,7 @@ class StatisticalAnalysis:
                 if save_dir and not os.path.exists(save_dir):
                     os.makedirs(save_dir, exist_ok=True)
                 plt.savefig(
-                    f"{save_dir}/cofried_sign_plot.png",
+                    f"{save_dir}/cofried_sign_plot.pdf",
                     dpi=300,
                     bbox_inches="tight",
                 )
@@ -371,7 +371,7 @@ class StatisticalAnalysis:
                 if save_dir and not os.path.exists(save_dir):
                     os.makedirs(save_dir, exist_ok=True)
                 plt.savefig(
-                    f"{save_dir}/cofried_ccd.png",
+                    f"{save_dir}/cofried_ccd.pdf",
                     dpi=300,
                     bbox_inches="tight",
                 )

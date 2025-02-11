@@ -5,11 +5,7 @@ import pandas as pd
 import matplotlib
 from tempfile import TemporaryDirectory
 from sklearn.datasets import make_classification, make_regression
-from ProQSAR.ModelDeveloper.model_validation import (
-    _plot_cv_report,
-    cross_validation_report,
-    external_validation_report,
-)
+from ProQSAR.ModelDeveloper.model_validation import ModelValidation
 
 matplotlib.use("Agg")
 
@@ -80,7 +76,7 @@ class TestModelReports(unittest.TestCase):
 
     def test_cv_report_classification(self):
         # Test cv_report for classification data
-        cv_result = cross_validation_report(
+        cv_result = ModelValidation.cross_validation_report(
             self.class_data, activity_col="Activity", id_col="ID"
         )
         self.assertIsInstance(cv_result, pd.DataFrame)
@@ -88,7 +84,7 @@ class TestModelReports(unittest.TestCase):
 
     def test_cv_report_regression(self):
         # Test cv_report for regression data
-        cv_result = cross_validation_report(
+        cv_result = ModelValidation.cross_validation_report(
             self.reg_data, activity_col="Activity", id_col="ID"
         )
         self.assertIsInstance(cv_result, pd.DataFrame)
@@ -98,7 +94,7 @@ class TestModelReports(unittest.TestCase):
         # Test ev_report for classification data (with train/test split)
         data_train = self.class_data.sample(frac=0.8, random_state=42)
         data_test = self.class_data.drop(data_train.index)
-        ev_result = external_validation_report(
+        ev_result = ModelValidation.external_validation_report(
             data_train, data_test, activity_col="Activity", id_col="ID"
         )
         self.assertIsInstance(ev_result, pd.DataFrame)
@@ -108,7 +104,7 @@ class TestModelReports(unittest.TestCase):
         # Test ev_report for regression data (with train/test split)
         data_train = self.reg_data.sample(frac=0.8, random_state=42)
         data_test = self.reg_data.drop(data_train.index)
-        ev_result = external_validation_report(
+        ev_result = ModelValidation.external_validation_report(
             data_train, data_test, activity_col="Activity", id_col="ID"
         )
         self.assertIsInstance(ev_result, pd.DataFrame)
@@ -117,7 +113,7 @@ class TestModelReports(unittest.TestCase):
     def test_ev_report_save_csv(self):
         data_train = self.class_data.sample(frac=0.8, random_state=42)
         data_test = self.class_data.drop(data_train.index)
-        external_validation_report(
+        ModelValidation.external_validation_report(
             data_train,
             data_test,
             activity_col="Activity",
@@ -133,21 +129,21 @@ class TestModelReports(unittest.TestCase):
 
     def test_invalid_graph_type(self):
         # Test invalid graph type in _plot_cv_report
-        cv_result = cross_validation_report(
+        cv_result = ModelValidation.cross_validation_report(
             self.class_data,
             activity_col="Activity",
             id_col="ID",
             scoring_list=["accuracy"],
         )
         with self.assertRaises(ValueError):
-            _plot_cv_report(
+            ModelValidation._plot_cv_report(
                 report_df=cv_result, scoring_list=["accuracy"], graph_type="invalid"
             )
 
     def test_invalid_select_model(self):
         # Test cv_report with an invalid model
         with self.assertRaises(ValueError):
-            cross_validation_report(
+            ModelValidation.cross_validation_report(
                 self.class_data,
                 activity_col="Activity",
                 id_col="ID",
@@ -155,35 +151,32 @@ class TestModelReports(unittest.TestCase):
             )
 
     def test_plot_cv_report_bar(self):
-        cv_result = cross_validation_report(
+        cv_result = ModelValidation.cross_validation_report(
             self.class_data,
             activity_col="Activity",
             id_col="ID",
             scoring_list=["accuracy"],
         )
-        _plot_cv_report(
+        ModelValidation._plot_cv_report(
             report_df=cv_result, scoring_list=["accuracy"], graph_type="bar"
         )
         # Ensure no exception occurs when plotting
 
     def test_plot_cv_report_save_fig(self):
         # Test _plot_cv_report with save_fig=True
-        cv_result = cross_validation_report(
+        cv_result = ModelValidation.cross_validation_report(
             self.class_data,
             activity_col="Activity",
             id_col="ID",
             scoring_list=["accuracy"],
-        )
-        _plot_cv_report(
-            report_df=cv_result,
-            scoring_list=["accuracy"],
+            visualize="box",
             save_fig=True,
             fig_prefix="test_cv_graph",
             save_dir=self.temp_dir.name,
         )
         # Ensure the figure file is saved
         self.assertTrue(
-            os.path.exists(f"{self.temp_dir.name}/test_cv_graph_accuracy_box.png")
+            os.path.exists(f"{self.temp_dir.name}/test_cv_graph_box.png")
         )
 
 
