@@ -99,7 +99,7 @@ class ConformalPredictor:
             })
         
         if self.activity_col in data.columns:
-            self.pred_result['Observed values'] = data[self.activity_col]
+            self.pred_result['Actual values'] = data[self.activity_col]
 
         if self.save_dir:
             if not os.path.exists(self.save_dir):
