@@ -372,6 +372,8 @@ class StatisticalAnalysis:
         scoring_list: Optional[Union[list, str]] = None,
         method_list: Optional[Union[list, str]] = None,
         plot: Optional[Union[list, str]] = None,
+        axis_text_size: float = 12,
+        title_size: float = 16,
         save_fig: bool = True,
         save_result: bool = True,
         save_dir: str = "Project/Analysis",
@@ -389,6 +391,10 @@ class StatisticalAnalysis:
             List or string of methods, by default None.
         plot : Optional[Union[list, str]], optional
             Type of plot to generate ('sign' or 'ccd'), by default None.
+        axis_text_size : float, optional
+            Text size for axis labels, by default 12.
+        title_size : float, optional
+            Text size for titles, by default 16.
         save_fig : bool, optional
             Whether to save the figure, by default True.
         save_result : bool, optional
@@ -438,90 +444,29 @@ class StatisticalAnalysis:
                         f"Posthoc Conover-Friedman results saved at {save_dir}/cofried_pc_{scoring}.csv"
                     )
 
-            def make_sign_plots(scoring_list, pc_results, save_fig, save_dir):
-                heatmap_args = {
-                    "linewidths": 0.25,
-                    "linecolor": "0.5",
-                    "clip_on": True,
-                    "square": True,
-                }
-                sns.set_context("notebook")
-                sns.set_style("whitegrid")
-
-                figure, axes = plt.subplots(
-                    1,
-                    len(scoring_list),
-                    sharex=False,
-                    sharey=True,
-                    figsize=(6 * len(scoring_list), 10),
-                )
-
-                if not isinstance(axes, np.ndarray):
-                    axes = np.array([axes])
-
-                for i, scoring in enumerate(scoring_list):
-                    pc = pc_results[scoring]
-                    sub_ax, sub_c = sp.sign_plot(
-                        pc, **heatmap_args, ax=axes[i], xticklabels=True
-                    )
-                    sub_ax.set_title(scoring.upper(), fontsize=16)
-
-                if save_fig:
-                    if save_dir and not os.path.exists(save_dir):
-                        os.makedirs(save_dir, exist_ok=True)
-                    plt.savefig(
-                        f"{save_dir}/cofried_sign_plot.pdf",
-                        dpi=300,
-                        bbox_inches="tight",
-                    )
-                    logging.info(
-                        f"Sign plots saved at {save_dir}/cofried_sign_plot.pdf"
-                    )
-
-            def make_critical_difference_diagrams(
-                scoring_list, pc_results, rank_results, save_fig, save_dir
-            ):
-                sns.set_context("notebook")
-                sns.set_style("whitegrid")
-                figure, axes = plt.subplots(
-                    len(scoring_list),
-                    1,
-                    sharex=True,
-                    sharey=False,
-                    figsize=(20, 3 * len(scoring_list)),
-                )
-                if not isinstance(axes, np.ndarray):
-                    axes = np.array([axes])
-
-                for i, scoring in enumerate(scoring_list):
-                    pc = pc_results[scoring]
-                    avg_rank = rank_results[scoring]
-                    sp.critical_difference_diagram(avg_rank, pc, ax=axes[i])
-                    axes[i].set_title(scoring.upper(), fontsize=16)
-
-                plt.tight_layout()
-                if save_fig:
-                    if save_dir and not os.path.exists(save_dir):
-                        os.makedirs(save_dir, exist_ok=True)
-                    plt.savefig(
-                        f"{save_dir}/cofried_ccd.pdf",
-                        dpi=300,
-                        bbox_inches="tight",
-                    )
-                    logging.info(
-                        f"Critical difference diagrams saved at {save_dir}/cofried_ccd.pdf"
-                    )
-
             if plot not in ["sign", "ccd", None]:
                 raise ValueError(
                     f"Invalid plot type: {plot}. Please choose 'sign' or 'ccd'."
                 )
             if plot is None or plot == "sign":
-                make_sign_plots(scoring_list, pc_results, save_fig, save_dir)
+                StatisticalAnalysis._make_sign_plots(
+                    pc_results=pc_results,
+                    scoring_list=scoring_list,
+                    axis_text_size=axis_text_size,
+                    title_size=title_size,
+                    save_fig=save_fig,
+                    save_dir=save_dir,
+                )
 
             if plot is None or plot == "ccd":
-                make_critical_difference_diagrams(
-                    scoring_list, pc_results, rank_results, save_fig, save_dir
+                StatisticalAnalysis._make_critical_difference_diagrams(
+                    pc_results=pc_results,
+                    rank_results=rank_results,
+                    scoring_list=scoring_list,
+                    axis_text_size=axis_text_size,
+                    title_size=title_size,
+                    save_fig=save_fig,
+                    save_dir=save_dir,
                 )
 
             logging.info("Posthoc Conover-Friedman analysis completed successfully")
@@ -534,6 +479,141 @@ class StatisticalAnalysis:
 
             return {}, {}
 
+    def _make_sign_plots(
+        pc_results: dict,
+        scoring_list: list,
+        axis_text_size: float = 12,
+        title_size: float = 16,
+        save_fig: bool = True,
+        save_dir: str = "Project/Analysis",
+    ) -> None:
+        """
+        Generate sign plots for each scoring metric.
+
+        Parameters
+        ----------
+        pc_results : dict
+            Dictionary containing pairwise comparison results.
+        scoring_list : list
+            List of scoring metrics.
+        axis_text_size : float, optional
+            Font size for axis labels, by default 12.
+        title_size : float, optional
+            Font size for plot titles, by default 16.
+        save_fig : bool, optional
+            Whether to save the figure, by default True.
+        save_dir : str, optional
+            Directory to save the figure, by default "Project/Analysis".
+
+        Returns
+        -------
+        None
+        """
+        heatmap_args = {
+            "linewidths": 0.25,
+            "linecolor": "black",
+            "clip_on": True,
+            "square": True,
+        }
+        sns.set_context("notebook")
+        sns.set_style("whitegrid")
+
+        figure, axes = plt.subplots(
+            1,
+            len(scoring_list),
+            sharex=False,
+            sharey=True,
+            figsize=(6 * len(scoring_list), 10),
+        )
+
+        if not isinstance(axes, np.ndarray):
+            axes = np.array([axes])
+
+        for i, scoring in enumerate(scoring_list):
+            pc = pc_results[scoring]
+            sub_ax, sub_c = sp.sign_plot(
+                pc, **heatmap_args, ax=axes[i], xticklabels=True
+            )
+            sub_ax.tick_params(labelsize=axis_text_size)
+            sub_ax.set_title(scoring.upper(), fontsize=title_size)
+
+        if save_fig:
+            if save_dir and not os.path.exists(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(
+                f"{save_dir}/cofried_sign_plot.pdf",
+                dpi=300,
+                bbox_inches="tight",
+            )
+            logging.info(f"Sign plots saved at {save_dir}/cofried_sign_plot.pdf")
+
+    def _make_critical_difference_diagrams(
+        pc_results: dict,
+        rank_results: dict,
+        scoring_list: list,
+        axis_text_size: float = 12,
+        title_size: float = 16,
+        save_fig: bool = True,
+        save_dir: str = "Project/Analysis",
+    ) -> None:
+        """
+        Generate critical difference diagrams for each scoring metric.
+
+        Parameters
+        ----------
+        pc_results : dict
+            Dictionary containing pairwise comparison results.
+        rank_results : dict
+            Dictionary containing rank results.
+        scoring_list : list
+            List of scoring metrics.
+        axis_text_size : float, optional
+            Font size for axis labels, by default 12.
+        title_size : float, optional
+            Font size for plot titles, by default 16.
+        save_fig : bool, optional
+            Whether to save the figure, by default True.
+        save_dir : str, optional
+            Directory to save the figure, by default "Project/Analysis".
+
+        Returns
+        -------
+        None
+        """
+        sns.set_context("notebook")
+        sns.set_style("whitegrid")
+        figure, axes = plt.subplots(
+            len(scoring_list),
+            1,
+            sharex=True,
+            sharey=False,
+            figsize=(20, 3 * len(scoring_list)),
+        )
+        if not isinstance(axes, np.ndarray):
+            axes = np.array([axes])
+
+        for i, scoring in enumerate(scoring_list):
+            pc = pc_results[scoring]
+            avg_rank = rank_results[scoring]
+            sp.critical_difference_diagram(
+                avg_rank, pc, ax=axes[i], label_props={"fontsize": axis_text_size}
+            )
+            axes[i].set_title(scoring.upper(), fontsize=title_size)
+            axes[i].tick_params(labelsize=axis_text_size)
+
+        plt.tight_layout()
+        if save_fig:
+            if save_dir and not os.path.exists(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(
+                f"{save_dir}/cofried_ccd.pdf",
+                dpi=300,
+                bbox_inches="tight",
+            )
+            logging.info(
+                f"Critical difference diagrams saved at {save_dir}/cofried_ccd.pdf"
+            )
+
     @staticmethod
     def posthoc_tukeyhsd(
         report_df: pd.DataFrame,
@@ -543,7 +623,11 @@ class StatisticalAnalysis:
         alpha: float = 0.05,
         direction_dict: dict = {},
         effect_dict: dict = {},
-        title_size: int = 16,
+        title_size: float = 16,
+        cell_text_size: float = 12,
+        axis_text_size: float = 12,
+        left_xlim: float = -0.5,
+        right_xlim: float = 0.5,
         save_fig: bool = True,
         save_result: bool = True,
         save_dir: str = "Project/Analysis",
@@ -567,6 +651,16 @@ class StatisticalAnalysis:
             Dictionary specifying the direction to maximize or minimize for each scoring metric, by default {}.
         effect_dict : dict, optional
             Dictionary specifying the effect size for each scoring metric, by default {}.
+        title_size : float, optional
+            Text size for titles, by default 16.
+        cell_text_size : (for MCS plot) float, optional
+            Text size for cell annotations, by default 16.
+        axis_text_size : float, optional
+            Text size for axis labels, by default 12.
+        left_xlim : (for CI plot) float, optional
+            Left limit for x-axis, by default -0.5.
+        right_xlim : (for CI plot) float, optional
+            Right limit for x-axis, by default 0.5.
         save_fig : bool, optional
             Whether to save the figure, by default True.
         save_result : bool, optional
@@ -710,7 +804,13 @@ class StatisticalAnalysis:
                     pc.to_csv(f"{save_dir}/tukey_pc_{scoring}.csv")
                     logging.info(f"Tukey HSD results saved at {save_dir}")
 
-            if plot is None or plot == "mcs_plot":
+            if not plot in [None, "mcs", "ci"]:
+                raise ValueError(
+                    f"Unsupported plot: {plot}."
+                    "Please choose 'mcs' for MCS plots or 'ci' for CI plots."
+                )
+
+            if plot is None or plot == "mcs":
                 StatisticalAnalysis._make_mcs_plot_grid(
                     tukey_results,
                     scoring_list,
@@ -718,21 +818,22 @@ class StatisticalAnalysis:
                     direction_dict,
                     effect_dict,
                     show_diff=True,
-                    cell_text_size=16,
-                    axis_text_size=12,
+                    cell_text_size=cell_text_size,
+                    axis_text_size=axis_text_size,
                     title_size=title_size,
                     save_fig=save_fig,
                     save_dir=save_dir,
                 )
 
-            if plot is None or plot == "ci_plot":
+            if plot is None or plot == "ci":
                 StatisticalAnalysis._make_ci_plot_grid(
                     tukey_results,
                     scoring_list,
                     method_list,
                     title_size=title_size,
-                    left_xlim=-0.5,
-                    right_xlim=1,
+                    axis_text_size=axis_text_size,
+                    left_xlim=left_xlim,
+                    right_xlim=right_xlim,
                     save_fig=save_fig,
                     save_dir=save_dir,
                 )
@@ -756,8 +857,8 @@ class StatisticalAnalysis:
         cbar_ax_bbox: Optional[tuple] = None,
         ax: Optional[plt.Axes] = None,
         show_diff: bool = True,
-        cell_text_size: int = 16,
-        axis_text_size: int = 12,
+        cell_text_size: float = 16,
+        axis_text_size: float = 12,
         show_cbar: bool = True,
         reverse_cmap: bool = False,
         vlim: Optional[float] = None,
@@ -784,9 +885,9 @@ class StatisticalAnalysis:
             Axes object to draw the heatmap on, by default None.
         show_diff : bool, optional
             Whether to show effect size differences, by default True.
-        cell_text_size : int, optional
+        cell_text_size : float, optional
             Text size for cell annotations, by default 16.
-        axis_text_size : int, optional
+        axis_text_size : float, optional
             Text size for axis labels, by default 12.
         show_cbar : bool, optional
             Whether to show the colorbar, by default True.
@@ -837,6 +938,10 @@ class StatisticalAnalysis:
                 **kwargs,
             )
 
+            if show_cbar:
+                cbar = hax.collections[0].colorbar
+                cbar.ax.tick_params(labelsize=axis_text_size)
+
             if labels:
                 label_list = list(means.index)
                 x_label_list = [
@@ -879,9 +984,9 @@ class StatisticalAnalysis:
         direction_dict: dict = {},
         effect_dict: dict = {},
         show_diff: bool = True,
-        cell_text_size: int = 16,
-        axis_text_size: int = 12,
-        title_size: int = 16,
+        cell_text_size: float = 16,
+        axis_text_size: float = 12,
+        title_size: float = 16,
         save_fig: bool = True,
         save_dir: str = "Project/Analysis",
     ) -> None:
@@ -902,11 +1007,11 @@ class StatisticalAnalysis:
             Dictionary specifying the effect size for each scoring metric, by default {}.
         show_diff : bool, optional
             Whether to show effect size differences, by default True.
-        cell_text_size : int, optional
+        cell_text_size : float, optional
             Text size for cell annotations, by default 16.
-        axis_text_size : int, optional
+        axis_text_size : float, optional
             Text size for axis labels, by default 12.
-        title_size : int, optional
+        title_size : float, optional
             Text size for titles, by default 16.
         save_fig : bool, optional
             Whether to save the figure, by default True.
@@ -997,7 +1102,8 @@ class StatisticalAnalysis:
         tukey_results: dict,
         scoring_list: list,
         method_list: list,
-        title_size: int = 16,
+        title_size: float = 16,
+        axis_text_size: float = 12,
         left_xlim: float = -0.5,
         right_xlim: float = 0.5,
         save_fig: bool = True,
@@ -1014,7 +1120,7 @@ class StatisticalAnalysis:
             List of scoring metrics.
         method_list : list
             List of methods.
-        title_size : int, optional
+        title_size : float, optional
             Text size for titles, by default 16.
         left_xlim : float, optional
             Left limit for x-axis, by default -0.5.
@@ -1072,11 +1178,13 @@ class StatisticalAnalysis:
                     markerfacecolor="red",
                 )
                 ax.axvline(0, ls="--", lw=3, color="#ADD3ED")
-                ax.set_xlabel("Mean Difference")
+                ax.set_xlabel("Mean Difference", fontsize=axis_text_size)
                 ax.set_ylabel("")
                 ax.set_title(scoring.upper(), fontsize=title_size)
                 ax.set_xlim(left_xlim, right_xlim)
+                ax.tick_params(labelsize=axis_text_size)
                 ax.grid(True, axis="x")
+
             plt.tight_layout()
 
             if save_fig:
