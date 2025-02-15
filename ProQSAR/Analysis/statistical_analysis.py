@@ -804,7 +804,7 @@ class StatisticalAnalysis:
                     pc.to_csv(f"{save_dir}/tukey_pc_{scoring}.csv")
                     logging.info(f"Tukey HSD results saved at {save_dir}")
 
-            if not plot in [None, "mcs", "ci"]:
+            if plot not in [None, "mcs", "ci"]:
                 raise ValueError(
                     f"Unsupported plot: {plot}."
                     "Please choose 'mcs' for MCS plots or 'ci' for CI plots."
