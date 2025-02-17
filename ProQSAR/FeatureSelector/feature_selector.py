@@ -1,5 +1,6 @@
 import os
 import pickle
+import logging
 import pandas as pd
 from sklearn.exceptions import NotFittedError
 from typing import Optional
@@ -109,56 +110,67 @@ class FeatureSelector:
         Raises:
             ValueError: If an unrecognized selection method is specified.
         """
+        try:
+            logging.info("Starting feature selection fitting process.")
+            X_data = data.drop([self.activity_col, self.id_col], axis=1)
+            y_data = data[self.activity_col]
 
-        X_data = data.drop([self.activity_col, self.id_col], axis=1)
-        y_data = data[self.activity_col]
-
-        self.task_type = _get_task_type(data, self.activity_col)
-        self.method_map = _get_method_map(self.task_type, self.add_method, self.n_jobs)
-        self.cv = _get_cv_strategy(
-            self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
-        )
-
-        if self.select_method == "best":
-            self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
-            comparison_df = evaluate_feature_selectors(
-                data=data,
-                activity_col=self.activity_col,
-                id_col=self.id_col,
-                add_method=self.add_method,
-                scoring_list=[self.scoring],
-                n_splits=self.n_splits,
-                n_repeats=self.n_repeats,
-                visualize=self.visualize,
-                save_fig=self.save_fig,
-                fig_prefix=self.fig_prefix,
-                save_csv=self.save_cv_report,
-                csv_name=self.cv_report_name,
-                save_dir=self.save_dir,
-                n_jobs=self.n_jobs,
+            self.task_type = _get_task_type(data, self.activity_col)
+            self.method_map = _get_method_map(
+                self.task_type, self.add_method, self.n_jobs
+            )
+            self.cv = _get_cv_strategy(
+                self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
             )
 
-            self.select_method = comparison_df.loc[
-                comparison_df[f"{self.scoring}_mean"].idxmax(), "FeatureSelector"
-            ]
+            if self.select_method == "best":
+                self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
+                comparison_df = evaluate_feature_selectors(
+                    data=data,
+                    activity_col=self.activity_col,
+                    id_col=self.id_col,
+                    add_method=self.add_method,
+                    scoring_list=[self.scoring],
+                    n_splits=self.n_splits,
+                    n_repeats=self.n_repeats,
+                    visualize=self.visualize,
+                    save_fig=self.save_fig,
+                    fig_prefix=self.fig_prefix,
+                    save_csv=self.save_cv_report,
+                    csv_name=self.cv_report_name,
+                    save_dir=self.save_dir,
+                    n_jobs=self.n_jobs,
+                )
+
+                self.select_method = comparison_df.loc[
+                    (f"{self.scoring}", "mean")
+                ].idxmax()
+
+                self.feature_selector = self.method_map[self.select_method].fit(
+                    X=X_data, y=y_data
+                )
+
+            if self.select_method not in self.method_map:
+                raise ValueError(f"Method '{self.select_method}' not recognized.")
+
             self.feature_selector = self.method_map[self.select_method].fit(
                 X=X_data, y=y_data
             )
-
-        elif self.select_method in self.method_map:
-            self.feature_selector = self.method_map[self.select_method].fit(
-                X=X_data, y=y_data
+            logging.info(
+                f"Feature selection method '{self.select_method}' applied successfully."
             )
-        else:
-            raise ValueError(f"Method '{self.select_method}' not recognized.")
 
-        if self.save_method:
-            if self.save_dir and not os.path.exists(self.save_dir):
+            if self.save_method:
                 os.makedirs(self.save_dir, exist_ok=True)
-            with open(f"{self.save_dir}/feature_selector.pkl", "wb") as file:
-                pickle.dump(self, file)
+                with open(f"{self.save_dir}/feature_selector.pkl", "wb") as file:
+                    pickle.dump(self, file)
+                logging.info("Feature selector model saved successfully.")
 
-        return self
+            return self
+
+        except Exception as e:
+            logging.error(f"Error in fit method: {e}")
+            raise
 
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -173,37 +185,42 @@ class FeatureSelector:
         Raises:
             NotFittedError: If the feature selector is not fitted yet.
         """
-        if self.feature_selector is None:
-            raise NotFittedError(
-                "FeatureSelector is not fitted yet. Call 'fit' before using this method."
+        try:
+            if self.feature_selector is None:
+                raise NotFittedError(
+                    "FeatureSelector is not fitted yet. Call 'fit' before using this method."
+                )
+
+            X_data = data.drop([self.activity_col, self.id_col], axis=1)
+            data_selected = pd.DataFrame(self.feature_selector.transform(X_data))
+            transformed_data = pd.concat(
+                [data_selected, data[[self.id_col, self.activity_col]]], axis=1
             )
-
-        X_data = data.drop([self.activity_col, self.id_col], axis=1)
-        data_selected = pd.DataFrame(self.feature_selector.transform(X_data))
-        transformed_data = pd.concat(
-            [data_selected, data[[self.id_col, self.activity_col]]], axis=1
-        )
-        if self.save_trans_data:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
-                base, ext = os.path.splitext(self.trans_data_name)
-                counter = 1
-                new_filename = f"{base} ({counter}){ext}"
-
-                while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
-                    counter += 1
+            if self.save_trans_data:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
+                    base, ext = os.path.splitext(self.trans_data_name)
+                    counter = 1
                     new_filename = f"{base} ({counter}){ext}"
 
-                csv_name = new_filename
+                    while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
+                        counter += 1
+                        new_filename = f"{base} ({counter}){ext}"
 
-            else:
-                csv_name = self.trans_data_name
+                    csv_name = new_filename
 
-            transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
-            print(f"File have been saved at: {self.save_dir}/{csv_name}.csv")
+                else:
+                    csv_name = self.trans_data_name
 
-        return transformed_data
+                transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+                logging.info(f"Transformed data saved at {self.save_dir}.")
+
+            return transformed_data
+
+        except Exception as e:
+            logging.error(f"Error in transform method: {e}")
+            raise
 
     def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """

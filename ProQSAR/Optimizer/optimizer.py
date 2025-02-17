@@ -1,7 +1,8 @@
 import optuna
 import pandas as pd
+import logging
 from sklearn.model_selection import cross_val_score
-from typing import Optional, List
+from typing import Optional, List, Tuple, Dict, Any
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_task_type,
     _get_cv_strategy,
@@ -66,14 +67,16 @@ class Optimizer:
         id_col: str,
         select_model: Optional[List[str]] = None,
         scoring: Optional[str] = None,
-        param_ranges: dict = {},
-        add_model: dict = {},
+        param_ranges: Dict[str, Dict[str, Any]] = {},
+        add_model: Dict[str, Tuple[Any, Dict[str, Any]]] = {},
         n_trials: int = 100,
         n_splits: int = 5,
         n_repeats: int = 2,
         n_jobs: int = -1,
-    ):
-
+    ) -> None:
+        """
+        Initializes the Optimizer class with user-defined parameters.
+        """
         self.activity_col = activity_col
         self.id_col = id_col
         self.select_model = select_model
@@ -89,66 +92,85 @@ class Optimizer:
         self.best_score = None
         self.task_type = None
         self.cv = None
+
+        # Merge additional model parameters into param_ranges
         self.param_ranges.update(
             {name: params for name, (model, params) in self.add_model.items()}
         )
+        logging.info("Optimizer initialized successfully.")
 
-    def optimize(self, data: pd.DataFrame) -> tuple:
+    def optimize(self, data: pd.DataFrame) -> Tuple[Dict[str, Any], float]:
         """
-        Optimizes the model based on the provided dataset.
+        Runs hyperparameter optimization using Optuna.
 
-        Parameters:
+        Parameters
         ----------
         data : pd.DataFrame
-            The input data containing features and target variable.
+            The dataset containing features and target variable.
 
-        Returns:
+        Returns
         -------
-        tuple
-            A tuple containing the best parameters and the best score achieved.
+        Tuple[Dict[str, Any], float]
+            The best hyperparameters and the best score obtained during optimization.
         """
+        try:
+            logging.info("Starting optimization process...")
+            X = data.drop([self.activity_col, self.id_col], axis=1)
+            y = data[self.activity_col]
 
-        X = data.drop([self.activity_col, self.id_col], axis=1)
-        y = data[self.activity_col]
+            self.task_type = _get_task_type(data, self.activity_col)
+            self.cv = _get_cv_strategy(
+                self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
+            )
+            self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
 
-        self.task_type = _get_task_type(data, self.activity_col)
-        self.cv = _get_cv_strategy(
-            self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
-        )
-        self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
-
-        model_list = self.select_model or _get_model_list(
-            self.task_type, self.add_model
-        )
-
-        def objective(trial):
-            model_name = trial.suggest_categorical("model", model_list)
-            model, params = _get_model_and_params(
-                trial, model_name, self.param_ranges, self.add_model
+            model_list = self.select_model or _get_model_list(
+                self.task_type, self.add_model
             )
 
-            model.set_params(**params)
-            score = cross_val_score(
-                model, X, y, scoring=self.scoring, cv=self.cv, n_jobs=self.n_jobs
-            ).mean()
-            return score
+            def objective(trial):
+                try:
+                    model_name = trial.suggest_categorical("model", model_list)
+                    model, params = _get_model_and_params(
+                        trial, model_name, self.param_ranges, self.add_model
+                    )
 
-        study = optuna.create_study(direction="maximize")
-        study.optimize(objective, n_trials=self.n_trials, n_jobs=self.n_jobs)
+                    model.set_params(**params)
+                    score = cross_val_score(
+                        model,
+                        X,
+                        y,
+                        scoring=self.scoring,
+                        cv=self.cv,
+                        n_jobs=self.n_jobs,
+                    ).mean()
+                    return score
 
-        self.best_params = study.best_trial.params
-        self.best_score = study.best_value
+                except Exception as e:
+                    logging.error(f"Error in objective function: {e}")
+                    raise
 
-        return self.best_params, self.best_score
+            study = optuna.create_study(direction="maximize")
+            study.optimize(objective, n_trials=self.n_trials, n_jobs=self.n_jobs)
 
-    def get_best_params(self) -> dict:
+            self.best_params = study.best_trial.params
+            self.best_score = study.best_value
+
+            logging.info("Optimization completed successfully.")
+            return self.best_params, self.best_score
+
+        except Exception as e:
+            logging.error(f"Optimization failed: {e}")
+            raise
+
+    def get_best_params(self) -> Dict[str, Any]:
         """
         Retrieves the best model and hyperparameters found during optimization.
 
         Returns:
         -------
-        dict
-            The best model and hyperparameters.
+        Dict[str, Any]
+            Dictionary of the best parameters.
 
         Raises:
         ------

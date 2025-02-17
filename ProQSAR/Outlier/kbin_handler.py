@@ -1,5 +1,6 @@
 import os
 import pickle
+import logging
 import pandas as pd
 from copy import deepcopy
 from typing import Optional
@@ -64,29 +65,35 @@ class KBinHandler:
         Returns:
             KBinHandler: Returns self for chaining.
         """
-
-        _, self.bad = _feature_quality(
-            data, id_col=self.id_col, activity_col=self.activity_col
-        )
-
-        if not self.bad:
-            print(
-                "No bad features (univariate outliers) found. Skipping outlier handling."
+        try:
+            _, self.bad = _feature_quality(
+                data, id_col=self.id_col, activity_col=self.activity_col
             )
+
+            if not self.bad:
+                print(
+                    "No bad features (univariate outliers) found. Skipping outlier handling."
+                )
+                return self
+
+            if self.bad:
+                self.kbin = KBinsDiscretizer(
+                    n_bins=self.n_bins, encode=self.encode, strategy=self.strategy
+                ).fit(data[self.bad])
+
+            if self.save_method:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                with open(f"{self.save_dir}/kbin_handler.pkl", "wb") as file:
+                    pickle.dump(self, file)
+                logging.info("KBin handler saved successfully.")
+
+            logging.info("Model fitting complete.")
             return self
 
-        if self.bad:
-            self.kbin = KBinsDiscretizer(
-                n_bins=self.n_bins, encode=self.encode, strategy=self.strategy
-            ).fit(data[self.bad])
-
-        if self.save_method:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            with open(f"{self.save_dir}/kbin_handler.pkl", "wb") as file:
-                pickle.dump(self, file)
-
-        return self
+        except Exception as e:
+            logging.error(f"Error in fitting: {e}")
+            raise
 
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -98,40 +105,45 @@ class KBinHandler:
         Returns:
             pd.DataFrame: The transformed dataset with "bad" features discretized.
         """
+        try:
+            transformed_data = deepcopy(data)
+            if not self.bad or transformed_data[self.bad].empty:
+                print("No bad features (outliers) to handle. Returning original data.")
+                return transformed_data
 
-        transformed_data = deepcopy(data)
-        if not self.bad or transformed_data[self.bad].empty:
-            print("No bad features (outliers) to handle. Returning original data.")
-            return transformed_data
+            new_bad_data = pd.DataFrame(self.kbin.transform(transformed_data[self.bad]))
+            new_bad_data.columns = [
+                "Kbin" + str(i) for i in range(1, len(new_bad_data.columns) + 1)
+            ]
+            transformed_data.drop(columns=self.bad, inplace=True)
+            transformed_data = pd.concat([transformed_data, new_bad_data], axis=1)
 
-        new_bad_data = pd.DataFrame(self.kbin.transform(transformed_data[self.bad]))
-        new_bad_data.columns = [
-            "Kbin" + str(i) for i in range(1, len(new_bad_data.columns) + 1)
-        ]
-        transformed_data.drop(columns=self.bad, inplace=True)
-        transformed_data = pd.concat([transformed_data, new_bad_data], axis=1)
-
-        if self.save_trans_data:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
-                base, ext = os.path.splitext(self.trans_data_name)
-                counter = 1
-                new_filename = f"{base} ({counter}){ext}"
-
-                while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
-                    counter += 1
+            if self.save_trans_data:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
+                    base, ext = os.path.splitext(self.trans_data_name)
+                    counter = 1
                     new_filename = f"{base} ({counter}){ext}"
 
-                csv_name = new_filename
+                    while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
+                        counter += 1
+                        new_filename = f"{base} ({counter}){ext}"
 
-            else:
-                csv_name = self.trans_data_name
+                    csv_name = new_filename
 
-            transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
-            print(f"File have been saved at: {self.save_dir}/{csv_name}.csv")
+                else:
+                    csv_name = self.trans_data_name
 
-        return transformed_data
+                transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+                logging.info(
+                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                )
+            return transformed_data
+
+        except Exception as e:
+            logging.error(f"Error in transforming the data: {e}")
+            raise
 
     def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """

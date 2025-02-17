@@ -1,5 +1,6 @@
 import os
 import pickle
+import logging
 import pandas as pd
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.ensemble import IsolationForest
@@ -77,44 +78,51 @@ class MultivariateOutliersHandler:
         Raises:
             ValueError: If an unsupported outlier detection method is provided.
         """
-        self.features = data.drop(
-            columns=[self.id_col, self.activity_col], errors="ignore"
-        ).columns
+        try:
+            self.features = data.drop(
+                columns=[self.id_col, self.activity_col], errors="ignore"
+            ).columns
 
-        method_map = {
-            "LocalOutlierFactor": LocalOutlierFactor(
-                n_neighbors=20, n_jobs=self.n_jobs, novelty=self.novelty
-            ),
-            "IsolationForest": IsolationForest(
-                n_estimators=100,
-                contamination="auto",
-                random_state=42,
-                n_jobs=self.n_jobs,
-            ),
-            "OneClassSVM": OneClassSVM(),
-            "RobustCovariance": EllipticEnvelope(contamination=0.1, random_state=42),
-            "EmpiricalCovariance": EllipticEnvelope(
-                contamination=0.1, support_fraction=1, random_state=42
-            ),
-        }
-        if self.select_method == "LocalOutlierFactor":
+            method_map = {
+                "LocalOutlierFactor": LocalOutlierFactor(
+                    n_neighbors=20, n_jobs=self.n_jobs, novelty=self.novelty
+                ),
+                "IsolationForest": IsolationForest(
+                    n_estimators=100,
+                    contamination="auto",
+                    random_state=42,
+                    n_jobs=self.n_jobs,
+                ),
+                "OneClassSVM": OneClassSVM(),
+                "RobustCovariance": EllipticEnvelope(
+                    contamination=0.1, random_state=42
+                ),
+                "EmpiricalCovariance": EllipticEnvelope(
+                    contamination=0.1, support_fraction=1, random_state=42
+                ),
+            }
+            if self.select_method not in method_map:
+                raise ValueError(f"Unsupported method: {self.select_method}")
+
             self.multi_outlier_handler = method_map[self.select_method]
-            if self.novelty:
+            if self.select_method == "LocalOutlierFactor" and self.novelty:
                 self.multi_outlier_handler.fit(data[self.features])
-        elif self.select_method in method_map:
-            self.multi_outlier_handler = method_map[self.select_method].fit(
-                data[self.features]
-            )
-        else:
-            raise ValueError(f"Unsupported method: {self.select_method}")
+            else:
+                self.multi_outlier_handler.fit(data[self.features])
 
-        if self.save_method:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            with open(f"{self.save_dir}/multi_outlier_handler.pkl", "wb") as file:
-                pickle.dump(self, file)
+            if self.save_method:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                with open(f"{self.save_dir}/multi_outlier_handler.pkl", "wb") as file:
+                    pickle.dump(self, file)
+                logging.info("Multivariate outlier handler saved successfully.")
 
-        return self
+            logging.info("Model fitting complete.")
+            return self
+
+        except Exception as e:
+            logging.error(f"Error in fitting: {e}")
+            raise
 
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -129,39 +137,47 @@ class MultivariateOutliersHandler:
         Raises:
             NotFittedError: If the model has not been fitted yet.
         """
-        if self.multi_outlier_handler is None:
-            raise NotFittedError(
-                "MultivariateOutlierHandler is not fitted yet. Call 'fit' before using this method."
-            )
+        try:
+            if self.multi_outlier_handler is None:
+                raise NotFittedError(
+                    "MultivariateOutlierHandler is not fitted yet. Call 'fit' before using this method."
+                )
 
-        if self.select_method == "LocalOutlierFactor" and not self.novelty:
-            outliers = self.multi_outlier_handler.fit_predict(data[self.features]) == -1
-        else:
-            outliers = self.multi_outlier_handler.predict(data[self.features]) == -1
+            if self.select_method == "LocalOutlierFactor" and not self.novelty:
+                outliers = (
+                    self.multi_outlier_handler.fit_predict(data[self.features]) == -1
+                )
+            else:
+                outliers = self.multi_outlier_handler.predict(data[self.features]) == -1
 
-        transformed_data = data[~outliers]
+            transformed_data = data[~outliers]
 
-        if self.save_trans_data:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
-                base, ext = os.path.splitext(self.trans_data_name)
-                counter = 1
-                new_filename = f"{base} ({counter}){ext}"
-
-                while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
-                    counter += 1
+            if self.save_trans_data:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
+                    base, ext = os.path.splitext(self.trans_data_name)
+                    counter = 1
                     new_filename = f"{base} ({counter}){ext}"
 
-                csv_name = new_filename
+                    while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
+                        counter += 1
+                        new_filename = f"{base} ({counter}){ext}"
 
-            else:
-                csv_name = self.trans_data_name
+                    csv_name = new_filename
 
-            transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
-            print(f"File have been saved at: {self.save_dir}/{csv_name}.csv")
+                else:
+                    csv_name = self.trans_data_name
 
-        return transformed_data
+                transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+                logging.info(
+                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                )
+
+            return transformed_data
+        except Exception as e:
+            logging.error(f"Error in transforming the data: {e}")
+            raise
 
     def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -186,6 +202,7 @@ class MultivariateOutliersHandler:
         id_col: Optional[str] = None,
         novelty: bool = False,
         methods_to_compare: List[str] = None,
+        save_dir: Optional[str] = "Project/OutlierHandler",
     ) -> pd.DataFrame:
         """
         Compares the effect of different outlier detection methods on one or two datasets.
@@ -203,50 +220,64 @@ class MultivariateOutliersHandler:
         Returns:
             pd.DataFrame: A DataFrame summarizing the outlier removal effects of each method.
         """
-        comparison_data = []
-        methods = [
-            "LocalOutlierFactor",
-            "IsolationForest",
-            "OneClassSVM",
-            "RobustCovariance",
-            "EmpiricalCovariance",
-        ]
-        methods_to_compare = methods_to_compare or methods
+        try:
+            comparison_data = []
+            methods = [
+                "LocalOutlierFactor",
+                "IsolationForest",
+                "OneClassSVM",
+                "RobustCovariance",
+                "EmpiricalCovariance",
+            ]
+            methods_to_compare = methods_to_compare or methods
 
-        for method in methods_to_compare:
-            multi_outlier_handler = MultivariateOutliersHandler(
-                id_col=id_col,
-                activity_col=activity_col,
-                select_method=method,
-                novelty=novelty,
-            )
-            multi_outlier_handler.fit(data1)
+            for method in methods_to_compare:
+                multi_outlier_handler = MultivariateOutliersHandler(
+                    id_col=id_col,
+                    activity_col=activity_col,
+                    select_method=method,
+                    novelty=novelty,
+                )
+                multi_outlier_handler.fit(data1)
 
-            transformed_data1 = multi_outlier_handler.transform(data1)
-            comparison_data.append(
-                {
-                    "Method": method,
-                    "Dataset": data1_name,
-                    "Original Rows": data1.shape[0],
-                    "After Handling Rows": transformed_data1.shape[0],
-                    "Removed Rows": data1.shape[0] - transformed_data1.shape[0],
-                }
-            )
-
-            comparison_table = pd.DataFrame(comparison_data)
-            comparison_table.name = f"Methods fitted & transformed on {data1_name}"
-
-            if data2 is not None:
-                transformed_data2 = multi_outlier_handler.transform(data2)
+                transformed_data1 = multi_outlier_handler.transform(data1)
                 comparison_data.append(
                     {
                         "Method": method,
-                        "Dataset": data2_name,
-                        "Original Rows": data2.shape[0],
-                        "After Handling Rows": transformed_data2.shape[0],
-                        "Removed Rows": data2.shape[0] - transformed_data2.shape[0],
+                        "Dataset": data1_name,
+                        "Original Rows": data1.shape[0],
+                        "After Handling Rows": transformed_data1.shape[0],
+                        "Removed Rows": data1.shape[0] - transformed_data1.shape[0],
                     }
                 )
+
                 comparison_table = pd.DataFrame(comparison_data)
-                comparison_table.name = f"Methods fitted on {data1_name} & transformed on {data1_name} & {data2_name}"
-        return comparison_table
+
+                if data2 is not None:
+                    transformed_data2 = multi_outlier_handler.transform(data2)
+                    comparison_data.append(
+                        {
+                            "Method": method,
+                            "Dataset": data2_name,
+                            "Original Rows": data2.shape[0],
+                            "After Handling Rows": transformed_data2.shape[0],
+                            "Removed Rows": data2.shape[0] - transformed_data2.shape[0],
+                        }
+                    )
+                    comparison_table = pd.DataFrame(comparison_data)
+
+                if save_dir:
+                    os.makedirs(save_dir, exist_ok=True)
+                    comparison_table.to_csv(
+                        (f"{save_dir}/compare_multivariate_methods.csv")
+                    )
+                    logging.info(
+                        f"Transformed data saved at: {save_dir}/compare_multivariate_methods.csv"
+                    )
+
+            logging.info("Comparison of multivariate methods completed.")
+            return comparison_table
+
+        except Exception as e:
+            logging.error(f"Error in comparing methods: {e}")
+            raise

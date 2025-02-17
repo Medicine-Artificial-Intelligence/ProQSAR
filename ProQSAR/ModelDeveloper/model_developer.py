@@ -1,8 +1,7 @@
 import os
 import pickle
-import numpy as np
+import logging
 import pandas as pd
-from sklearn.base import BaseEstimator
 from sklearn.exceptions import NotFittedError
 from typing import Optional
 
@@ -63,9 +62,6 @@ class ModelDeveloper:
     predict(data: pd.DataFrame) -> pd.DataFrame
         Predicts outcomes using the fitted model.
 
-    static_predict(data: pd.DataFrame, save_dir: str,
-        save_pred_result: bool = True, pred_result_name: str = "pred_result") -> pd.DataFrame
-        Loads a pre-trained model from disk and predicts outcomes.
     """
 
     def __init__(
@@ -111,7 +107,7 @@ class ModelDeveloper:
         self.cv = None
         self.classes_ = None
 
-    def fit(self, data: pd.DataFrame) -> BaseEstimator:
+    def fit(self, data: pd.DataFrame) -> "ModelDeveloper":
         """
         Fits a machine learning model based on the specified model.
 
@@ -119,55 +115,61 @@ class ModelDeveloper:
         -----------
         data : pd.DataFrame
             The training dataset including features, activity, and ID columns.
-
-        Returns:
-        --------
-        BaseEstimator
-            The fitted machine learning model.
         """
-        X_data = data.drop([self.activity_col, self.id_col], axis=1)
-        y_data = data[self.activity_col]
+        try:
+            logging.info("Starting model fitting.")
+            X_data = data.drop([self.activity_col, self.id_col], axis=1)
+            y_data = data[self.activity_col]
 
-        self.task_type = _get_task_type(data, self.activity_col)
-        self.model_map = _get_model_map(self.task_type, self.add_model, self.n_jobs)
-        self.cv = _get_cv_strategy(
-            self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
-        )
-
-        if self.select_model == "best":
-            self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
-            comparison_df = ModelValidation.cross_validation_report(
-                data=data,
-                activity_col=self.activity_col,
-                id_col=self.id_col,
-                add_model=self.add_model,
-                scoring_list=[self.scoring],
-                n_splits=self.n_splits,
-                n_repeats=self.n_repeats,
-                visualize=self.visualize,
-                save_fig=self.save_fig,
-                fig_prefix=self.fig_prefix,
-                save_csv=self.save_cv_report,
-                csv_name=self.cv_report_name,
-                save_dir=self.save_dir,
-                n_jobs=self.n_jobs,
+            self.task_type = _get_task_type(data, self.activity_col)
+            self.model_map = _get_model_map(self.task_type, self.add_model, self.n_jobs)
+            self.cv = _get_cv_strategy(
+                self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
             )
 
-            self.select_model = comparison_df.loc[
-                comparison_df[f"{self.scoring}_mean"].idxmax(), "Model"
-            ]
-            self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
-        elif self.select_model in self.model_map:
-            self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
-        else:
-            raise ValueError(f"Model '{self.select_model}' is not recognized.")
+            if self.select_model == "best":
+                self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
+                comparison_df = ModelValidation.cross_validation_report(
+                    data=data,
+                    activity_col=self.activity_col,
+                    id_col=self.id_col,
+                    add_model=self.add_model,
+                    scoring_list=[self.scoring],
+                    n_splits=self.n_splits,
+                    n_repeats=self.n_repeats,
+                    visualize=self.visualize,
+                    save_fig=self.save_fig,
+                    fig_prefix=self.fig_prefix,
+                    save_csv=self.save_cv_report,
+                    csv_name=self.cv_report_name,
+                    save_dir=self.save_dir,
+                    n_jobs=self.n_jobs,
+                )
 
-        self.classes_ = self.model.classes_ if self.task_type == "C" else None
-        if self.save_model:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            with open(f"{self.save_dir}/model.pkl", "wb") as file:
-                pickle.dump(self, file)
+                self.select_model = comparison_df.loc[
+                    (f"{self.scoring}", "mean")
+                ].idxmax()
+
+                self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
+            elif self.select_model in self.model_map:
+                self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
+            else:
+                raise ValueError(f"Model '{self.select_model}' is not recognized.")
+
+            self.classes_ = self.model.classes_ if self.task_type == "C" else None
+
+            if self.save_model:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                with open(f"{self.save_dir}/model.pkl", "wb") as file:
+                    pickle.dump(self, file)
+                logging.info(f"Model saved at: {self.save_dir}/model.pkl")
+
+            logging.info("Model fitting completed successfully.")
+
+        except Exception as e:
+            logging.error(f"Error in model fitting: {e}")
+            raise
 
         return self
 
@@ -185,28 +187,40 @@ class ModelDeveloper:
         pd.DataFrame
             A DataFrame containing the predicted outcomes and optionally the probabilities.
         """
-        if self.model is None:
-            raise NotFittedError(
-                "ModelDeveloper is not fitted yet. Call 'fit' before using this model."
+        try:
+            if self.model is None:
+                raise NotFittedError(
+                    "ModelDeveloper is not fitted yet. Call 'fit' before using this model."
+                )
+
+            logging.info("Starting predictions.")
+            X_data = data.drop(
+                [self.activity_col, self.id_col], axis=1, errors="ignore"
             )
+            y_pred = self.model.predict(X_data)
+            result = {
+                "ID": data[self.id_col].values,
+                "Predicted values": y_pred,
+            }
 
-        X_data = data.drop([self.activity_col, self.id_col], axis=1, errors='ignore')
-        y_pred = self.model.predict(X_data)
-        result = {
-            "ID": data[self.id_col].values,
-            "Predicted values": y_pred,
-        }
+            if self.task_type == "C":
+                y_proba = self.model.predict_proba(X_data)
+                result[f"Probability for class {self.classes_[0]}"] = y_proba[:, 0]
+                result[f"Probability for class {self.classes_[1]}"] = y_proba[:, 1]
 
-        if self.task_type == "C":
-            y_proba = self.model.predict_proba(X_data)
-            result[f"Probability for class {self.classes_[0]}"] = y_proba[:, 0]
-            result[f"Probability for class {self.classes_[1]}"] = y_proba[:, 1]
+            self.pred_result = pd.DataFrame(result)
 
-        self.pred_result = pd.DataFrame(result)
+            if self.save_pred_result:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                self.pred_result.to_csv(f"{self.save_dir}/{self.pred_result_name}.csv")
+                logging.info(
+                    f"Prediction results saved to {self.save_dir}/{self.pred_result_name}.csv"
+                )
 
-        if self.save_pred_result:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            self.pred_result.to_csv(f"{self.save_dir}/{self.pred_result_name}.csv")
+            logging.info("Predictions completed successfully.")
+            return self.pred_result
 
-        return self.pred_result
+        except Exception as e:
+            logging.error(f"Error during prediction: {e}")
+            raise

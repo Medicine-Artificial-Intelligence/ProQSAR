@@ -7,8 +7,10 @@ from sklearn.preprocessing import (
     RobustScaler,
     FunctionTransformer,
 )
+from sklearn.exceptions import NotFittedError
 import pickle
 import os
+import logging
 
 
 class Rescaler:
@@ -90,6 +92,7 @@ class Rescaler:
         self.trans_data_name = trans_data_name
         self.non_binary_cols = None
         self.rescaler = None
+        self.fitted = False
 
     @staticmethod
     def _get_scaler(rescaler_method: str) -> object:
@@ -118,17 +121,17 @@ class Rescaler:
             "None": FunctionTransformer(lambda x: x),  # No operation scaler
         }
 
-        if rescaler_method in rescalers_dict:
+        try:
             rescaler = rescalers_dict[rescaler_method]
-        else:
+        except KeyError:
             raise ValueError(
-                f"Unsupported rescaler_method {rescaler_method}. Choose from"
+                f"Unsupported rescaler_method {rescaler_method}. Choose from "
                 + "'MinMaxScaler', 'StandardScaler', 'RobustScaler', or 'None'."
             )
 
         return rescaler
 
-    def fit(self, data: pd.DataFrame) -> None:
+    def fit(self, data: pd.DataFrame) -> "Rescaler":
         """
         Fits the rescaler to the provided data, excluding columns specified by `id_col` and `activity_col`.
 
@@ -139,25 +142,33 @@ class Rescaler:
 
         Returns
         -------
-        None
+        Rescaler: The fitted Rescaler object.
         """
-        temp_data = data.drop(columns=[self.id_col, self.activity_col])
-        self.non_binary_cols = [
-            col
-            for col in temp_data.columns
-            if not temp_data[col].dropna().isin([0, 1]).all()
-        ]
+        try:
+            temp_data = data.drop(columns=[self.id_col, self.activity_col])
+            self.non_binary_cols = [
+                col
+                for col in temp_data.columns
+                if not temp_data[col].dropna().isin([0, 1]).all()
+            ]
 
-        if self.non_binary_cols:
-            self.rescaler = self._get_scaler(self.rescaler_method).fit(
-                data[self.non_binary_cols]
-            )
+            if self.non_binary_cols:
+                self.rescaler = self._get_scaler(self.rescaler_method).fit(
+                    data[self.non_binary_cols]
+                )
 
-        if self.save_method:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            with open(f"{self.save_dir}/rescaler.pkl", "wb") as file:
-                pickle.dump(self, file)
+            self.fitted = True
+
+            if self.save_method:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                with open(f"{self.save_dir}/rescaler.pkl", "wb") as file:
+                    pickle.dump(self, file)
+                logging.info(f"Rescaler model saved to {self.save_dir}/rescaler.pkl")
+
+        except Exception as e:
+            logging.error(f"Error during fitting the rescaler: {e}")
+            raise
 
         return self
 
@@ -175,33 +186,55 @@ class Rescaler:
         pd.DataFrame
             The transformed data.
         """
-        transformed_data = deepcopy(data)
-        if self.non_binary_cols:
-            transformed_data[self.non_binary_cols] = self.rescaler.transform(
-                data[self.non_binary_cols]
-            )
+        try:
+            if not self.fitted:
+                raise NotFittedError(
+                    "Rescaler is not fitted yet. Call 'fit' before using this model."
+                )
 
-        if self.save_trans_data:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
-                base, ext = os.path.splitext(self.trans_data_name)
-                counter = 1
-                new_filename = f"{base} ({counter}){ext}"
-
-                while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
-                    counter += 1
-                    new_filename = f"{base} ({counter}){ext}"
-
-                csv_name = new_filename
+            transformed_data = deepcopy(data)
+            if not self.non_binary_cols:
+                logging.info(
+                    "No non-binary columns found in the data. The data remains unchanged."
+                )
 
             else:
-                csv_name = self.trans_data_name
+                transformed_data[self.non_binary_cols] = self.rescaler.transform(
+                    data[self.non_binary_cols]
+                )
 
-            transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
-            print(f"File have been saved at: {self.save_dir}/{csv_name}.csv")
+            if self.save_trans_data:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
 
-        return transformed_data
+                if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
+                    base, ext = os.path.splitext(self.trans_data_name)
+                    counter = 1
+                    new_filename = f"{base} ({counter}){ext}"
+
+                    while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
+                        counter += 1
+                        new_filename = f"{base} ({counter}){ext}"
+
+                    csv_name = new_filename
+
+                else:
+                    csv_name = self.trans_data_name
+
+                transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+                logging.info(
+                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                )
+
+            return transformed_data
+
+        except NotFittedError as e:
+            logging.error(f"Error: {e}")
+            raise
+
+        except Exception as e:
+            logging.error(f"Error during transforming the data: {e}")
+            raise
 
     def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """

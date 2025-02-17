@@ -7,9 +7,26 @@ from typing import Tuple, Optional
 from copy import deepcopy
 import pickle
 import os
+import logging
 
 
 class MissingHandler:
+    """
+    A class to handle missing data by performing imputation and removing columns with
+    missing values exceeding a specified threshold.
+
+    Attributes:
+        id_col (Optional[str]): Column name for identifiers.
+        activity_col (Optional[str]): Column name for activity values.
+        missing_thresh (float): Threshold for missing values to drop columns.
+        imputation_strategy (str): Imputation strategy for missing values.
+        n_neighbors (int): Number of neighbors for KNN imputation.
+        save_method (bool): Whether to save the imputation model.
+        save_dir (Optional[str]): Directory to save the imputation model and transformed data.
+        save_trans_data (bool): Whether to save the transformed data after imputation.
+        trans_data_name (str): Name of the transformed data file.
+    """
+
     def __init__(
         self,
         id_col: Optional[str] = None,
@@ -23,18 +40,7 @@ class MissingHandler:
         trans_data_name: str = "mh_trans_data",
     ):
         """
-        Initializes the MissingHandler with necessary configuration.
-
-        Parameters:
-        id_col (str): Column name that contains the ID of the entries.
-        activity_col (str): Column name that represents the activity label.
-        missing_thresh (float): Threshold percentage above which columns are dropped.
-        imputation_strategy (str): Strategy used for imputing missing values in non-binary columns.
-        n_neighbors (int): Number of neighbors to consider for KNN imputation.
-        save_method (bool): Whether to save the fitted missing data handler.
-        save_dir (str): Directory to save the imputation models.
-        save_trans_data (bool): Whether to save the transformed data.
-        trans_data_name (str): File name for saved transformed data.
+        Initializes the MissingHandler object with the given parameters.
         """
         self.id_col = id_col
         self.activity_col = activity_col
@@ -127,33 +133,41 @@ class MissingHandler:
         Returns:
         Tuple[SimpleImputer, Optional[SimpleImputer]]: The fitted binary and non-binary imputers.
         """
-        data_to_impute = data.drop(
-            columns=[self.id_col, self.activity_col], errors="ignore"
-        )
+        try:
+            data_to_impute = data.drop(
+                columns=[self.id_col, self.activity_col], errors="ignore"
+            )
 
-        missing_percent_df = self.calculate_missing_percent(data_to_impute)
-        self.drop_cols = missing_percent_df[
-            missing_percent_df["MissingPercent"] > self.missing_thresh
-        ]["ColumnName"].tolist()
-        data_to_impute.drop(columns=self.drop_cols, inplace=True)
+            missing_percent_df = self.calculate_missing_percent(data_to_impute)
+            self.drop_cols = missing_percent_df[
+                missing_percent_df["MissingPercent"] > self.missing_thresh
+            ]["ColumnName"].tolist()
+            data_to_impute.drop(columns=self.drop_cols, inplace=True)
 
-        self.binary_cols = [
-            col
-            for col in data_to_impute.columns
-            if data_to_impute[col].dropna().isin([0, 1]).all()
-        ]
+            self.binary_cols = [
+                col
+                for col in data_to_impute.columns
+                if data_to_impute[col].dropna().isin([0, 1]).all()
+            ]
 
-        self.binary_imputer, self.non_binary_imputer = self._get_imputer(
-            data_to_impute,
-            imputation_strategy=self.imputation_strategy,
-            n_neighbors=self.n_neighbors,
-        )
+            self.binary_imputer, self.non_binary_imputer = self._get_imputer(
+                data_to_impute,
+                imputation_strategy=self.imputation_strategy,
+                n_neighbors=self.n_neighbors,
+            )
 
-        if self.save_method:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            with open(f"{self.save_dir}/missing_handler.pkl", "wb") as file:
-                pickle.dump(self, file)
+            if self.save_method:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                with open(f"{self.save_dir}/missing_handler.pkl", "wb") as file:
+                    pickle.dump(self, file)
+                logging.info(
+                    f"MissingHandler method saved at: {self.save_dir}/missing_handler.pkl"
+                )
+
+        except Exception as e:
+            logging.error(f"Error in fitting LowVarianceHandler: {e}")
+            raise
 
         return self
 
@@ -178,68 +192,82 @@ class MissingHandler:
         NotFittedError
             If imputation models have not been fitted.
         """
-        if self.binary_imputer is None and self.non_binary_imputer is None:
-            raise NotFittedError(
-                "MissingHandler is not fitted yet. Call 'fit' before using this method."
+        try:
+            if self.binary_imputer is None and self.non_binary_imputer is None:
+                raise NotFittedError(
+                    "MissingHandler is not fitted yet. Call 'fit' before using this method."
+                )
+
+            data_to_impute = data.drop(
+                columns=[self.id_col, self.activity_col], errors="ignore"
+            )
+            data_to_impute.drop(columns=self.drop_cols, inplace=True, errors="ignore")
+
+            data_binary = data_to_impute[self.binary_cols]
+            data_non_binary = data_to_impute.drop(
+                columns=self.binary_cols, errors="ignore"
             )
 
-        data_to_impute = data.drop(
-            columns=[self.id_col, self.activity_col], errors="ignore"
-        )
-        data_to_impute.drop(columns=self.drop_cols, inplace=True, errors="ignore")
-
-        data_binary = data_to_impute[self.binary_cols]
-        data_non_binary = data_to_impute.drop(columns=self.binary_cols, errors="ignore")
-
-        imputed_data_binary = (
-            pd.DataFrame(
-                self.binary_imputer.transform(data_binary), columns=data_binary.columns
+            imputed_data_binary = (
+                pd.DataFrame(
+                    self.binary_imputer.transform(data_binary),
+                    columns=data_binary.columns,
+                )
+                if self.binary_imputer
+                else data_binary
             )
-            if self.binary_imputer
-            else data_binary
-        )
 
-        imputed_data_non_binary = (
-            pd.DataFrame(
-                self.non_binary_imputer.transform(data_non_binary),
-                columns=data_non_binary.columns,
+            imputed_data_non_binary = (
+                pd.DataFrame(
+                    self.non_binary_imputer.transform(data_non_binary),
+                    columns=data_non_binary.columns,
+                )
+                if self.non_binary_imputer
+                else data_non_binary
             )
-            if self.non_binary_imputer
-            else data_non_binary
-        )
 
-        columns_to_include = []
-        if self.id_col is not None:
-            columns_to_include.append(self.id_col)
-        if self.activity_col is not None:
-            columns_to_include.append(self.activity_col)
+            columns_to_include = []
+            if self.id_col is not None:
+                columns_to_include.append(self.id_col)
+            if self.activity_col is not None:
+                columns_to_include.append(self.activity_col)
 
-        transformed_data = pd.concat(
-            [data[columns_to_include], imputed_data_binary, imputed_data_non_binary],
-            axis=1,
-        )
+            transformed_data = pd.concat(
+                [
+                    data[columns_to_include],
+                    imputed_data_binary,
+                    imputed_data_non_binary,
+                ],
+                axis=1,
+            )
 
-        if self.save_trans_data:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
-                base, ext = os.path.splitext(self.trans_data_name)
-                counter = 1
-                new_filename = f"{base} ({counter}){ext}"
-
-                while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
-                    counter += 1
+            if self.save_trans_data:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
+                    base, ext = os.path.splitext(self.trans_data_name)
+                    counter = 1
                     new_filename = f"{base} ({counter}){ext}"
 
-                csv_name = new_filename
+                    while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
+                        counter += 1
+                        new_filename = f"{base} ({counter}){ext}"
 
-            else:
-                csv_name = self.trans_data_name
+                    csv_name = new_filename
 
-            transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
-            print(f"File have been saved at: {self.save_dir}/{csv_name}.csv")
+                else:
+                    csv_name = self.trans_data_name
 
-        return transformed_data
+                transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+                logging.info(
+                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                )
+
+            return transformed_data
+
+        except Exception as e:
+            logging.error(f"Error in transforming data: {e}")
+            raise
 
     def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """

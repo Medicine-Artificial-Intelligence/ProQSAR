@@ -1,5 +1,6 @@
 import os
 import pickle
+import logging
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -10,6 +11,22 @@ from typing import Optional
 
 
 class LowVarianceHandler:
+    """
+    A class to handle low variance feature selection from a dataset.
+
+    Attributes:
+    id_col (Optional[str]): The column name representing the ID column.
+    activity_col (Optional[str]): The column name representing the activity column.
+    var_thresh (float): The variance threshold for feature selection.
+    save_method (bool): Whether to save the fitted model to disk.
+    visualize (bool): Whether to visualize variance analysis.
+    save_image (bool): Whether to save the variance analysis image.
+    image_name (str): The name of the image file for variance analysis.
+    save_dir (str): The directory to save the model and transformed data.
+    save_trans_data (bool): Whether to save the transformed data.
+    trans_data_name (str): The name of the transformed data file.
+    selected_columns (Optional[list]): The selected columns after fitting.
+    """
 
     def __init__(
         self,
@@ -75,60 +92,69 @@ class LowVarianceHandler:
         - set_style (str): The style of the seaborn plot. Default is "whitegrid".
         - save_image (bool): Whether to save the plot as an image. Default is False.
         - image_name (str): The path to save the image if save_image is True.
-          Default is 'variance_analysis.png'.
+            Default is 'variance_analysis.png'.
         - save_dir (str): The directory to save the image if save_image is True.
-        Default is "Project/VarianceHandler".
+            Default is "Project/VarianceHandler".
         """
+        try:
+            columns_to_exclude = [activity_col, id_col]
+            temp_data = data.drop(columns=columns_to_exclude)
+            binary_cols = [
+                col
+                for col in temp_data.columns
+                if temp_data[col].dropna().isin([0, 1]).all()
+            ]
+            non_binary_cols = [
+                col for col in temp_data.columns if col not in binary_cols
+            ]
 
-        columns_to_exclude = [activity_col, id_col]
-        temp_data = data.drop(columns=columns_to_exclude)
-        binary_cols = [
-            col
-            for col in temp_data.columns
-            if temp_data[col].dropna().isin([0, 1]).all()
-        ]
-        non_binary_cols = [col for col in temp_data.columns if col not in binary_cols]
+            if non_binary_cols:
+                X_non_binary = temp_data[non_binary_cols]
+                thresholds = np.arange(0.0, 1, 0.05)
+                results = []
 
-        if non_binary_cols:
-            X_non_binary = temp_data[non_binary_cols]
-            thresholds = np.arange(0.0, 1, 0.05)
-            results = []
+                for t in thresholds:
+                    transform = VarianceThreshold(threshold=t)
+                    try:
+                        X_selected = transform.fit_transform(X_non_binary)
+                        n_features = X_selected.shape[1] + len(binary_cols)
+                    except ValueError:
+                        n_features = len(binary_cols)
+                    results.append(n_features)
 
-            for t in thresholds:
-                transform = VarianceThreshold(threshold=t)
-                try:
-                    X_selected = transform.fit_transform(X_non_binary)
-                    n_features = X_selected.shape[1] + len(binary_cols)
-                except ValueError:
-                    n_features = len(binary_cols)
-                results.append(n_features)
+                sns.set_theme(style=set_style)
+                plt.figure(figsize=(14, 8))
+                plt.plot(thresholds, results, marker=".")  # Added marker
+                plt.title("Variance Analysis", fontsize=24, weight="semibold")
+                plt.xlabel("Variance Threshold", fontsize=16)
+                plt.ylabel("Number of Features", fontsize=16)
+                plt.grid(True)  # Added grid
 
-            sns.set_theme(style=set_style)
-            plt.figure(figsize=(14, 8))
-            plt.plot(thresholds, results, marker=".")  # Added marker
-            plt.title("Variance Analysis", fontsize=24, weight="semibold")
-            plt.xlabel("Variance Threshold", fontsize=16)
-            plt.ylabel("Number of Features", fontsize=16)
-            plt.grid(True)  # Added grid
+                # Add annotations for key points
+                for i, txt in enumerate(results):
+                    plt.annotate(
+                        txt,
+                        (thresholds[i], results[i]),
+                        textcoords="offset points",
+                        xytext=(0, 10),
+                        ha="center",
+                        fontsize=10,
+                    )
+                plt.show()
 
-            # Add annotations for key points
-            for i, txt in enumerate(results):
-                plt.annotate(
-                    txt,
-                    (thresholds[i], results[i]),
-                    textcoords="offset points",
-                    xytext=(0, 10),
-                    ha="center",
-                    fontsize=10,
-                )
-            plt.show()
+                if save_image:
+                    if save_dir and not os.path.exists(save_dir):
+                        os.makedirs(save_dir, exist_ok=True)
+                    plt.savefig(os.path.join(save_dir, image_name))
+                    logging.info(
+                        f"Variance threshold analysis figure save at: {save_dir}/{image_name}"
+                    )
+            else:
+                logging.warning("No non-binary columns to apply variance threshold.")
 
-            if save_image:
-                if save_dir and not os.path.exists(save_dir):
-                    os.makedirs(save_dir, exist_ok=True)
-                plt.savefig(os.path.join(save_dir, image_name))
-        else:
-            print("No non-binary columns to apply variance threshold.")
+        except Exception as e:
+            logging.error(f"Error in variance threshold analysis: {e}")
+            raise
 
     @staticmethod
     def select_features_by_variance(
@@ -150,26 +176,33 @@ class LowVarianceHandler:
         Returns:
         - list: The list of selected columns.
         """
-        columns_to_exclude = [activity_col, id_col]
-        temp_data = data.drop(columns=columns_to_exclude)
-        binary_cols = [
-            col
-            for col in temp_data.columns
-            if temp_data[col].dropna().isin([0, 1]).all()
-        ]
-        non_binary_cols = [col for col in temp_data.columns if col not in binary_cols]
+        try:
+            columns_to_exclude = [activity_col, id_col]
+            temp_data = data.drop(columns=columns_to_exclude)
+            binary_cols = [
+                col
+                for col in temp_data.columns
+                if temp_data[col].dropna().isin([0, 1]).all()
+            ]
+            non_binary_cols = [
+                col for col in temp_data.columns if col not in binary_cols
+            ]
 
-        selected_features = []
-        if non_binary_cols:
-            selector = VarianceThreshold(var_thresh)
-            try:
-                selector.fit(data[non_binary_cols])
-                features = selector.get_support(indices=True)
-                selected_features = data[non_binary_cols].columns[features].tolist()
-            except ValueError:
-                pass
+            selected_features = []
+            if non_binary_cols:
+                selector = VarianceThreshold(var_thresh)
+                try:
+                    selector.fit(data[non_binary_cols])
+                    features = selector.get_support(indices=True)
+                    selected_features = data[non_binary_cols].columns[features].tolist()
+                except ValueError:
+                    pass
 
-        return columns_to_exclude + binary_cols + selected_features
+            return columns_to_exclude + binary_cols + selected_features
+
+        except Exception as e:
+            logging.error(f"Error in feature selection by variance: {e}")
+            return []
 
     def fit(self, data: pd.DataFrame):
         """
@@ -178,29 +211,37 @@ class LowVarianceHandler:
         Parameters:
         - data (pd.DataFrame): The input data.
         """
+        try:
+            if self.visualize:
+                LowVarianceHandler.variance_threshold_analysis(
+                    data=data,
+                    id_col=self.id_col,
+                    activity_col=self.activity_col,
+                    save_image=self.save_image,
+                    image_name=self.image_name,
+                    save_dir=self.save_dir,
+                )
 
-        if self.visualize:
-            LowVarianceHandler.variance_threshold_analysis(
+            self.selected_columns = LowVarianceHandler.select_features_by_variance(
                 data=data,
-                id_col=self.id_col,
                 activity_col=self.activity_col,
-                save_image=self.save_image,
-                image_name=self.image_name,
-                save_dir=self.save_dir,
+                id_col=self.id_col,
+                var_thresh=self.var_thresh,
             )
 
-        self.selected_columns = LowVarianceHandler.select_features_by_variance(
-            data=data,
-            activity_col=self.activity_col,
-            id_col=self.id_col,
-            var_thresh=self.var_thresh,
-        )
+            if self.save_method:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                with open(f"{self.save_dir}/low_variance_handler.pkl", "wb") as file:
+                    pickle.dump(self, file)
+                logging.info(
+                    f"LowVarianceHandler method saved at: {self.save_dir}/low_variance_handler.pkl"
+                )
 
-        if self.save_method:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            with open(f"{self.save_dir}/low_variance_handler.pkl", "wb") as file:
-                pickle.dump(self, file)
+            logging.info("LowVarianceHandler fitted successfully.")
+
+        except Exception as e:
+            logging.error(f"Error in fitting LowVarianceHandler: {e}")
 
         return self
 
@@ -214,34 +255,41 @@ class LowVarianceHandler:
         Returns:
         - pd.DataFrame: The transformed data with selected features.
         """
-        if self.selected_columns is None:
-            raise NotFittedError(
-                "LowVarianceHandler is not fitted yet. call 'fit' before using this method."
-            )
+        try:
+            if self.selected_columns is None:
+                raise NotFittedError(
+                    "LowVarianceHandler is not fitted yet. call 'fit' before using this method."
+                )
 
-        transformed_data = data[self.selected_columns]
+            transformed_data = data[self.selected_columns]
 
-        if self.save_trans_data:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
-                base, ext = os.path.splitext(self.trans_data_name)
-                counter = 1
-                new_filename = f"{base} ({counter}){ext}"
-
-                while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
-                    counter += 1
+            if self.save_trans_data:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
+                    base, ext = os.path.splitext(self.trans_data_name)
+                    counter = 1
                     new_filename = f"{base} ({counter}){ext}"
 
-                csv_name = new_filename
+                    while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
+                        counter += 1
+                        new_filename = f"{base} ({counter}){ext}"
 
-            else:
-                csv_name = self.trans_data_name
+                    csv_name = new_filename
 
-            transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
-            print(f"File have been saved at: {self.save_dir}/{csv_name}.csv")
+                else:
+                    csv_name = self.trans_data_name
 
-        return transformed_data
+                transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+                logging.info(
+                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                )
+
+            return transformed_data
+
+        except Exception as e:
+            logging.error(f"Error in transforming data: {e}")
+            raise
 
     def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """

@@ -164,7 +164,7 @@ class TestModelReports(unittest.TestCase):
 
     def test_plot_cv_report_save_fig(self):
         # Test _plot_cv_report with save_fig=True
-        cv_result = ModelValidation.cross_validation_report(
+        ModelValidation.cross_validation_report(
             self.class_data,
             activity_col="Activity",
             id_col="ID",
@@ -175,9 +175,7 @@ class TestModelReports(unittest.TestCase):
             save_dir=self.temp_dir.name,
         )
         # Ensure the figure file is saved
-        self.assertTrue(
-            os.path.exists(f"{self.temp_dir.name}/test_cv_graph_box.png")
-        )
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_cv_graph_box.png"))
 
 
 if __name__ == "__main__":

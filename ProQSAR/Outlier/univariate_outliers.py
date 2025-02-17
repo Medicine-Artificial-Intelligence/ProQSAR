@@ -1,5 +1,6 @@
 import os
 import pickle
+import logging
 import numpy as np
 import pandas as pd
 from copy import deepcopy
@@ -17,18 +18,24 @@ def _iqr_threshold(data: pd.DataFrame) -> Dict[str, Dict[str, float]]:
     - data: A pandas DataFrame containing numeric data.
 
     Returns:
-    - A dictionary where each key is the column name and each value is another dictionary with "low" and "high"
-      thresholds based on the IQR method (1.5 * IQR rule).
+    - Dict[str, Dict[str, float]]: A dictionary where each key is the column name and each value is another dictionary
+    with "low" and "high" thresholds based on the IQR method (1.5 * IQR rule).
     """
-    iqr_thresholds = {}
-    for col in data.columns:
-        q1 = data[col].quantile(0.25)
-        q3 = data[col].quantile(0.75)
-        iqr = q3 - q1
-        low = q1 - 1.5 * iqr
-        high = q3 + 1.5 * iqr
-        iqr_thresholds[col] = {"low": low, "high": high}
-    return iqr_thresholds
+    try:
+        iqr_thresholds = {}
+        for col in data.columns:
+            q1 = data[col].quantile(0.25)
+            q3 = data[col].quantile(0.75)
+            iqr = q3 - q1
+            low = q1 - 1.5 * iqr
+            high = q3 + 1.5 * iqr
+            iqr_thresholds[col] = {"low": low, "high": high}
+        logging.info("Successfully computed IQR thresholds.")
+        return iqr_thresholds
+
+    except Exception as e:
+        logging.error(f"Error in computing IQR thresholds: {e}")
+        raise
 
 
 def _impute_nan(
@@ -44,15 +51,19 @@ def _impute_nan(
     Returns:
     - A DataFrame with outliers replaced by NaN based on the IQR thresholds.
     """
-    nan_data = deepcopy(data)
-    for col, thresh in iqr_thresholds.items():
-        low = thresh["low"]
-        high = thresh["high"]
-        nan_data[col] = np.where(
-            (nan_data[col] < low) | (nan_data[col] > high), np.nan, nan_data[col]
-        )
-
-    return nan_data
+    try:
+        nan_data = deepcopy(data)
+        for col, thresh in iqr_thresholds.items():
+            low = thresh["low"]
+            high = thresh["high"]
+            nan_data[col] = np.where(
+                (nan_data[col] < low) | (nan_data[col] > high), np.nan, nan_data[col]
+            )
+        logging.info("Successfully imputed NaN values.")
+        return nan_data
+    except Exception as e:
+        logging.error(f"Error in imputing NaN values: {e}")
+        raise
 
 
 def _feature_quality(
@@ -73,27 +84,32 @@ def _feature_quality(
         - 'good' features: Columns that do not have outliers based on IQR.
         - 'bad' features: Columns that are identified as having outliers.
     """
-    good, bad = [], []
-    cols_to_exclude = [id_col, activity_col]
-    temp_data = data.drop(columns=cols_to_exclude, errors="ignore")
-    non_binary_cols = [
-        col
-        for col in temp_data.columns
-        if not temp_data[col].dropna().isin([0, 1]).all()
-    ]
+    try:
+        good, bad = [], []
+        cols_to_exclude = [id_col, activity_col]
+        temp_data = data.drop(columns=cols_to_exclude, errors="ignore")
+        non_binary_cols = [
+            col
+            for col in temp_data.columns
+            if not temp_data[col].dropna().isin([0, 1]).all()
+        ]
 
-    iqr_thresholds = _iqr_threshold(temp_data[non_binary_cols])
-    for col, thresh in iqr_thresholds.items():
-        low = thresh["low"]
-        high = thresh["high"]
-        df = temp_data[(temp_data[col] <= high) & (temp_data[col] >= low)]
-        remove = temp_data.shape[0] - df.shape[0]
-        if remove == 0:
-            good.append(col)
-        else:
-            bad.append(col)
+        iqr_thresholds = _iqr_threshold(temp_data[non_binary_cols])
+        for col, thresh in iqr_thresholds.items():
+            low = thresh["low"]
+            high = thresh["high"]
+            df = temp_data[(temp_data[col] <= high) & (temp_data[col] >= low)]
+            remove = temp_data.shape[0] - df.shape[0]
+            if remove == 0:
+                good.append(col)
+            else:
+                bad.append(col)
 
-    return good, bad
+        logging.info("Feature quality assessment completed.")
+        return good, bad
+    except Exception as e:
+        logging.error(f"Error in feature quality assessment: {e}")
+        raise
 
 
 class IQRHandler:
@@ -374,41 +390,44 @@ class UnivariateOutliersHandler:
         Returns:
         - The UnivariateOutliersHandler instance (for method chaining).
         """
-
-        _, self.bad = _feature_quality(
-            data, id_col=self.id_col, activity_col=self.activity_col
-        )
-        if not self.bad:
-            print(
-                "No bad features (univariate outliers) found. Skipping outlier handling."
+        try:
+            _, self.bad = _feature_quality(
+                data, id_col=self.id_col, activity_col=self.activity_col
             )
-            return self
+            if not self.bad:
+                logging.info("No bad features found. Skipping outlier handling.")
+                return self
 
-        method_map = {
-            "iqr": IQRHandler(),
-            "winsorization": WinsorHandler(),
-            "imputation": ImputationHandler(
-                missing_thresh=self.missing_thresh,
-                imputation_strategy=self.imputation_strategy,
-                n_neighbors=self.n_neighbors,
-            ),
-            "power": PowerTransformer(),
-            "normal": QuantileTransformer(output_distribution="normal"),
-            "uniform": QuantileTransformer(output_distribution="uniform"),
-        }
+            method_map = {
+                "iqr": IQRHandler(),
+                "winsorization": WinsorHandler(),
+                "imputation": ImputationHandler(
+                    missing_thresh=self.missing_thresh,
+                    imputation_strategy=self.imputation_strategy,
+                    n_neighbors=self.n_neighbors,
+                ),
+                "power": PowerTransformer(),
+                "normal": QuantileTransformer(output_distribution="normal"),
+                "uniform": QuantileTransformer(output_distribution="uniform"),
+            }
 
-        if self.select_method in method_map:
-            self.uni_outlier_handler = method_map[self.select_method].fit(
-                data[self.bad]
-            )
-        else:
-            raise ValueError(f"Unsupported method: {self.select_method}")
+            if self.select_method in method_map:
+                self.uni_outlier_handler = method_map[self.select_method].fit(
+                    data[self.bad]
+                )
+            else:
+                raise ValueError(f"Unsupported method: {self.select_method}")
 
-        if self.save_method:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            with open(f"{self.save_dir}/uni_outlier_handler.pkl", "wb") as file:
-                pickle.dump(self, file)
+            if self.save_method:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                with open(f"{self.save_dir}/uni_outlier_handler.pkl", "wb") as file:
+                    pickle.dump(self, file)
+                logging.info("Univariate outlier handler saved successfully.")
+
+        except Exception as e:
+            logging.error(f"Error during fitting: {e}")
+            raise
 
         return self
 
@@ -422,40 +441,45 @@ class UnivariateOutliersHandler:
         Returns:
         - Transformed DataFrame with outliers handled based on the selected method.
         """
-        transformed_data = deepcopy(data)
-        if not self.bad:
-            print("No bad features (outliers) to handle. Returning original data.")
-            return transformed_data
+        try:
+            transformed_data = deepcopy(data)
+            if not self.bad:
+                logging.info("No bad features to handle. Returning original data.")
+                return transformed_data
 
-        if self.uni_outlier_handler is None:
-            raise NotFittedError(
-                "UnivariateOutlierHandler is not fitted yet. Call 'fit' before using this method."
+            if self.uni_outlier_handler is None:
+                raise NotFittedError(
+                    "UnivariateOutlierHandler is not fitted yet. Call 'fit' before using this method."
+                )
+
+            transformed_data[self.bad] = self.uni_outlier_handler.transform(
+                transformed_data[self.bad]
             )
-
-        transformed_data[self.bad] = self.uni_outlier_handler.transform(
-            transformed_data[self.bad]
-        )
-        if self.save_trans_data:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
-                base, ext = os.path.splitext(self.trans_data_name)
-                counter = 1
-                new_filename = f"{base} ({counter}){ext}"
-
-                while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
-                    counter += 1
+            if self.save_trans_data:
+                if self.save_dir and not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir, exist_ok=True)
+                if os.path.exists(f"{self.save_dir}/{self.trans_data_name}.csv"):
+                    base, ext = os.path.splitext(self.trans_data_name)
+                    counter = 1
                     new_filename = f"{base} ({counter}){ext}"
 
-                csv_name = new_filename
+                    while os.path.exists(f"{self.save_dir}/{new_filename}.csv"):
+                        counter += 1
+                        new_filename = f"{base} ({counter}){ext}"
 
-            else:
-                csv_name = self.trans_data_name
+                    csv_name = new_filename
 
-            transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
-            print(f"File have been saved at: {self.save_dir}/{csv_name}.csv")
+                else:
+                    csv_name = self.trans_data_name
 
-        return transformed_data
+                transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+                logging.info(f"Files saved at: {self.save_dir}/{csv_name}.csv")
+
+            return transformed_data
+
+        except Exception as e:
+            logging.error(f"Error during transformation: {e}")
+            raise
 
     def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -479,6 +503,7 @@ class UnivariateOutliersHandler:
         activity_col: Optional[str] = None,
         id_col: Optional[str] = None,
         methods_to_compare: List[str] = None,
+        save_dir: Optional[str] = "Project/OutlierHandler",
     ) -> pd.DataFrame:
         """
         Compare the effect of different outlier handling methods between two datasets.
@@ -495,42 +520,61 @@ class UnivariateOutliersHandler:
         Returns:
         - A DataFrame summarizing the effect of each method on the datasets.
         """
-        comparison_data = []
-        methods = ["iqr", "winsorization", "imputation", "power", "normal", "uniform"]
-        methods_to_compare = methods_to_compare or methods
+        try:
+            comparison_data = []
+            methods = [
+                "iqr",
+                "winsorization",
+                "imputation",
+                "power",
+                "normal",
+                "uniform",
+            ]
+            methods_to_compare = methods_to_compare or methods
 
-        for method in methods_to_compare:
-            uni_outlier_handler = UnivariateOutliersHandler(
-                id_col=id_col,
-                activity_col=activity_col,
-                select_method=method,
-            )
-            uni_outlier_handler.fit(data1)
+            for method in methods_to_compare:
+                uni_outlier_handler = UnivariateOutliersHandler(
+                    id_col=id_col,
+                    activity_col=activity_col,
+                    select_method=method,
+                )
+                uni_outlier_handler.fit(data1)
 
-            transformed_data1 = uni_outlier_handler.transform(data1)
-            comparison_data.append(
-                {
-                    "Method": method,
-                    "Dataset": data1_name,
-                    "Original Rows": data1.shape[0],
-                    "After Handling Rows": transformed_data1.shape[0],
-                    "Removed Rows": data1.shape[0] - transformed_data1.shape[0],
-                }
-            )
-            comparison_table = pd.DataFrame(comparison_data)
-            comparison_table.name = f"Methods fitted & transformed on {data1_name}"
-            if data2 is not None:
-
-                transformed_data2 = uni_outlier_handler.transform(data2)
+                transformed_data1 = uni_outlier_handler.transform(data1)
                 comparison_data.append(
                     {
                         "Method": method,
-                        "Dataset": data2_name,
-                        "Original Rows": data2.shape[0],
-                        "After Handling Rows": transformed_data2.shape[0],
-                        "Removed Rows": data2.shape[0] - transformed_data2.shape[0],
+                        "Dataset": data1_name,
+                        "Original Rows": data1.shape[0],
+                        "After Handling Rows": transformed_data1.shape[0],
+                        "Removed Rows": data1.shape[0] - transformed_data1.shape[0],
                     }
                 )
                 comparison_table = pd.DataFrame(comparison_data)
-                comparison_table.name = f"Methods fitted on {data1_name} & transformed on {data1_name} & {data2_name}"
-        return comparison_table
+                if data2 is not None:
+
+                    transformed_data2 = uni_outlier_handler.transform(data2)
+                    comparison_data.append(
+                        {
+                            "Method": method,
+                            "Dataset": data2_name,
+                            "Original Rows": data2.shape[0],
+                            "After Handling Rows": transformed_data2.shape[0],
+                            "Removed Rows": data2.shape[0] - transformed_data2.shape[0],
+                        }
+                    )
+                    comparison_table = pd.DataFrame(comparison_data)
+
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
+                comparison_table.to_csv((f"{save_dir}/compare_univariate_methods.csv"))
+                logging.info(
+                    f"Transformed data saved at: {save_dir}/compare_univariate_methods.csv"
+                )
+
+            logging.info("Comparison of univariate methods completed.")
+            return comparison_table
+
+        except Exception as e:
+            logging.error(f"Error in comparison: {e}")
+            raise

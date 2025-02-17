@@ -1,4 +1,5 @@
 import os
+import logging
 import numpy as np
 import pandas as pd
 from typing import Optional, List, Union
@@ -60,62 +61,73 @@ def _get_method_map(
     ValueError
         If task_type is not 'C' or 'R'.
     """
-    if task_type == "C":
-        method_map = {
-            "Anova": SelectKBest(score_func=f_classif, k=20),
-            "MutualInformation": SelectKBest(score_func=mutual_info_classif, k=20),
-            "RandomForestClassifier": SelectFromModel(
-                RandomForestClassifier(random_state=42)
-            ),
-            "ExtraTreesClassifier": SelectFromModel(
-                ExtraTreesClassifier(random_state=42, n_jobs=n_jobs)
-            ),
-            "AdaBoostClassifier": SelectFromModel(AdaBoostClassifier(random_state=42)),
-            "GradientBoostingClassifier": SelectFromModel(
-                GradientBoostingClassifier(random_state=42)
-            ),
-            "XGBClassifier": SelectFromModel(
-                XGBClassifier(random_state=42, verbosity=0, eval_metric="logloss")
-            ),
-            "LogisticRegression": SelectFromModel(
-                LogisticRegression(
-                    random_state=42,
-                    penalty="elasticnet",
-                    solver="saga",
-                    l1_ratio=0.5,
-                    max_iter=1000,
-                )
-            ),
-        }
-    elif task_type == "R":
-        method_map = {
-            "Anova": SelectKBest(score_func=f_regression, k=20),
-            "MutualInformation": SelectKBest(score_func=mutual_info_regression, k=20),
-            "RandomForestRegressor": SelectFromModel(
-                RandomForestRegressor(random_state=42)
-            ),
-            "ExtraTreesRegressor": SelectFromModel(
-                ExtraTreesRegressor(random_state=42, n_jobs=n_jobs)
-            ),
-            "AdaBoostRegressor": SelectFromModel(AdaBoostRegressor(random_state=42)),
-            "GradientBoostingRegressor": SelectFromModel(
-                GradientBoostingRegressor(random_state=42)
-            ),
-            "XGBRegressor": SelectFromModel(
-                XGBRegressor(random_state=42, verbosity=0, eval_metric="rmse")
-            ),
-            "LassoCV": SelectFromModel(LassoCV(random_state=42)),
-        }
+    try:
+        if task_type == "C":
+            method_map = {
+                "Anova": SelectKBest(score_func=f_classif, k=20),
+                "MutualInformation": SelectKBest(score_func=mutual_info_classif, k=20),
+                "RandomForestClassifier": SelectFromModel(
+                    RandomForestClassifier(random_state=42)
+                ),
+                "ExtraTreesClassifier": SelectFromModel(
+                    ExtraTreesClassifier(random_state=42, n_jobs=n_jobs)
+                ),
+                "AdaBoostClassifier": SelectFromModel(
+                    AdaBoostClassifier(random_state=42)
+                ),
+                "GradientBoostingClassifier": SelectFromModel(
+                    GradientBoostingClassifier(random_state=42)
+                ),
+                "XGBClassifier": SelectFromModel(
+                    XGBClassifier(random_state=42, verbosity=0, eval_metric="logloss")
+                ),
+                "LogisticRegression": SelectFromModel(
+                    LogisticRegression(
+                        random_state=42,
+                        penalty="elasticnet",
+                        solver="saga",
+                        l1_ratio=0.5,
+                        max_iter=1000,
+                    )
+                ),
+            }
+        elif task_type == "R":
+            method_map = {
+                "Anova": SelectKBest(score_func=f_regression, k=20),
+                "MutualInformation": SelectKBest(
+                    score_func=mutual_info_regression, k=20
+                ),
+                "RandomForestRegressor": SelectFromModel(
+                    RandomForestRegressor(random_state=42)
+                ),
+                "ExtraTreesRegressor": SelectFromModel(
+                    ExtraTreesRegressor(random_state=42, n_jobs=n_jobs)
+                ),
+                "AdaBoostRegressor": SelectFromModel(
+                    AdaBoostRegressor(random_state=42)
+                ),
+                "GradientBoostingRegressor": SelectFromModel(
+                    GradientBoostingRegressor(random_state=42)
+                ),
+                "XGBRegressor": SelectFromModel(
+                    XGBRegressor(random_state=42, verbosity=0, eval_metric="rmse")
+                ),
+                "LassoCV": SelectFromModel(LassoCV(random_state=42)),
+            }
 
-    else:
-        raise ValueError(
-            "Invalid task_type. Please choose 'C' for classification or 'R' for regression."
-        )
+        else:
+            raise ValueError(
+                "Invalid task_type. Please choose 'C' for classification or 'R' for regression."
+            )
 
-    if add_method:
-        method_map.update(add_method)
+        if add_method:
+            method_map.update(add_method)
 
-    return method_map
+        return method_map
+
+    except Exception as e:
+        logging.error(f"Error in _get_method_map: {e}")
+        raise
 
 
 def evaluate_feature_selectors(
@@ -182,101 +194,116 @@ def evaluate_feature_selectors(
     ValueError
         If a selected method is not recognized in the method map.
     """
-    X_data = data.drop([activity_col, id_col], axis=1)
-    y_data = data[activity_col]
+    try:
+        logging.info("Starting feature selection evaluation.")
+        X_data = data.drop([activity_col, id_col], axis=1)
+        y_data = data[activity_col]
 
-    task_type = _get_task_type(data, activity_col)
-    method_map = _get_method_map(task_type, add_method, n_jobs)
-    cv = _get_cv_strategy(task_type, n_splits=n_splits, n_repeats=n_repeats)
-    scoring_list = scoring_list or _get_cv_scoring_list(task_type)
+        task_type = _get_task_type(data, activity_col)
+        method_map = _get_method_map(task_type, add_method, n_jobs)
+        cv = _get_cv_strategy(task_type, n_splits=n_splits, n_repeats=n_repeats)
+        scoring_list = scoring_list or _get_cv_scoring_list(task_type)
 
-    result = []
-    methods_to_compare = {}
+        result = []
+        methods_to_compare = {}
 
-    if select_method is None:
-        methods_to_compare = method_map
-    else:
-        for name in select_method:
-            if name in method_map:
-                methods_to_compare.update({name: method_map[name]})
-            else:
-                raise ValueError(f"Method '{name}' is not recognized.")
+        if select_method is None:
+            methods_to_compare = method_map
+        else:
+            for name in select_method:
+                if name in method_map:
+                    methods_to_compare.update({name: method_map[name]})
+                else:
+                    raise ValueError(f"Method '{name}' is not recognized.")
 
-    for name, method in methods_to_compare.items():
-        selector = method.fit(X_data, y_data)
-        selected_X = selector.transform(X_data)
-        model = (
-            RandomForestClassifier(random_state=42)
-            if task_type == "C"
-            else RandomForestRegressor(random_state=42)
-        )
-        scores = cross_validate(
-            model, selected_X, y_data, cv=cv, scoring=scoring_list, n_jobs=n_jobs
-        )
-
-        # Collect fold scores for each cycle
-        for cycle in range(n_splits * n_repeats):
-            for metric in scoring_list:
-                model_result = {
-                    "scoring": metric,
-                    "cv_cycle": cycle + 1,
-                    "method": name,
-                    "value": scores[f"test_{metric}"][cycle],
-                    }
-                result.append(model_result)
-            # Optionally add mean, std, and median for each model and scoring metric
-        if include_stats:
-            for metric in scoring_list:
-                metric_scores = scores[f"test_{metric}"]
-                result.append({
-                    "scoring": metric,
-                    "cv_cycle": "mean",
-                    "method": name,
-                    "value": np.mean(metric_scores),
-                })
-                result.append({
-                    "scoring": metric,
-                    "cv_cycle": "std",
-                    "method": name,
-                    "value": np.std(metric_scores),
-                })
-                result.append({
-                    "scoring": metric,
-                    "cv_cycle": "median",
-                    "method": name,
-                    "value": np.median(metric_scores),
-                })
-    # Create a DataFrame in wide format
-    result_df = pd.DataFrame(result)
-    
-    # Pivot the DataFrame so that each model becomes a separate column
-    result_df = result_df.pivot_table(
-        index=["scoring", "cv_cycle"],
-        columns="method",
-        values="value",
-        aggfunc="first"
-    )
-    # Sort index and columns to maintain a consistent order
-    result_df = result_df.sort_index(axis=0).sort_index(axis=1)
-
-    # Visualization if requested
-    if visualize is not None:
-        if isinstance(visualize, str):
-            visualize = [visualize]  
-            
-        for graph_type in visualize:
-            ModelValidation._plot_cv_report(
-                report_df=result_df,
-                scoring_list=scoring_list,
-                graph_type=graph_type,
-                save_fig=save_fig,
-                fig_prefix=fig_prefix,
-                save_dir=save_dir,
+        for name, method in methods_to_compare.items():
+            selector = method.fit(X_data, y_data)
+            selected_X = selector.transform(X_data)
+            model = (
+                RandomForestClassifier(random_state=42)
+                if task_type == "C"
+                else RandomForestRegressor(random_state=42)
             )
-            
-    if save_csv:
-        if save_dir and not os.path.exists(save_dir):
-            os.makedirs(save_dir, exist_ok=True)
-        result_df.to_csv(f"{save_dir}/{csv_name}.csv")
+            scores = cross_validate(
+                model, selected_X, y_data, cv=cv, scoring=scoring_list, n_jobs=n_jobs
+            )
 
-    return result_df
+            # Collect fold scores for each cycle
+            for cycle in range(n_splits * n_repeats):
+                for metric in scoring_list:
+                    result.append(
+                        {
+                            "scoring": metric,
+                            "cv_cycle": cycle + 1,
+                            "method": name,
+                            "value": scores[f"test_{metric}"][cycle],
+                        }
+                    )
+
+            # Optionally add mean, std, and median for each model and scoring metric
+            if include_stats:
+                for metric in scoring_list:
+                    metric_scores = scores[f"test_{metric}"]
+                    result.append(
+                        {
+                            "scoring": metric,
+                            "cv_cycle": "mean",
+                            "method": name,
+                            "value": np.mean(metric_scores),
+                        }
+                    )
+                    result.append(
+                        {
+                            "scoring": metric,
+                            "cv_cycle": "std",
+                            "method": name,
+                            "value": np.std(metric_scores),
+                        }
+                    )
+                    result.append(
+                        {
+                            "scoring": metric,
+                            "cv_cycle": "median",
+                            "method": name,
+                            "value": np.median(metric_scores),
+                        }
+                    )
+        # Create a DataFrame in wide format
+        result_df = pd.DataFrame(result)
+
+        # Pivot the DataFrame so that each model becomes a separate column
+        result_df = result_df.pivot_table(
+            index=["scoring", "cv_cycle"],
+            columns="method",
+            values="value",
+            aggfunc="first",
+        )
+        # Sort index and columns to maintain a consistent order
+        result_df = result_df.sort_index(axis=0).sort_index(axis=1)
+
+        # Visualization if requested
+        if visualize is not None:
+            if isinstance(visualize, str):
+                visualize = [visualize]
+
+            for graph_type in visualize:
+                ModelValidation._plot_cv_report(
+                    report_df=result_df,
+                    scoring_list=scoring_list,
+                    graph_type=graph_type,
+                    save_fig=save_fig,
+                    fig_prefix=fig_prefix,
+                    save_dir=save_dir,
+                )
+
+        if save_csv:
+            os.makedirs(save_dir, exist_ok=True)
+            result_df.to_csv(f"{save_dir}/{csv_name}.csv")
+            logging.info(f"Feature selection evaluation data saved at {save_dir}.")
+
+        logging.info("Feature selection evaluation completed successfully.")
+        return result_df
+
+    except Exception as e:
+        logging.error(f"Error in evaluate_feature_selectors: {e}")
+        raise

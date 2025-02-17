@@ -99,7 +99,7 @@ class ModelValidation:
                     hue="method",
                     width=0.5,
                     color="black",
-                    err_kws={'linewidth': 1.2}
+                    err_kws={"linewidth": 1.2},
                 )
             elif graph_type == "violin":
                 plot = sns.violinplot(

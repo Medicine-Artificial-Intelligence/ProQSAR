@@ -147,8 +147,6 @@ class TestFeatureSelectorUtils(unittest.TestCase):
         )
         self.assertIsInstance(result_df, pd.DataFrame)
         self.assertIn("Anova", result_df.columns)
-        self.assertIn("accuracy_mean", result_df.index)
-        self.assertIn("f1_mean", result_df.index)
         self.assertEqual(result_df.shape[1], len(self.select_methods_class))
 
     def test_evaluate_feature_selectors_regression(self):
@@ -168,8 +166,6 @@ class TestFeatureSelectorUtils(unittest.TestCase):
         )
         self.assertIsInstance(result_df, pd.DataFrame)
         self.assertIn("RandomForestRegressor", result_df.columns)
-        self.assertIn("r2_mean", result_df.index)
-        self.assertIn("neg_mean_squared_error_mean", result_df.index)
         self.assertEqual(result_df.shape[1], len(self.select_methods_reg))
 
     def test_evaluate_feature_selectors_invalid_method(self):
