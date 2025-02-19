@@ -4,7 +4,6 @@ from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
 from sklearn.linear_model import BayesianRidge
 from sklearn.exceptions import NotFittedError
 from typing import Tuple, Optional
-from copy import deepcopy
 import pickle
 import os
 import logging

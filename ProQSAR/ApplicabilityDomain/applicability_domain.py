@@ -179,7 +179,7 @@ class ApplicabilityDomain:
 
             if self.save_dir:
                 os.makedirs(self.save_dir, exist_ok=True)
-                result_df.to_csv(f"{self.save_dir}/ad_pred_result.csv")
+                result_df.to_csv(f"{self.save_dir}/ad_pred_result.csv", index=False)
 
             logging.info("Prediction completed successfully.")
             return result_df

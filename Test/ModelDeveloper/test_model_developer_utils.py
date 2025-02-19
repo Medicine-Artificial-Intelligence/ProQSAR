@@ -11,8 +11,8 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_cv_strategy,
     _get_task_type,
     _get_model_map,
-    _get_cv_scoring_list,
-    _get_ev_scoring_dict,
+    _get_cv_scoring,
+    _get_ev_scoring,
 )
 
 
@@ -103,30 +103,30 @@ class TestModelMethods(unittest.TestCase):
         cv_strategy = _get_cv_strategy("R")
         self.assertIsInstance(cv_strategy, RepeatedKFold)
 
-    def test_get_cv_scoring_list_classification(self):
-        scoring_list = _get_cv_scoring_list("C")
-        self.assertIn("roc_auc", scoring_list)
+    def test_get_cv_scoring_classification(self):
+        scoring = _get_cv_scoring("C")
+        self.assertIn("roc_auc", scoring)
 
-    def test_get_cv_scoring_list_regression(self):
-        scoring_list = _get_cv_scoring_list("R")
-        self.assertIn("r2", scoring_list)
+    def test_get_cv_scoring_regression(self):
+        scoring = _get_cv_scoring("R")
+        self.assertIn("r2", scoring)
 
-    def test_get_ev_scoring_dict_classification(self):
+    def test_get_ev_scoring_classification(self):
         y_test = np.array([0, 1, 1, 0])
         y_test_pred = np.array([0, 1, 1, 1])
         y_test_proba = np.array([0.2, 0.8, 0.9, 0.4])
-        scoring_dict = _get_ev_scoring_dict("C", y_test, y_test_pred, y_test_proba)
+        scoring = _get_ev_scoring("C", y_test, y_test_pred, y_test_proba)
 
-        self.assertIn("roc_auc", scoring_dict)
+        self.assertIn("roc_auc", scoring)
 
-    def test_get_ev_scoring_dict_regression(self):
+    def test_get_ev_scoring_regression(self):
         y_test = np.array([3.0, 2.5, 4.0, 5.0])
         y_test_pred = np.array([2.8, 2.6, 3.9, 4.9])
-        scoring_dict = _get_ev_scoring_dict("R", y_test, y_test_pred)
+        scoring = _get_ev_scoring("R", y_test, y_test_pred)
 
-        self.assertIn("r2", scoring_dict)
-        self.assertIn("mean_squared_error", scoring_dict)
-        self.assertIn("mean_absolute_error", scoring_dict)
+        self.assertIn("r2", scoring)
+        self.assertIn("mean_squared_error", scoring)
+        self.assertIn("mean_absolute_error", scoring)
 
     def test_additional_models_in_model_map(self):
         add_model = {"CustomModel": Ridge(alpha=1.0)}
@@ -139,21 +139,21 @@ class TestModelMethods(unittest.TestCase):
         with self.assertRaises(ValueError):
             _get_task_type(invalid_data, "Activity")
 
-    def test_ev_scoring_dict_classification_missing_proba(self):
+    def test_ev_scoring_classification_missing_proba(self):
         y_test = np.array([0, 1, 1, 0])
         y_test_pred = np.array([0, 1, 1, 1])
         with self.assertRaises(TypeError):
-            _get_ev_scoring_dict("C", y_test, y_test_pred)
+            _get_ev_scoring("C", y_test, y_test_pred)
 
-    def test_cv_scoring_list_invalid_task(self):
+    def test_cv_scoring_invalid_task(self):
         with self.assertRaises(ValueError):
-            _get_cv_scoring_list("X")
+            _get_cv_scoring("X")
 
-    def test_ev_scoring_list_invalid_task(self):
+    def test_ev_scoring_invalid_task(self):
         y_test = np.array([0, 1, 1, 0])
         y_test_pred = np.array([0, 1, 1, 1])
         with self.assertRaises(ValueError):
-            _get_ev_scoring_dict("X", y_test, y_test_pred)
+            _get_ev_scoring("X", y_test, y_test_pred)
 
 
 if __name__ == "__main__":

@@ -146,9 +146,11 @@ class ModelDeveloper:
                     n_jobs=self.n_jobs,
                 )
 
-                self.select_model = comparison_df.loc[
-                    (f"{self.scoring}", "mean")
-                ].idxmax()
+                self.select_model = (
+                    comparison_df.set_index(["scoring", "cv_cycle"])
+                    .loc[(f"{self.scoring}", "mean")]
+                    .idxmax()
+                )
 
                 self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
             elif self.select_model in self.model_map:
@@ -213,7 +215,9 @@ class ModelDeveloper:
             if self.save_pred_result:
                 if self.save_dir and not os.path.exists(self.save_dir):
                     os.makedirs(self.save_dir, exist_ok=True)
-                self.pred_result.to_csv(f"{self.save_dir}/{self.pred_result_name}.csv")
+                self.pred_result.to_csv(
+                    f"{self.save_dir}/{self.pred_result_name}.csv", index=False
+                )
                 logging.info(
                     f"Prediction results saved to {self.save_dir}/{self.pred_result_name}.csv"
                 )

@@ -147,7 +147,6 @@ class TestFeatureSelectorUtils(unittest.TestCase):
         )
         self.assertIsInstance(result_df, pd.DataFrame)
         self.assertIn("Anova", result_df.columns)
-        self.assertEqual(result_df.shape[1], len(self.select_methods_class))
 
     def test_evaluate_feature_selectors_regression(self):
         # Evaluate feature selectors for regression dataset
@@ -166,7 +165,6 @@ class TestFeatureSelectorUtils(unittest.TestCase):
         )
         self.assertIsInstance(result_df, pd.DataFrame)
         self.assertIn("RandomForestRegressor", result_df.columns)
-        self.assertEqual(result_df.shape[1], len(self.select_methods_reg))
 
     def test_evaluate_feature_selectors_invalid_method(self):
         # Test for invalid method in evaluation

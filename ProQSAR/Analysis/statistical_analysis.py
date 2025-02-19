@@ -42,40 +42,37 @@ class StatisticalAnalysis:
                 scoring_list = [scoring_list]
 
             if scoring_list is None:
-                scoring_list = report_df.index.get_level_values("scoring").unique()
+                scoring_list = report_df["scoring"].unique()
 
             if isinstance(method_list, str):
                 method_list = [method_list]
 
             if method_list is None:
-                method_list = report_df.columns.tolist()
+                method_list = report_df.drop(
+                    columns=["scoring", "cv_cycle"]
+                ).columns.tolist()
 
             scoring_list = [scoring.lower() for scoring in scoring_list]
 
             filtered_dfs = []
 
             for scoring in scoring_list:
-                if scoring not in report_df.index.get_level_values("scoring").unique():
+                if scoring not in report_df["scoring"].unique():
                     raise ValueError(f"Invalid scoring value: {scoring}.")
-                score_df = deepcopy(
-                    report_df[report_df.index.get_level_values("scoring") == scoring]
-                )
+                score_df = deepcopy(report_df[report_df["scoring"] == scoring])
                 score_df = score_df[
-                    method_list
+                    ["scoring", "cv_cycle"] + method_list
                 ]  # Select only the columns in method_list
                 filtered_dfs.append(score_df)
 
             scoring_dfs = pd.concat(filtered_dfs)
             scoring_dfs = scoring_dfs[
-                ~scoring_dfs.index.get_level_values("cv_cycle").isin(
-                    ["mean", "median", "std"]
-                )
+                ~scoring_dfs["cv_cycle"].isin(["mean", "median", "std"])
             ]
             scoring_dfs = scoring_dfs.sort_index(axis=0).sort_index(axis=1)
 
             # Melt the dataframe to long format
             if melt:
-                scoring_dfs.reset_index(inplace=True)
                 scoring_dfs = scoring_dfs.melt(
                     id_vars=["scoring", "cv_cycle"],
                     var_name="method",
@@ -152,7 +149,7 @@ class StatisticalAnalysis:
             if save_csv:
                 if save_dir and not os.path.exists(save_dir):
                     os.makedirs(save_dir, exist_ok=True)
-                result_df.to_csv(f"{save_dir}/{csv_name}.csv")
+                result_df.to_csv(f"{save_dir}/{csv_name}.csv", index=False)
 
             logging.info("Successfully checked variance homogeneity.")
             return result_df
@@ -422,12 +419,10 @@ class StatisticalAnalysis:
             rank_results = {}
 
             for scoring in scoring_list:
-                scoring_df_filtered = report_new[
-                    report_new.index.get_level_values("scoring") == scoring
-                ]
-                scoring_df_filtered.reset_index(
-                    level="scoring", drop=True, inplace=True
-                )
+                scoring_df_filtered = report_new[report_new["scoring"] == scoring]
+                scoring_df_filtered = scoring_df_filtered.drop(
+                    columns="scoring"
+                ).set_index("cv_cycle")
                 pc_results[scoring] = sp.posthoc_conover_friedman(
                     scoring_df_filtered, p_adjust="holm"
                 )
@@ -439,7 +434,9 @@ class StatisticalAnalysis:
                 if save_result:
                     if save_dir and not os.path.exists(save_dir):
                         os.makedirs(save_dir, exist_ok=True)
-                    pc_results[scoring].to_csv(f"{save_dir}/cofried_pc_{scoring}.csv")
+                    pc_results[scoring].to_csv(
+                        f"{save_dir}/cofried_pc_{scoring}.csv", index=False
+                    )
                     logging.info(
                         f"Posthoc Conover-Friedman results saved at {save_dir}/cofried_pc_{scoring}.csv"
                     )
@@ -796,12 +793,16 @@ class StatisticalAnalysis:
                 if save_result:
                     if save_dir and not os.path.exists(save_dir):
                         os.makedirs(save_dir, exist_ok=True)
-                    result_tab.to_csv(f"{save_dir}/tukey_result_tab_{scoring}.csv")
-                    df_means.to_csv(f"{save_dir}/tukey_df_means_{scoring}.csv")
-                    df_means_diff.to_csv(
-                        f"{save_dir}/tukey_df_means_diff_{scoring}.csv"
+                    result_tab.to_csv(
+                        f"{save_dir}/tukey_result_tab_{scoring}.csv", index=False
                     )
-                    pc.to_csv(f"{save_dir}/tukey_pc_{scoring}.csv")
+                    df_means.to_csv(
+                        f"{save_dir}/tukey_df_means_{scoring}.csv", index=False
+                    )
+                    df_means_diff.to_csv(
+                        f"{save_dir}/tukey_df_means_diff_{scoring}.csv", index=False
+                    )
+                    pc.to_csv(f"{save_dir}/tukey_pc_{scoring}.csv", index=False)
                     logging.info(f"Tukey HSD results saved at {save_dir}")
 
             if plot not in [None, "mcs", "ci"]:

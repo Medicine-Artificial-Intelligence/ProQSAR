@@ -142,9 +142,11 @@ class FeatureSelector:
                     n_jobs=self.n_jobs,
                 )
 
-                self.select_method = comparison_df.loc[
-                    (f"{self.scoring}", "mean")
-                ].idxmax()
+                self.select_method = (
+                    comparison_df.set_index(["scoring", "cv_cycle"])
+                    .loc[(f"{self.scoring}", "mean")]
+                    .idxmax()
+                )
 
                 self.feature_selector = self.method_map[self.select_method].fit(
                     X=X_data, y=y_data
@@ -213,7 +215,7 @@ class FeatureSelector:
                 else:
                     csv_name = self.trans_data_name
 
-                transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
+                transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv", index=False)
                 logging.info(f"Transformed data saved at {self.save_dir}.")
 
             return transformed_data

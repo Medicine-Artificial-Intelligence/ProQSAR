@@ -30,7 +30,7 @@ from ProQSAR.ModelDeveloper.model_validation import ModelValidation
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_task_type,
     _get_cv_strategy,
-    _get_cv_scoring_list,
+    _get_cv_scoring,
 )
 
 
@@ -202,7 +202,7 @@ def evaluate_feature_selectors(
         task_type = _get_task_type(data, activity_col)
         method_map = _get_method_map(task_type, add_method, n_jobs)
         cv = _get_cv_strategy(task_type, n_splits=n_splits, n_repeats=n_repeats)
-        scoring_list = scoring_list or _get_cv_scoring_list(task_type)
+        scoring_list = scoring_list or _get_cv_scoring(task_type)
 
         result = []
         methods_to_compare = {}
@@ -281,6 +281,9 @@ def evaluate_feature_selectors(
         # Sort index and columns to maintain a consistent order
         result_df = result_df.sort_index(axis=0).sort_index(axis=1)
 
+        # Reset index
+        result_df = result_df.reset_index().rename_axis(None, axis="columns")
+
         # Visualization if requested
         if visualize is not None:
             if isinstance(visualize, str):
@@ -297,9 +300,12 @@ def evaluate_feature_selectors(
                 )
 
         if save_csv:
-            os.makedirs(save_dir, exist_ok=True)
-            result_df.to_csv(f"{save_dir}/{csv_name}.csv")
-            logging.info(f"Feature selection evaluation data saved at {save_dir}.")
+            if save_dir and not os.path.exists(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            result_df.to_csv(f"{save_dir}/{csv_name}.csv", index=False)
+            logging.info(
+                f"Feature selection evaluation data saved at: {save_dir}/{csv_name}.csv"
+            )
 
         logging.info("Feature selection evaluation completed successfully.")
         return result_df

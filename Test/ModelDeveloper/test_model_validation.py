@@ -133,7 +133,7 @@ class TestModelReports(unittest.TestCase):
             self.class_data,
             activity_col="Activity",
             id_col="ID",
-            scoring_list=["accuracy"],
+            scoring_list="accuracy",
         )
         with self.assertRaises(ValueError):
             ModelValidation._plot_cv_report(
@@ -147,7 +147,7 @@ class TestModelReports(unittest.TestCase):
                 self.class_data,
                 activity_col="Activity",
                 id_col="ID",
-                select_model=["InvalidModel"],
+                select_model="InvalidModel",
             )
 
     def test_plot_cv_report_bar(self):
@@ -176,6 +176,36 @@ class TestModelReports(unittest.TestCase):
         )
         # Ensure the figure file is saved
         self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_cv_graph_box.png"))
+
+    def test_make_roc_curve(self):
+        data_train = self.class_data.sample(frac=0.8, random_state=42)
+        data_test = self.class_data.drop(data_train.index)
+        ModelValidation.make_roc_curve(
+            data_train=data_train,
+            data_test=data_test,
+            activity_col="Activity",
+            id_col="ID",
+            select_model=["KNeighborsClassifier", "SVC", "ExtraTreesClassifier"],
+            save_dir=self.temp_dir.name,
+            fig_name="test_make_roc_curve",
+        )
+        # Ensure the csv file is saved
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_make_roc_curve.png"))
+
+    def test_make_pr_curve(self):
+        data_train = self.class_data.sample(frac=0.8, random_state=42)
+        data_test = self.class_data.drop(data_train.index)
+        ModelValidation.make_pr_curve(
+            data_train=data_train,
+            data_test=data_test,
+            activity_col="Activity",
+            id_col="ID",
+            select_model=["KNeighborsClassifier", "SVC", "ExtraTreesClassifier"],
+            save_dir=self.temp_dir.name,
+            fig_name="test_make_pr_curve",
+        )
+        # Ensure the csv file is saved
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_make_pr_curve.png"))
 
 
 if __name__ == "__main__":

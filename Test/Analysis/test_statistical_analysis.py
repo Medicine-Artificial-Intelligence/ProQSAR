@@ -11,10 +11,8 @@ matplotlib.use("Agg")
 class TestStatisticalAnalysis(unittest.TestCase):
 
     def setUp(self):
-        self.cv_class = pd.read_csv("Data/cv_class.csv").set_index(
-            ["scoring", "cv_cycle"]
-        )
-        self.cv_reg = pd.read_csv("Data/cv_reg.csv").set_index(["scoring", "cv_cycle"])
+        self.cv_class = pd.read_csv("Data/cv_class.csv")
+        self.cv_reg = pd.read_csv("Data/cv_reg.csv")
         self.temp_dir = TemporaryDirectory()
 
     def tearDown(self):

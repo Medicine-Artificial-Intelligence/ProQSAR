@@ -43,6 +43,7 @@ from sklearn.metrics import (
     median_absolute_error,
     mean_absolute_percentage_error,
     max_error,
+    matthews_corrcoef,
 )
 
 
@@ -171,7 +172,7 @@ def _get_cv_strategy(
         )
 
 
-def _get_cv_scoring_list(task_type: str) -> list:
+def _get_cv_scoring(task_type: str) -> list:
     """
     Returns a list of scoring metrics based on the task type.
 
@@ -191,6 +192,7 @@ def _get_cv_scoring_list(task_type: str) -> list:
             "f1",
             "neg_log_loss",
             "neg_brier_score",
+            "matthews_corrcoef",
         ]
     elif task_type == "R":
         return [
@@ -208,7 +210,7 @@ def _get_cv_scoring_list(task_type: str) -> list:
         )
 
 
-def _get_ev_scoring_dict(
+def _get_ev_scoring(
     task_type: str,
     y_test: pd.Series,
     y_test_pred: pd.Series,
@@ -236,6 +238,7 @@ def _get_ev_scoring_dict(
             "f1": f1_score(y_test, y_test_pred, average="binary"),
             "log_loss": log_loss(y_test, y_test_proba),
             "brier_score": brier_score_loss(y_test, y_test_proba),
+            "matthews_corrcoef": matthews_corrcoef(y_test, y_test_pred),
         }
 
     elif task_type == "R":
