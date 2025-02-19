@@ -9,14 +9,14 @@ from joblib import Parallel, delayed
 logger = logging.getLogger(__name__)
 
 
-class ConformerGenerator:
+class ConformationGenerator:
     """
     A class to handle the generation and optimization of conformers for molecules.
     """
 
     def __init__(self) -> None:
         """
-        Initializes the ConformerGenerator instance.
+        Initializes the ConformationGenerator instance.
         """
         pass
 
@@ -126,7 +126,7 @@ class ConformerGenerator:
                 logger.error("Invalid SMILES string: %s", smiles)
                 return None, None
 
-            return ConformerGenerator._mol_process(
+            return ConformationGenerator._mol_process(
                 mol,
                 num_conformers,
                 embedding_method,
@@ -183,7 +183,7 @@ class ConformerGenerator:
             data["conformer"] = None
             return data
 
-        minimized_mol, minimized_energy = ConformerGenerator._smiles_process(
+        minimized_mol, minimized_energy = ConformationGenerator._smiles_process(
             smi,
             num_conformers,
             embedding_method,

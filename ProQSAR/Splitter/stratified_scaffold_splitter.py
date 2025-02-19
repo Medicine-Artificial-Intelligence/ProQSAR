@@ -4,10 +4,10 @@ import pandas as pd
 import numpy as np
 import logging
 from typing import List, Tuple, Literal
-from ProQSAR.Partition.stratified_scaffold_kfold import StratifiedScaffoldKFold
+from ProQSAR.Splitter.stratified_scaffold_kfold import StratifiedScaffoldKFold
 
 
-class StratifiedScaffoldPartition:
+class StratifiedScaffoldSplitter:
     """
     A class used to split data into training and testing sets based on molecular scaffolds
     with stratification on the activity column.
@@ -24,7 +24,7 @@ class StratifiedScaffoldPartition:
         shuffle: bool = True,
     ):
         """
-        Constructs all the necessary attributes for the StratifiedScaffoldPartition object.
+        Constructs all the necessary attributes for the StratifiedScaffoldSplitter object.
 
         Parameters:
         -----------
@@ -106,7 +106,7 @@ class StratifiedScaffoldPartition:
             shuffle=self.shuffle,
             scaff_based=self.scaff_based,
         )
-        groups = StratifiedScaffoldPartition.get_scaffold_groups(
+        groups = StratifiedScaffoldSplitter.get_scaffold_groups(
             self.data[self.smiles_col].to_list()
         )
         y = self.data[self.activity_col].to_numpy(dtype=float)

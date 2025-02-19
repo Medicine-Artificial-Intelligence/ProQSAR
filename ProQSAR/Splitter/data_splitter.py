@@ -1,13 +1,13 @@
-from ProQSAR.Partition.random_partition import RandomPartition
-from ProQSAR.Partition.stratified_random_partition import StratifiedRandomPartition
-from ProQSAR.Partition.scaffold_partition import ScaffoldPartition
-from ProQSAR.Partition.stratified_scaffold_partition import StratifiedScaffoldPartition
+from ProQSAR.Splitter.random_splitter import RandomSplitter
+from ProQSAR.Splitter.stratified_random_splitter import StratifiedRandomSplitter
+from ProQSAR.Splitter.scaffold_splitter import ScaffoldSplitter
+from ProQSAR.Splitter.stratified_scaffold_splitter import StratifiedScaffoldSplitter
 from typing import Tuple
 import pandas as pd
 import logging
 
 
-class Partition:
+class Splitter:
     """
     A class to handle various data partitioning strategies for training and testing sets.
     """
@@ -23,7 +23,7 @@ class Partition:
         random_state: int = 42,
     ):
         """
-        Constructs all the necessary attributes for the Partition object.
+        Constructs all the necessary attributes for the Splitter object.
 
         Parameters:
         -----------
@@ -34,7 +34,7 @@ class Partition:
         smiles_col : str
             The name of the column containing SMILES strings for molecular data.
         option : str
-            The partitioning method, either "random", "stratified_random", "scaffold", or "stratified_scaffold".
+            The splitting method, either "random", "stratified_random", "scaffold", or "stratified_scaffold".
         test_size : float, optional
             The proportion of the dataset to include in the test split (default is 0.2).
         random_state : int, optional
@@ -52,7 +52,7 @@ class Partition:
 
     def fit(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Applies the selected partitioning strategy based on the 'option' attribute
+        Applies the selected splitting strategy based on the 'option' attribute
         and returns the training and testing sets.
 
         Returns:
@@ -62,7 +62,7 @@ class Partition:
         """
         try:
             if self.option == "random":
-                partition = RandomPartition(
+                splitter = RandomSplitter(
                     self.data,
                     self.activity_col,
                     self.smiles_col,
@@ -70,7 +70,7 @@ class Partition:
                     random_state=self.random_state,
                 )
             elif self.option == "stratified_random":
-                partition = StratifiedRandomPartition(
+                splitter = StratifiedRandomSplitter(
                     self.data,
                     self.activity_col,
                     self.smiles_col,
@@ -78,7 +78,7 @@ class Partition:
                     random_state=self.random_state,
                 )
             elif self.option == "scaffold":
-                partition = ScaffoldPartition(
+                splitter = ScaffoldSplitter(
                     self.data,
                     self.activity_col,
                     self.smiles_col,
@@ -86,7 +86,7 @@ class Partition:
                     random_state=self.random_state,
                 )
             elif self.option == "stratified_scaffold":
-                partition = StratifiedScaffoldPartition(
+                splitter = StratifiedScaffoldSplitter(
                     self.data,
                     self.activity_col,
                     self.smiles_col,
@@ -95,11 +95,11 @@ class Partition:
                 )
             else:
                 raise ValueError(
-                    f"Invalid partition option: {self.option}."
+                    f"Invalid splitting option: {self.option}."
                     "Choose from 'random', 'stratified_random', 'scaffold', or 'stratified_scaffold'."
                 )
 
-            data_train, data_test = partition.fit()
+            data_train, data_test = splitter.fit()
 
             logging.info(
                 f"Data successfully partitioned using the '{self.option}' method."

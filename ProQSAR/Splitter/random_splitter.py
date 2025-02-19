@@ -3,7 +3,7 @@ from typing import Tuple
 from sklearn.model_selection import train_test_split
 
 
-class RandomPartition:
+class RandomSplitter:
     """
     A class used to split data into training and testing sets randomly.
     """
@@ -17,7 +17,7 @@ class RandomPartition:
         random_state: int = 42,
     ):
         """
-        Constructs all the necessary attributes for the RandomPartition object.
+        Constructs all the necessary attributes for the RandomSplitter object.
 
         Parameters:
         -----------

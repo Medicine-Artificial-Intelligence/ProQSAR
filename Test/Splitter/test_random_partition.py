@@ -1,10 +1,10 @@
-from ProQSAR.Partition.random_partition import RandomPartition
+from ProQSAR.Splitter.random_splitter import RandomSplitter
 import pandas as pd
 import numpy as np
 import unittest
 
 
-class TestRandomPartition(unittest.TestCase):
+class TestRandomSplitter(unittest.TestCase):
     def setUp(self):
         """
         Set up the test datasets for the partitioning tests.
@@ -40,18 +40,18 @@ class TestRandomPartition(unittest.TestCase):
         self.data["feature1"] = np.random.rand(self.data.shape[0])
         self.data["feature2"] = np.random.rand(self.data.shape[0])
 
-        self.randompartition = RandomPartition(
+        self.randomsplitter = RandomSplitter(
             self.data, "pIC50", "smiles", test_size=0.2, random_state=42
         )
 
-    def test_randompartition_size(self):
-        data_train, data_test = self.randompartition.fit()
+    def test_randomsplitter_size(self):
+        data_train, data_test = self.randomsplitter.fit()
 
         self.assertEqual(data_train.shape[0], 16)
         self.assertEqual(data_test.shape[0], 4)
 
-    def test_randompartition_df(self):
-        data_train, data_test = self.randompartition.fit()
+    def test_randomsplitter_df(self):
+        data_train, data_test = self.randomsplitter.fit()
 
         self.assertIsInstance(data_train, pd.DataFrame)
         self.assertIsInstance(data_test, pd.DataFrame)

@@ -1,18 +1,82 @@
 import os
 import unittest
 import pandas as pd
+import numpy as np
 import matplotlib
 from tempfile import TemporaryDirectory
+from sklearn.datasets import make_classification, make_regression
 from ProQSAR.Analysis.statistical_analysis import StatisticalAnalysis
+from ProQSAR.ModelDeveloper.model_validation import ModelValidation
 
 matplotlib.use("Agg")
+
+
+def create_classification_data(
+    n_samples=60, n_features=25, n_informative=10, random_state=42
+) -> pd.DataFrame:
+    """
+    Generate a DataFrame containing synthetic classification data.
+
+    Args:
+        n_samples (int): The number of samples.
+        n_features (int): The number of features.
+        n_informative (int): The number of informative features.
+        random_state (int): Seed for random number generation.
+
+    Returns:
+        pd.DataFrame: DataFrame with features, ID, and activity columns.
+    """
+    X, y = make_classification(
+        n_samples=n_samples,
+        n_features=n_features,
+        n_informative=n_informative,
+        random_state=random_state,
+    )
+    data = pd.DataFrame(X, columns=[f"Feature{i}" for i in range(1, n_features + 1)])
+    data["ID"] = np.arange(n_samples)
+    data["Activity"] = y
+    return data
+
+
+def create_regression_data(
+    n_samples=40, n_features=20, n_informative=10, random_state=42
+) -> pd.DataFrame:
+    """
+    Generate a DataFrame containing synthetic regression data.
+
+    Args:
+        n_samples (int): The number of samples.
+        n_features (int): The number of features.
+        n_informative (int): The number of informative features.
+        random_state (int): Seed for random number generation.
+
+    Returns:
+        pd.DataFrame: DataFrame with features, ID, and activity columns.
+    """
+    X, y = make_regression(
+        n_samples=n_samples,
+        n_features=n_features,
+        n_informative=n_informative,
+        random_state=random_state,
+    )
+    data = pd.DataFrame(X, columns=[f"Feature{i}" for i in range(1, n_features + 1)])
+    data["ID"] = np.arange(n_samples)
+    data["Activity"] = y
+    return data
 
 
 class TestStatisticalAnalysis(unittest.TestCase):
 
     def setUp(self):
-        self.cv_class = pd.read_csv("Data/cv_class.csv")
-        self.cv_reg = pd.read_csv("Data/cv_reg.csv")
+        self.class_data = create_classification_data()
+        self.reg_data = create_regression_data()
+        self.cv_class = ModelValidation.cross_validation_report(
+            self.class_data, activity_col="Activity", id_col="ID"
+        )
+
+        self.cv_reg = ModelValidation.cross_validation_report(
+            self.reg_data, activity_col="Activity", id_col="ID"
+        )
         self.temp_dir = TemporaryDirectory()
 
     def tearDown(self):

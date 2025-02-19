@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 
 
-class ScaffoldPartition:
+class ScaffoldSplitter:
     """
     A class used to split data into training and testing sets based on molecular scaffolds.
     """
@@ -20,7 +20,7 @@ class ScaffoldPartition:
         random_state: int = 42,
     ):
         """
-        Constructs all the necessary attributes for the ScaffoldPartition object.
+        Constructs all the necessary attributes for the ScaffoldSplitter object.
 
         Parameters:
         -----------

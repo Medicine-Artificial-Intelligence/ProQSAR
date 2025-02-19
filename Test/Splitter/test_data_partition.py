@@ -1,15 +1,13 @@
-from ProQSAR.Partition.scaffold_partition import ScaffoldPartition
-from rdkit import Chem
-from rdkit.Chem.Scaffolds import MurckoScaffold
+from ProQSAR.Splitter.data_splitter import Splitter
 import pandas as pd
 import numpy as np
 import unittest
 
 
-class TestScaffoldPartition(unittest.TestCase):
+class TestSplitter(unittest.TestCase):
     def setUp(self):
         """
-        Set up the test datasets for the partitioning tests.
+        Set up the test datasets for the splitting tests.
         """
         # Create a mock dataset for testing
         self.data = pd.DataFrame(
@@ -38,57 +36,69 @@ class TestScaffoldPartition(unittest.TestCase):
                 ],
             }
         )
-        self.data["pIC50"] = np.random.uniform(0, 10, self.data.shape[0])
+        self.data["pIC50"] = np.array([0] * 10 + [1] * 10)
         self.data["feature1"] = np.random.rand(self.data.shape[0])
         self.data["feature2"] = np.random.rand(self.data.shape[0])
 
-        self.scaffoldpartition = ScaffoldPartition(
-            self.data, "pIC50", "smiles", test_size=0.2, random_state=42
+        self.randomsplitter = Splitter(
+            self.data, "pIC50", "smiles", "random", test_size=0.2, random_state=42
         )
+        self.stratifiedrandomsplitter = Splitter(
+            self.data,
+            "pIC50",
+            "smiles",
+            "stratified_random",
+            test_size=0.2,
+            random_state=42,
+        )
+        self.scaffoldsplitter = Splitter(
+            self.data, "pIC50", "smiles", "scaffold", test_size=0.2, random_state=42
+        )
+        self.stratifiedscaffoldsplitter = Splitter(
+            self.data,
+            "pIC50",
+            "smiles",
+            "stratified_scaffold",
+            n_splits=5,
+            random_state=42,
+        )
+        self.invalidsplitter = Splitter(self.data, "pIC50", "smiles", "invalid")
 
-    def test_scaffoldpartition_size(self):
-        data_train, data_test = self.scaffoldpartition.fit()
+    def test_randomsplitter(self):
+        data_train, data_test = self.randomsplitter.fit()
 
         self.assertEqual(data_train.shape[0], 16)
         self.assertEqual(data_test.shape[0], 4)
-
-    def test_scaffoldpartition_df(self):
-        data_train, data_test = self.scaffoldpartition.fit()
-
         self.assertIsInstance(data_train, pd.DataFrame)
         self.assertIsInstance(data_test, pd.DataFrame)
 
-    def test_scaffoldpartition_scaffold(self):
-        data_train, data_test = self.scaffoldpartition.fit()
+    def test_stratifiedrandomsplitter(self):
+        data_train, data_test = self.stratifiedrandomsplitter.fit()
 
-        # Create scaffold sets for both train and test sets
-        def get_scaffold_set(df):
-            scaffolds = set()
-            for smiles in df["smiles"]:
-                mol = Chem.MolFromSmiles(smiles)
-                scaffold = MurckoScaffold.MurckoScaffoldSmiles(
-                    mol=mol, includeChirality=False
-                )
-                scaffolds.add(scaffold)
-            return scaffolds
+        self.assertEqual(data_train.shape[0], 16)
+        self.assertEqual(data_test.shape[0], 4)
+        self.assertIsInstance(data_train, pd.DataFrame)
+        self.assertIsInstance(data_test, pd.DataFrame)
 
-        train_scaffolds = get_scaffold_set(data_train)
-        test_scaffolds = get_scaffold_set(data_test)
+    def test_scaffoldsplitter(self):
+        data_train, data_test = self.scaffoldsplitter.fit()
 
-        # Ensure no overlap of scaffolds between training and test sets
-        self.assertTrue(
-            train_scaffolds.isdisjoint(test_scaffolds),
-            "Scaffolds are not unique between train and test sets",
-        )
+        self.assertEqual(data_train.shape[0], 16)
+        self.assertEqual(data_test.shape[0], 4)
+        self.assertIsInstance(data_train, pd.DataFrame)
+        self.assertIsInstance(data_test, pd.DataFrame)
 
-    def test_scaffoldpartition_invalid(self):
-        data = self.data.copy()
-        data.loc[0, "smiles"] = "Invalid_smiles"
-        scaffoldpartition = ScaffoldPartition(
-            data, "pIC50", "smiles", test_size=0.2, random_state=42
-        )
+    def test_stratifiedscaffoldsplitter(self):
+        data_train, data_test = self.stratifiedscaffoldsplitter.fit()
+
+        self.assertEqual(data_train.shape[0], 16)
+        self.assertEqual(data_test.shape[0], 4)
+        self.assertIsInstance(data_train, pd.DataFrame)
+        self.assertIsInstance(data_test, pd.DataFrame)
+
+    def test_splitter_invalid(self):
         with self.assertRaises(ValueError):
-            data_train, data_test = scaffoldpartition.fit()
+            data_train, data_test = self.invalidsplitter.fit()
 
 
 if __name__ == "__main__":

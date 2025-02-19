@@ -3,7 +3,7 @@ from typing import Tuple
 from sklearn.model_selection import train_test_split
 
 
-class StratifiedRandomPartition:
+class StratifiedRandomSplitter:
     """
     A class used to split data into training and testing sets with stratification based on the activity column.
     """
@@ -17,7 +17,7 @@ class StratifiedRandomPartition:
         random_state: int = 42,
     ):
         """
-        Constructs all the necessary attributes for the RandomPartition object.
+        Constructs all the necessary attributes for the StratifiedRandomSplitter object.
 
         Parameters:
         -----------

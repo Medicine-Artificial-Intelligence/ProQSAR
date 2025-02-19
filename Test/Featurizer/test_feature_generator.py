@@ -1,7 +1,7 @@
 import unittest
 import pandas as pd
 from rdkit import Chem
-from ProQSAR.Featurizer.features_generator import FeatureGenerator
+from ProQSAR.Featurizer.feature_generator import FeatureGenerator
 
 
 class TestFeatureGenerator(unittest.TestCase):

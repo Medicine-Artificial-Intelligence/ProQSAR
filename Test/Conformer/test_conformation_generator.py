@@ -1,13 +1,13 @@
 import unittest
 from rdkit import Chem
-from ProQSAR.Conformer.conformer_generator import ConformerGenerator
+from ProQSAR.Conformer.conformation_generator import ConformationGenerator
 import logging
 
 
 logging.basicConfig(level=logging.INFO)
 
 
-class TestConformerGenerator(unittest.TestCase):
+class TestConformationGenerator(unittest.TestCase):
 
     def setUp(self):
         self.molecule = Chem.MolFromSmiles("CCO")
@@ -17,7 +17,7 @@ class TestConformerGenerator(unittest.TestCase):
         ]
 
     def test_mol_process_valid(self):
-        minimized_mol, minimized_energy = ConformerGenerator._mol_process(
+        minimized_mol, minimized_energy = ConformationGenerator._mol_process(
             self.molecule,
             num_conformers="auto",
             embedding_method="ETKDGv3",
@@ -34,7 +34,7 @@ class TestConformerGenerator(unittest.TestCase):
 
     def test_smiles_process_valid(self):
         smiles = "CCO"
-        minimized_mol, minimized_energy = ConformerGenerator._smiles_process(
+        minimized_mol, minimized_energy = ConformationGenerator._smiles_process(
             smiles,
             num_conformers="auto",
             embedding_method="ETKDGv3",
@@ -51,7 +51,7 @@ class TestConformerGenerator(unittest.TestCase):
 
     def test_smiles_process_invalid(self):
         smiles = "InvalidSmilesString"
-        minimized_mol, minimized_energy = ConformerGenerator._smiles_process(
+        minimized_mol, minimized_energy = ConformationGenerator._smiles_process(
             smiles,
             num_conformers="auto",
             embedding_method="ETKDGv3",
@@ -67,7 +67,7 @@ class TestConformerGenerator(unittest.TestCase):
 
     def test_dict_process(self):
         # Process the dictionary containing the SMILES string
-        result = ConformerGenerator._dict_process(self.example_smiles_list_dict[0])
+        result = ConformationGenerator._dict_process(self.example_smiles_list_dict[0])
 
         # Check that the keys 'conformer' and 'energy' are present in the results
         self.assertIn(
@@ -89,7 +89,7 @@ class TestConformerGenerator(unittest.TestCase):
 
     def test_parallel_process(self):
         # Processing the SMILES strings in parallel
-        results = ConformerGenerator.parallel_process(self.example_smiles_list_dict)
+        results = ConformationGenerator.parallel_process(self.example_smiles_list_dict)
 
         # Check the number of results
         self.assertEqual(

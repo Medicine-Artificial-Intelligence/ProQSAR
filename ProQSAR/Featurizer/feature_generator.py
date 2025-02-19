@@ -168,8 +168,8 @@ class FeatureGenerator:
             )
 
             if self.save_dir:
-                if not os.path.exists(self.save_dir):
-                    os.makedirs(self.save_dir, exist_ok=True)
+
+                os.makedirs(self.save_dir, exist_ok=True)
 
                 save_path = os.path.join(self.save_dir, f"{feature_type}.csv")
                 feature_df.to_csv(save_path, index=False)
