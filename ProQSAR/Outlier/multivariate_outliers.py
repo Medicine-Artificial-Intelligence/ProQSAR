@@ -7,10 +7,11 @@ from sklearn.ensemble import IsolationForest
 from sklearn.svm import OneClassSVM
 from sklearn.covariance import EllipticEnvelope
 from sklearn.exceptions import NotFittedError
+from sklearn.base import BaseEstimator, TransformerMixin
 from typing import Optional, List
 
 
-class MultivariateOutliersHandler:
+class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
     """
     A class to handle multivariate outlier detection using various algorithms
     including Local Outlier Factor, Isolation Forest, One-Class SVM, and
@@ -32,8 +33,8 @@ class MultivariateOutliersHandler:
 
     def __init__(
         self,
-        id_col: Optional[str] = None,
         activity_col: Optional[str] = None,
+        id_col: Optional[str] = None,
         select_method: str = "LocalOutlierFactor",
         novelty: bool = False,
         n_jobs: int = -1,
@@ -41,13 +42,14 @@ class MultivariateOutliersHandler:
         save_dir: Optional[str] = "Project/OutlierHandler",
         save_trans_data: bool = False,
         trans_data_name: str = "mo_trans_data",
+        deactivate: bool = False,
     ) -> None:
         """
         Initializes MultivariateOutliersHandler with given parameters.
 
         Args:
-            id_col (Optional[str]): Column name for the unique identifier.
             activity_col (Optional[str]): Column name for activity or target variable.
+            id_col (Optional[str]): Column name for the unique identifier.
             select_method (str): Method to use for outlier detection.
             novelty (bool): If True, enables novelty detection for certain methods.
             n_jobs (int): Number of parallel jobs to run (-1 uses all processors).
@@ -55,9 +57,10 @@ class MultivariateOutliersHandler:
             save_dir (Optional[str]): Directory path to save model and transformed data.
             save_trans_data (bool): If True, saves the transformed data to disk.
             trans_data_name (str): Name for the transformed data file.
+            deactivate (bool): Flag to deactivate the process.
         """
-        self.id_col = id_col
         self.activity_col = activity_col
+        self.id_col = id_col
         self.select_method = select_method
         self.novelty = novelty
         self.n_jobs = n_jobs
@@ -65,10 +68,11 @@ class MultivariateOutliersHandler:
         self.save_dir = save_dir
         self.save_trans_data = save_trans_data
         self.trans_data_name = trans_data_name
+        self.deactivate = deactivate
         self.multi_outlier_handler = None
         self.features = None
 
-    def fit(self, data: pd.DataFrame) -> None:
+    def fit(self, data: pd.DataFrame, y=None) -> None:
         """
         Fits the selected outlier detection model to the provided data.
 
@@ -78,6 +82,10 @@ class MultivariateOutliersHandler:
         Raises:
             ValueError: If an unsupported outlier detection method is provided.
         """
+        if self.deactivate:
+            logging.info("MultivariateOutliersHandler is deactivated. Skipping fit.")
+            return self
+
         try:
             self.features = data.drop(
                 columns=[self.id_col, self.activity_col], errors="ignore"
@@ -118,11 +126,12 @@ class MultivariateOutliersHandler:
                 logging.info("Multivariate outlier handler saved successfully.")
 
             logging.info("Model fitting complete.")
-            return self
 
         except Exception as e:
             logging.error(f"Error in fitting: {e}")
             raise
+
+        return self
 
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -137,6 +146,12 @@ class MultivariateOutliersHandler:
         Raises:
             NotFittedError: If the model has not been fitted yet.
         """
+        if self.deactivate:
+            logging.info(
+                "MultivariateOutlierHandler is deactivated. Returning unmodified data."
+            )
+            return data
+
         try:
             if self.multi_outlier_handler is None:
                 raise NotFittedError(
@@ -179,7 +194,7 @@ class MultivariateOutliersHandler:
             logging.error(f"Error in transforming the data: {e}")
             raise
 
-    def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
+    def fit_transform(self, data: pd.DataFrame, y=None) -> pd.DataFrame:
         """
         Fits the model and transforms the data in a single step.
 
@@ -189,6 +204,12 @@ class MultivariateOutliersHandler:
         Returns:
             pd.DataFrame: The transformed dataset with outliers removed.
         """
+        if self.deactivate:
+            logging.info(
+                "MultivariateOutlierHandler is deactivated. Returning unmodified data."
+            )
+            return data
+
         self.fit(data)
         return self.transform(data)
 

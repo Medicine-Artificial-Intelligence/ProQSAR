@@ -3,7 +3,7 @@ import pickle
 import logging
 import pandas as pd
 from sklearn.exceptions import NotFittedError
-from typing import Optional
+from typing import Optional, Union, List
 
 from ProQSAR.FeatureSelector.feature_selector_utils import (
     _get_method_map,
@@ -37,6 +37,7 @@ class FeatureSelector:
         save_fig (bool): Whether to save figures.
         fig_prefix (str): Prefix for saved figure files.
         n_jobs (int): Number of jobs to run in parallel.
+        deactivate (bool): Flag to deactivate the feature selection process.
 
     Methods:
         fit(data: pd.DataFrame) -> object:
@@ -51,11 +52,12 @@ class FeatureSelector:
         self,
         activity_col: str,
         id_col: str,
-        select_method: str = "best",
+        select_method: Optional[Union[str, List[str]]] = None,
         add_method: Optional[dict] = None,
+        best: bool = True,
         scoring: Optional[str] = None,
-        n_splits: int = 10,
-        n_repeats: int = 3,
+        n_splits: int = 5,
+        n_repeats: int = 5,
         save_method: bool = False,
         save_trans_data: bool = False,
         trans_data_name: str = "fs_trans_data",
@@ -66,6 +68,7 @@ class FeatureSelector:
         save_fig: bool = False,
         fig_prefix: str = "fs_cv_graph",
         n_jobs: int = -1,
+        deactivate: bool = False,
     ):
         """
         Initializes the FeatureSelector with the specified parameters.
@@ -77,6 +80,7 @@ class FeatureSelector:
         self.id_col = id_col
         self.select_method = select_method
         self.add_method = add_method
+        self.best = best
         self.scoring = scoring
         self.n_splits = n_splits
         self.n_repeats = n_repeats
@@ -90,9 +94,11 @@ class FeatureSelector:
         self.save_fig = save_fig
         self.fig_prefix = fig_prefix
         self.n_jobs = n_jobs
+        self.deactivate = deactivate
         self.feature_selector = None
         self.task_type = None
         self.cv = None
+        self.comparison = None
 
     def fit(self, data: pd.DataFrame) -> object:
         """
@@ -110,6 +116,10 @@ class FeatureSelector:
         Raises:
             ValueError: If an unrecognized selection method is specified.
         """
+        if self.deactivate:
+            logging.info("FeatureSelector is deactivated. Skipping fit.")
+            return self
+
         try:
             logging.info("Starting feature selection fitting process.")
             X_data = data.drop([self.activity_col, self.id_col], axis=1)
@@ -122,35 +132,46 @@ class FeatureSelector:
             self.cv = _get_cv_strategy(
                 self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
             )
+            if isinstance(self.select_method, list) or not self.select_method:
+                if self.best:
+                    self.scoring = (
+                        self.scoring or "f1" if self.task_type == "C" else "r2"
+                    )
+                    self.comparison = evaluate_feature_selectors(
+                        data=data,
+                        activity_col=self.activity_col,
+                        id_col=self.id_col,
+                        select_method=self.select_method,
+                        add_method=self.add_method,
+                        scoring_list=self.scoring,
+                        n_splits=self.n_splits,
+                        n_repeats=self.n_repeats,
+                        visualize=self.visualize,
+                        save_fig=self.save_fig,
+                        fig_prefix=self.fig_prefix,
+                        save_csv=self.save_cv_report,
+                        csv_name=self.cv_report_name,
+                        save_dir=self.save_dir,
+                        n_jobs=self.n_jobs,
+                    )
 
-            if self.select_method == "best":
-                self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
-                comparison_df = evaluate_feature_selectors(
-                    data=data,
-                    activity_col=self.activity_col,
-                    id_col=self.id_col,
-                    add_method=self.add_method,
-                    scoring_list=[self.scoring],
-                    n_splits=self.n_splits,
-                    n_repeats=self.n_repeats,
-                    visualize=self.visualize,
-                    save_fig=self.save_fig,
-                    fig_prefix=self.fig_prefix,
-                    save_csv=self.save_cv_report,
-                    csv_name=self.cv_report_name,
-                    save_dir=self.save_dir,
-                    n_jobs=self.n_jobs,
-                )
-
-                self.select_method = (
-                    comparison_df.set_index(["scoring", "cv_cycle"])
-                    .loc[(f"{self.scoring}", "mean")]
-                    .idxmax()
-                )
-
-                self.feature_selector = self.method_map[self.select_method].fit(
-                    X=X_data, y=y_data
-                )
+                    self.select_method = (
+                        self.comparison.set_index(["scoring", "cv_cycle"])
+                        .loc[(f"{self.scoring}", "mean")]
+                        .idxmax()
+                    )
+                    if self.select_method == "NoFS":
+                        self.deactivate = True
+                        logging.info(
+                            "Skipping feature selection is considered to be the optimal method."
+                        )
+                        return self
+                else:
+                    raise AttributeError(
+                        "'select_method' is entered as a list."
+                        "To evaluate and use the best method among the entered methods, turn 'best = True'."
+                        "Otherwise, select_method must be a string as the name of the method."
+                    )
 
             if self.select_method not in self.method_map:
                 raise ValueError(f"Method '{self.select_method}' not recognized.")
@@ -187,6 +208,10 @@ class FeatureSelector:
         Raises:
             NotFittedError: If the feature selector is not fitted yet.
         """
+        if self.deactivate:
+            logging.info("FeatureSelector is deactivated. Returning unmodified data.")
+            return data
+
         try:
             if self.feature_selector is None:
                 raise NotFittedError(
@@ -194,10 +219,16 @@ class FeatureSelector:
                 )
 
             X_data = data.drop([self.activity_col, self.id_col], axis=1)
-            data_selected = pd.DataFrame(self.feature_selector.transform(X_data))
-            transformed_data = pd.concat(
-                [data_selected, data[[self.id_col, self.activity_col]]], axis=1
+            selected_features = self.feature_selector.transform(X_data)
+
+            transformed_data = pd.DataFrame(
+                selected_features,
+                columns=X_data.columns[self.feature_selector.get_support()],
             )
+            transformed_data[[self.id_col, self.activity_col]] = data[
+                [self.id_col, self.activity_col]
+            ].values
+
             if self.save_trans_data:
                 if self.save_dir and not os.path.exists(self.save_dir):
                     os.makedirs(self.save_dir, exist_ok=True)
@@ -234,5 +265,9 @@ class FeatureSelector:
         Returns:
             pd.DataFrame: Transformed data with selected features.
         """
+        if self.deactivate:
+            logging.info("FeatureSelector is deactivated. Returning unmodified data.")
+            return data
+
         self.fit(data)
         return self.transform(data)

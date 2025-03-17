@@ -15,7 +15,6 @@ class StratifiedScaffoldSplitter:
 
     def __init__(
         self,
-        data: pd.DataFrame,
         activity_col: str,
         smiles_col: str,
         random_state: int = 42,
@@ -28,8 +27,6 @@ class StratifiedScaffoldSplitter:
 
         Parameters:
         -----------
-        data : pd.DataFrame
-            The dataset containing the features and labels.
         activity_col : str
             The name of the column representing the activity or target label.
         smiles_col : str
@@ -43,7 +40,6 @@ class StratifiedScaffoldSplitter:
         shuffle : bool, optional
             Whether to shuffle the data before splitting (default is True).
         """
-        self.data = data
         self.random_state = random_state
         self.activity_col = activity_col
         self.smiles_col = smiles_col
@@ -91,9 +87,17 @@ class StratifiedScaffoldSplitter:
             raise AssertionError("Some molecules are not assigned to a group.")
         return groups
 
-    def fit(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def fit(
+        self,
+        data: pd.DataFrame,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Splits the data into training and testing sets using stratified scaffolds.
+
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            The dataset containing the features and labels.
 
         Returns:
         --------
@@ -107,12 +111,12 @@ class StratifiedScaffoldSplitter:
             scaff_based=self.scaff_based,
         )
         groups = StratifiedScaffoldSplitter.get_scaffold_groups(
-            self.data[self.smiles_col].to_list()
+            data[self.smiles_col].to_list()
         )
-        y = self.data[self.activity_col].to_numpy(dtype=float)
-        X = self.data.drop([self.activity_col, self.smiles_col], axis=1).to_numpy()
+        y = data[self.activity_col].to_numpy(dtype=float)
+        X = data.drop([self.activity_col, self.smiles_col], axis=1).to_numpy()
         train_idx, test_idx = next(cv.split(X, y, groups))
-        data_train = self.data.iloc[train_idx]
-        data_test = self.data.iloc[test_idx]
+        data_train = data.iloc[train_idx]
+        data_test = data.iloc[test_idx]
 
         return data_train, data_test

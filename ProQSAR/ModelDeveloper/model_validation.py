@@ -58,6 +58,8 @@ class ModelValidation:
             if isinstance(scoring_list, str):
                 scoring_list = [scoring_list]
 
+            scoring_list.sort()
+
             sns.set_context("notebook")
             sns.set_style("whitegrid")
 
@@ -182,6 +184,73 @@ class ModelValidation:
             raise
 
     @staticmethod
+    def _perform_cross_validation(
+        models,
+        X_data,
+        y_data,
+        cv,
+        scoring_list,
+        include_stats,
+        n_splits,
+        n_repeats,
+        n_jobs,
+    ):
+        result = []
+
+        for name, model in models.items():
+            scores = cross_validate(
+                model,
+                X_data,
+                y_data,
+                cv=cv,
+                scoring=scoring_list,
+                n_jobs=n_jobs,
+            )
+
+            # Collect fold scores for each cycle
+            for cycle in range(n_splits * n_repeats):
+                for metric in scoring_list:
+                    result.append(
+                        {
+                            "scoring": metric,
+                            "cv_cycle": cycle + 1,
+                            "method": name,
+                            "value": scores[f"test_{metric}"][cycle],
+                        }
+                    )
+
+            # Optionally add mean, std, and median for each model and scoring metric
+            if include_stats:
+                for metric in scoring_list:
+                    metric_scores = scores[f"test_{metric}"]
+                    result.append(
+                        {
+                            "scoring": metric,
+                            "cv_cycle": "mean",
+                            "method": name,
+                            "value": np.mean(metric_scores),
+                        }
+                    )
+                    result.append(
+                        {
+                            "scoring": metric,
+                            "cv_cycle": "std",
+                            "method": name,
+                            "value": np.std(metric_scores),
+                        }
+                    )
+                    result.append(
+                        {
+                            "scoring": metric,
+                            "cv_cycle": "median",
+                            "method": name,
+                            "value": np.median(metric_scores),
+                        }
+                    )
+
+        return pd.DataFrame(result)
+
+    @staticmethod
     def cross_validation_report(
         data: pd.DataFrame,
         activity_col: str,
@@ -259,7 +328,6 @@ class ModelValidation:
 
             scoring_list = scoring_list or _get_cv_scoring(task_type)
 
-            result = []
             models_to_compare = {}
 
             if select_model is None:
@@ -271,61 +339,20 @@ class ModelValidation:
                     else:
                         raise ValueError(f"Model '{name}' is not recognized.")
 
-            for name, model in models_to_compare.items():
-                scores = cross_validate(
-                    model,
-                    X_data,
-                    y_data,
-                    cv=cv,
-                    scoring=scoring_list,
-                    n_jobs=n_jobs,
-                )
-
-                # Collect fold scores for each cycle
-                for cycle in range(n_splits * n_repeats):
-                    for metric in scoring_list:
-                        model_result = {
-                            "scoring": metric,
-                            "cv_cycle": cycle + 1,
-                            "method": name,
-                            "value": scores[f"test_{metric}"][cycle],
-                        }
-                        result.append(model_result)
-
-                # Optionally add mean, std, and median for each model and scoring metric
-                if include_stats:
-                    for metric in scoring_list:
-                        metric_scores = scores[f"test_{metric}"]
-                        result.append(
-                            {
-                                "scoring": metric,
-                                "cv_cycle": "mean",
-                                "method": name,
-                                "value": np.mean(metric_scores),
-                            }
-                        )
-                        result.append(
-                            {
-                                "scoring": metric,
-                                "cv_cycle": "std",
-                                "method": name,
-                                "value": np.std(metric_scores),
-                            }
-                        )
-                        result.append(
-                            {
-                                "scoring": metric,
-                                "cv_cycle": "median",
-                                "method": name,
-                                "value": np.median(metric_scores),
-                            }
-                        )
+            result_df = ModelValidation._perform_cross_validation(
+                models_to_compare,
+                X_data,
+                y_data,
+                cv,
+                scoring_list,
+                include_stats,
+                n_splits,
+                n_repeats,
+                n_jobs,
+            )
 
             # Create a DataFrame in wide format
-            cv_df = pd.DataFrame(result)
-
-            # Pivot the DataFrame so that each model becomes a separate column
-            cv_df = cv_df.pivot_table(
+            result_df = result_df.pivot_table(
                 index=["scoring", "cv_cycle"],
                 columns="method",
                 values="value",
@@ -333,10 +360,10 @@ class ModelValidation:
             )
 
             # Sort index and columns to maintain a consistent order
-            cv_df = cv_df.sort_index(axis=0).sort_index(axis=1)
+            result_df = result_df.sort_index(axis=0).sort_index(axis=1)
 
             # Reset index
-            cv_df = cv_df.reset_index().rename_axis(None, axis="columns")
+            result_df = result_df.reset_index().rename_axis(None, axis="columns")
 
             # Visualization if requested
             if visualize is not None:
@@ -344,7 +371,7 @@ class ModelValidation:
                     visualize = [visualize]
                 for graph_type in visualize:
                     ModelValidation._plot_cv_report(
-                        report_df=cv_df,
+                        report_df=result_df,
                         scoring_list=scoring_list,
                         graph_type=graph_type,
                         save_fig=save_fig,
@@ -355,13 +382,13 @@ class ModelValidation:
             if save_csv:
                 if save_dir and not os.path.exists(save_dir):
                     os.makedirs(save_dir, exist_ok=True)
-                cv_df.to_csv(f"{save_dir}/{csv_name}.csv", index=False)
+                result_df.to_csv(f"{save_dir}/{csv_name}.csv", index=False)
                 logging.info(
                     f"Cross validation report saved at: {save_dir}/{csv_name}.csv"
                 )
 
             logging.info("Cross validation completed successfully.")
-            return cv_df
+            return result_df
 
         except Exception as e:
             logging.error(f"Error in cross-validation report generation {e}")
@@ -464,6 +491,8 @@ class ModelValidation:
                             raise ValueError(f"'{metric}' is not recognized.")
 
             ev_df = pd.DataFrame(ev_score)
+
+            ev_df = ev_df.sort_index(axis=0).sort_index(axis=1)
 
             if save_csv:
                 if save_dir and not os.path.exists(save_dir):

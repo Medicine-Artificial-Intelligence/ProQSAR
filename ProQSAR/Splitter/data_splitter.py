@@ -14,10 +14,9 @@ class Splitter:
 
     def __init__(
         self,
-        data: pd.DataFrame,
         activity_col: str,
         smiles_col: str,
-        option: str,
+        option: str = "random",
         test_size: float = 0.2,
         n_splits: int = 5,
         random_state: int = 42,
@@ -27,8 +26,6 @@ class Splitter:
 
         Parameters:
         -----------
-        data : pd.DataFrame
-            The dataset containing the features and labels.
         activity_col : str
             The name of the column representing the activity or target label.
         smiles_col : str
@@ -37,23 +34,27 @@ class Splitter:
             The splitting method, either "random", "stratified_random", "scaffold", or "stratified_scaffold".
         test_size : float, optional
             The proportion of the dataset to include in the test split (default is 0.2).
-        random_state : int, optional
-            The random seed used by the random number generator (default is 42).
         n_splits : int, optional
             Number of splits/folds to create for stratified partitions (default is 5).
+        random_state : int, optional
+            The random seed used by the random number generator (default is 42).
         """
         self.option = option
-        self.data = data
         self.test_size = test_size
         self.random_state = random_state
         self.activity_col = activity_col
         self.smiles_col = smiles_col
         self.n_splits = n_splits
 
-    def fit(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def fit(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Applies the selected splitting strategy based on the 'option' attribute
         and returns the training and testing sets.
+
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            The dataset containing the features and labels.
 
         Returns:
         --------
@@ -63,7 +64,6 @@ class Splitter:
         try:
             if self.option == "random":
                 splitter = RandomSplitter(
-                    self.data,
                     self.activity_col,
                     self.smiles_col,
                     test_size=self.test_size,
@@ -71,7 +71,6 @@ class Splitter:
                 )
             elif self.option == "stratified_random":
                 splitter = StratifiedRandomSplitter(
-                    self.data,
                     self.activity_col,
                     self.smiles_col,
                     test_size=self.test_size,
@@ -79,7 +78,6 @@ class Splitter:
                 )
             elif self.option == "scaffold":
                 splitter = ScaffoldSplitter(
-                    self.data,
                     self.activity_col,
                     self.smiles_col,
                     test_size=self.test_size,
@@ -87,7 +85,6 @@ class Splitter:
                 )
             elif self.option == "stratified_scaffold":
                 splitter = StratifiedScaffoldSplitter(
-                    self.data,
                     self.activity_col,
                     self.smiles_col,
                     n_splits=self.n_splits,
@@ -99,7 +96,9 @@ class Splitter:
                     "Choose from 'random', 'stratified_random', 'scaffold', or 'stratified_scaffold'."
                 )
 
-            data_train, data_test = splitter.fit()
+            data_train, data_test = splitter.fit(data)
+            data_train = data_train.reset_index(drop=True).drop(columns=self.smiles_col)
+            data_test = data_test.reset_index(drop=True).drop(columns=self.smiles_col)
 
             logging.info(
                 f"Data successfully partitioned using the '{self.option}' method."

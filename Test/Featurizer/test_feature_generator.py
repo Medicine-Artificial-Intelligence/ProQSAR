@@ -11,7 +11,7 @@ class TestFeatureGenerator(unittest.TestCase):
         self.feature_gen = FeatureGenerator(
             mol_col="mol",
             activity_col="activity",
-            ID_col="ID",
+            id_col="ID",
             save_dir=None,
             n_jobs=1,
             verbose=0,
@@ -60,7 +60,7 @@ class TestFeatureGenerator(unittest.TestCase):
             record,
             self.feature_gen.mol_col,
             self.feature_gen.activity_col,
-            self.feature_gen.ID_col,
+            self.feature_gen.id_col,
             ["RDK7"],
         )
 
@@ -76,8 +76,8 @@ class TestFeatureGenerator(unittest.TestCase):
         df = pd.DataFrame(
             {"mol": [self.mol, self.mol], "activity": [1, 0], "ID": ["M001", "M002"]}
         )
-        feature_types = ["RDK5"]
-        result = self.feature_gen.generate_features(df, feature_types)
+        self.feature_gen.feature_types = ["RDK5"]
+        result = self.feature_gen.generate_features(df)
 
         # Check the results
         self.assertIsInstance(result["RDK5"], pd.DataFrame)
@@ -89,8 +89,8 @@ class TestFeatureGenerator(unittest.TestCase):
             {"mol": self.mol, "activity": 1, "ID": "M001"},
             {"mol": self.mol, "activity": 0, "ID": "M002"},
         ]
-        feature_types = ["RDK5"]
-        result = self.feature_gen.generate_features(data, feature_types)
+        self.feature_gen.feature_types = ["RDK5"]
+        result = self.feature_gen.generate_features(data)
 
         # Check the results
         self.assertIsInstance(result["RDK5"], pd.DataFrame)

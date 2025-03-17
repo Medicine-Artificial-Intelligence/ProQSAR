@@ -3,28 +3,31 @@ import pickle
 import os
 import logging
 from typing import Optional
+from sklearn.base import BaseEstimator, TransformerMixin
 
 
-class DuplicateHandler:
+class DuplicateHandler(BaseEstimator, TransformerMixin):
     def __init__(
         self,
-        id_col: Optional[str] = None,
         activity_col: Optional[str] = None,
+        id_col: Optional[str] = None,
         save_method: bool = False,
         save_dir: str = "Project/DuplicateHandler",
         save_trans_data: bool = False,
         trans_data_name: str = "dh_trans_data",
+        deactivate: bool = False,
     ):
         """
         Initializes the DuplicateHandler with the necessary configuration.
 
         Parameters:
-        - id_col (str): The name of the column to be used as the identifier.
         - activity_col (str): The name of the column to be used for activity tracking.
+        - id_col (str): The name of the column to be used as the identifier.
         - save_method (bool): Whether to save the fitted duplicate data handler.
         - save_dir (str): Directory to save the configuration.
         - save_trans_data (bool): Whether to save the transformed data.
         - trans_data_name (str): File name for saved transformed data.
+        - deactivate (bool): Flag to deactivate the process.
         """
         self.id_col = id_col
         self.activity_col = activity_col
@@ -32,17 +35,22 @@ class DuplicateHandler:
         self.save_dir = save_dir
         self.save_trans_data = save_trans_data
         self.trans_data_name = trans_data_name
+        self.deactivate = deactivate
         self.dup_cols = None
 
-    def fit(self, data: pd.DataFrame) -> None:
+    def fit(self, data: pd.DataFrame, y=None) -> "DuplicateHandler":
         """
         Fits the duplicate handler by identifying duplicated columns.
 
         Parameters:
         - data (pd.DataFrame): The data on which to fit the handler.
         """
+        if self.deactivate:
+            logging.info("DuplicateHandler is deactivated. Skipping fit.")
+            return self
+
         try:
-            logging.info("Fitting DuplicateHandler model...")
+            logging.info("Fitting DuplicateHandler ...")
             temp_data = data.drop(
                 columns=[self.id_col, self.activity_col], errors="ignore"
             )
@@ -55,11 +63,11 @@ class DuplicateHandler:
                 with open(f"{self.save_dir}/duplicate_handler.pkl", "wb") as file:
                     pickle.dump(self, file)
                 logging.info(
-                    f"DuplicateHandler model saved at: {self.save_dir}/duplicate_handler.pkl"
+                    f"DuplicateHandler saved at: {self.save_dir}/duplicate_handler.pkl"
                 )
 
         except Exception as e:
-            logging.error(f"An error occurred while fitting the model: {e}")
+            logging.error(f"An error occurred while fitting: {e}")
             raise
 
         return self
@@ -74,6 +82,10 @@ class DuplicateHandler:
         Returns:
         - pd.DataFrame: The transformed DataFrame with duplicates removed.
         """
+        if self.deactivate:
+            logging.info("DuplicateHandler is deactivated. Returning unmodified data.")
+            return data
+
         try:
             logging.info("Transforming data to remove duplicates...")
             temp_data = data.drop(
@@ -81,6 +93,7 @@ class DuplicateHandler:
             )
             dup_rows = temp_data.index[temp_data.duplicated()].tolist()
             transformed_data = data.drop(index=dup_rows, columns=self.dup_cols)
+            transformed_data.reset_index(drop=True, inplace=True)
 
             if self.save_trans_data:
                 if self.save_dir and not os.path.exists(self.save_dir):
@@ -114,7 +127,7 @@ class DuplicateHandler:
 
         return transformed_data
 
-    def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
+    def fit_transform(self, data: pd.DataFrame, y=None) -> pd.DataFrame:
         """
         Fits the handler and then transforms the data.
 
@@ -124,5 +137,9 @@ class DuplicateHandler:
         Returns:
         - pd.DataFrame: The transformed DataFrame with duplicates removed.
         """
+        if self.deactivate:
+            logging.info("DuplicateHandler is deactivated. Returning unmodified data.")
+            return data
+
         self.fit(data)
         return self.transform(data)

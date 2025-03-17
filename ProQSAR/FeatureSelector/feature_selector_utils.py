@@ -67,7 +67,7 @@ def _get_method_map(
                 "Anova": SelectKBest(score_func=f_classif, k=20),
                 "MutualInformation": SelectKBest(score_func=mutual_info_classif, k=20),
                 "RandomForestClassifier": SelectFromModel(
-                    RandomForestClassifier(random_state=42)
+                    RandomForestClassifier(random_state=42, n_jobs=n_jobs)
                 ),
                 "ExtraTreesClassifier": SelectFromModel(
                     ExtraTreesClassifier(random_state=42, n_jobs=n_jobs)
@@ -88,6 +88,7 @@ def _get_method_map(
                         solver="saga",
                         l1_ratio=0.5,
                         max_iter=1000,
+                        n_jobs=n_jobs,
                     )
                 ),
             }
@@ -98,7 +99,7 @@ def _get_method_map(
                     score_func=mutual_info_regression, k=20
                 ),
                 "RandomForestRegressor": SelectFromModel(
-                    RandomForestRegressor(random_state=42)
+                    RandomForestRegressor(random_state=42, n_jobs=n_jobs)
                 ),
                 "ExtraTreesRegressor": SelectFromModel(
                     ExtraTreesRegressor(random_state=42, n_jobs=n_jobs)
@@ -112,7 +113,7 @@ def _get_method_map(
                 "XGBRegressor": SelectFromModel(
                     XGBRegressor(random_state=42, verbosity=0, eval_metric="rmse")
                 ),
-                "LassoCV": SelectFromModel(LassoCV(random_state=42)),
+                "LassoCV": SelectFromModel(LassoCV(random_state=42, n_jobs=n_jobs)),
             }
 
         else:
@@ -135,8 +136,8 @@ def evaluate_feature_selectors(
     activity_col: str,
     id_col: str,
     add_method: Optional[dict[str, object]] = None,
-    select_method: Optional[List[str]] = None,
-    scoring_list: Optional[List[str]] = None,
+    select_method: Optional[Union[list, str]] = None,
+    scoring_list: Optional[Union[list, str]] = None,
     n_splits: int = 5,
     n_repeats: int = 5,
     include_stats: bool = True,
@@ -196,15 +197,22 @@ def evaluate_feature_selectors(
     """
     try:
         logging.info("Starting feature selection evaluation.")
+
+        if isinstance(scoring_list, str):
+            scoring_list = [scoring_list]
+
+        if isinstance(select_method, str):
+            select_method = [select_method]
+
         X_data = data.drop([activity_col, id_col], axis=1)
         y_data = data[activity_col]
 
         task_type = _get_task_type(data, activity_col)
         method_map = _get_method_map(task_type, add_method, n_jobs)
+        method_map.update({"NoFS": None})
         cv = _get_cv_strategy(task_type, n_splits=n_splits, n_repeats=n_repeats)
         scoring_list = scoring_list or _get_cv_scoring(task_type)
 
-        result = []
         methods_to_compare = {}
 
         if select_method is None:
@@ -216,63 +224,36 @@ def evaluate_feature_selectors(
                 else:
                     raise ValueError(f"Method '{name}' is not recognized.")
 
+        result = []
+
         for name, method in methods_to_compare.items():
-            selector = method.fit(X_data, y_data)
-            selected_X = selector.transform(X_data)
+            if name == "NoFS":
+                selected_X = X_data  # No feature selection
+            else:
+                selector = method.fit(X_data, y_data)
+                selected_X = selector.transform(X_data)
+
             model = (
                 RandomForestClassifier(random_state=42)
                 if task_type == "C"
                 else RandomForestRegressor(random_state=42)
             )
-            scores = cross_validate(
-                model, selected_X, y_data, cv=cv, scoring=scoring_list, n_jobs=n_jobs
+            result.append(
+                ModelValidation._perform_cross_validation(
+                    {name: model},
+                    selected_X,
+                    y_data,
+                    cv,
+                    scoring_list,
+                    include_stats,
+                    n_splits,
+                    n_repeats,
+                    n_jobs,
+                )
             )
 
-            # Collect fold scores for each cycle
-            for cycle in range(n_splits * n_repeats):
-                for metric in scoring_list:
-                    result.append(
-                        {
-                            "scoring": metric,
-                            "cv_cycle": cycle + 1,
-                            "method": name,
-                            "value": scores[f"test_{metric}"][cycle],
-                        }
-                    )
-
-            # Optionally add mean, std, and median for each model and scoring metric
-            if include_stats:
-                for metric in scoring_list:
-                    metric_scores = scores[f"test_{metric}"]
-                    result.append(
-                        {
-                            "scoring": metric,
-                            "cv_cycle": "mean",
-                            "method": name,
-                            "value": np.mean(metric_scores),
-                        }
-                    )
-                    result.append(
-                        {
-                            "scoring": metric,
-                            "cv_cycle": "std",
-                            "method": name,
-                            "value": np.std(metric_scores),
-                        }
-                    )
-                    result.append(
-                        {
-                            "scoring": metric,
-                            "cv_cycle": "median",
-                            "method": name,
-                            "value": np.median(metric_scores),
-                        }
-                    )
-        # Create a DataFrame in wide format
-        result_df = pd.DataFrame(result)
-
         # Pivot the DataFrame so that each model becomes a separate column
-        result_df = result_df.pivot_table(
+        result_df = pd.concat(result).pivot_table(
             index=["scoring", "cv_cycle"],
             columns="method",
             values="value",

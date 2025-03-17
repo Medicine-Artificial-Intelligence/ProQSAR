@@ -5,12 +5,13 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.exceptions import NotFittedError
 from typing import Optional
 
 
-class LowVarianceHandler:
+class LowVarianceHandler(BaseEstimator, TransformerMixin):
     """
     A class to handle low variance feature selection from a dataset.
 
@@ -30,8 +31,8 @@ class LowVarianceHandler:
 
     def __init__(
         self,
-        id_col: Optional[str] = None,
         activity_col: Optional[str] = None,
+        id_col: Optional[str] = None,
         var_thresh: float = 0.05,
         save_method: bool = False,
         visualize: bool = False,
@@ -40,13 +41,14 @@ class LowVarianceHandler:
         save_dir: str = "Project/VarianceHandler",
         save_trans_data: bool = False,
         trans_data_name: str = "lvh_trans_data",
+        deactivate: bool = False,
     ):
         """
         Initialize the LowVarianceHandler.
 
         Parameters:
-        - id_col (str): The column name for the ID column.
         - activity_col (str): The column name for the activity column.
+        - id_col (str): The column name for the ID column.
         - var_thresh (float): The variance threshold. Default is 0.05.
         - save_method (bool): Whether to save the fitted missing data handler.
         - visualize (bool): Whether to visualize the variance threshold analysis.
@@ -69,13 +71,14 @@ class LowVarianceHandler:
         self.save_dir = save_dir
         self.save_trans_data = save_trans_data
         self.trans_data_name = trans_data_name
+        self.deactivate = deactivate
         self.selected_columns = None
 
     @staticmethod
     def variance_threshold_analysis(
         data: pd.DataFrame,
-        id_col: Optional[str] = None,
         activity_col: Optional[str] = None,
+        id_col: Optional[str] = None,
         set_style: str = "whitegrid",
         save_image: bool = False,
         image_name: str = "variance_analysis.png",
@@ -172,12 +175,13 @@ class LowVarianceHandler:
         - id_col (str): The column name for the ID column.
         - var_thresh (float): The variance threshold.
         Features with variance below this threshold will be removed.
+        - deactivate (bool): Flag to deactivate the process.
 
         Returns:
         - list: The list of selected columns.
         """
         try:
-            columns_to_exclude = [activity_col, id_col]
+            columns_to_exclude = [id_col, activity_col]
             temp_data = data.drop(columns=columns_to_exclude)
             binary_cols = [
                 col
@@ -197,6 +201,8 @@ class LowVarianceHandler:
                     selected_features = data[non_binary_cols].columns[features].tolist()
                 except ValueError:
                     pass
+            else:
+                logging.warning("No non-binary columns to apply variance threshold.")
 
             return columns_to_exclude + binary_cols + selected_features
 
@@ -204,13 +210,17 @@ class LowVarianceHandler:
             logging.error(f"Error in feature selection by variance: {e}")
             return []
 
-    def fit(self, data: pd.DataFrame):
+    def fit(self, data: pd.DataFrame, y=None):
         """
         Fits the variance-related preprocessing steps on the data.
 
         Parameters:
         - data (pd.DataFrame): The input data.
         """
+        if self.deactivate:
+            logging.info("LowVarianceHandler is deactivated. Skipping fit.")
+            return self
+
         try:
             if self.visualize:
                 LowVarianceHandler.variance_threshold_analysis(
@@ -255,6 +265,12 @@ class LowVarianceHandler:
         Returns:
         - pd.DataFrame: The transformed data with selected features.
         """
+        if self.deactivate:
+            logging.info(
+                "LowVarianceHandler is deactivated. Returning unmodified data."
+            )
+            return data
+
         try:
             if self.selected_columns is None:
                 raise NotFittedError(
@@ -291,7 +307,7 @@ class LowVarianceHandler:
             logging.error(f"Error in transforming data: {e}")
             raise
 
-    def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
+    def fit_transform(self, data: pd.DataFrame, y=None) -> pd.DataFrame:
         """
         Fit the handler and transform the data.
 
@@ -301,7 +317,11 @@ class LowVarianceHandler:
         Returns:
         - pd.DataFrame: The transformed data with selected features.
         """
+        if self.deactivate:
+            logging.info(
+                "LowVarianceHandler is deactivated. Returning unmodified data."
+            )
+            return data
+
         self.fit(data)
-        return self.transform(
-            data,
-        )
+        return self.transform(data)

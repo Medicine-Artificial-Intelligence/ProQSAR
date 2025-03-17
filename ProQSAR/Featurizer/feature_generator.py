@@ -17,10 +17,21 @@ from typing import Optional, Union, Dict, Any, List
 
 
 class FeatureGenerator:
-    def __init__(self, mol_col, activity_col, ID_col, save_dir, n_jobs=-1, verbose=1):
+    def __init__(
+        self,
+        mol_col: str,
+        activity_col: str,
+        id_col: str,
+        feature_types: Union[list, str] = "RDK5",
+        save_dir: Optional[str] = None,
+        n_jobs=-1,
+        verbose=1,
+    ):
+
         self.mol_col = mol_col
         self.activity_col = activity_col
-        self.ID_col = ID_col
+        self.id_col = id_col
+        self.feature_types = feature_types
         self.save_dir = save_dir
         self.n_jobs = n_jobs
         self.verbose = verbose
@@ -56,16 +67,18 @@ class FeatureGenerator:
                     fp_size = 2048 if maxpath <= 6 else 4096
                     result[fp] = RDKFp(mol, maxPath=maxpath, fpSize=fp_size)
                 elif "ECFP" in fp:
-                    d = int(fp[-1:]) * 2
+                    d = int(fp[-1:])
+                    radius = d // 2 if d != 0 else 0
                     nBits = 2048 if d < 6 else 4096
-                    use_features = "feat" in fp.lower()
+                    use_features = False
                     result[fp] = ECFPs(
-                        mol, radius=d, nBits=nBits, useFeatures=use_features
+                        mol, radius=radius, nBits=nBits, useFeatures=use_features
                     )
                 elif "FCFP" in fp:
-                    d = int(fp[-1:]) * 2
+                    d = int(fp[-1:])
+                    radius = d // 2 if d != 0 else 0
                     nBits = 2048 if d < 6 else 4096
-                    use_features = "fcfp" in fp.lower()
+                    use_features = True
                     result[fp] = ECFPs(
                         mol, radius=d, nBits=nBits, useFeatures=use_features
                     )
@@ -91,7 +104,7 @@ class FeatureGenerator:
         record: Dict[str, Any],
         mol_col: str,
         activity_col: str,
-        ID_col: str,
+        id_col: str,
         feature_types: List[str] = ["RDK5"],
     ) -> Dict[str, Any]:
         """
@@ -110,19 +123,37 @@ class FeatureGenerator:
         try:
             mol = record[mol_col]
             act = record[activity_col]
-            id = record[ID_col]
+            id = record[id_col]
             result = FeatureGenerator._mol_process(mol, feature_types=feature_types)
-            result[ID_col] = id
+            result[id_col] = id
             result[activity_col] = act
             return result
         except KeyError as e:
             logging.error(f"Missing key in record: {e}")
             return None
 
+    @staticmethod
+    def get_all_types():
+        return [
+            "ECFP2",
+            "ECFP4",
+            "ECFP6",
+            "FCFP2",
+            "FCFP4",
+            "FCFP6",
+            "RDK5",
+            "RDK6",
+            "RDK7",
+            "MACCS",
+            "avalon",
+            "rdkdes",
+            "pubchem",
+            "pharm2dgbfp",
+        ]
+
     def generate_features(
         self,
         df: Union[pd.DataFrame, List[Dict[str, Any]]],
-        feature_types: List[str] = ["RDK5"],
     ) -> Dict[str, pd.DataFrame]:
         """
         Generates features for molecules contained in a DataFrame or a list of dictionaries
@@ -130,8 +161,7 @@ class FeatureGenerator:
 
         Parameters:
         - df (Union[pd.DataFrame, List[Dict[str, Any]]]): The input data as either
-          a DataFrame or a list of dictionaries.
-        - feature_types (List[str]): Types of features to generate.
+        a DataFrame or a list of dictionaries.
 
         Returns:
         - Dict[str, pd.DataFrame]: A dictionary where keys are feature types and values are DataFrames
@@ -150,10 +180,16 @@ class FeatureGenerator:
             logging.error("Invalid input data type", exc_info=True)
             return None
 
+        if self.feature_types == "all":
+            self.feature_types = FeatureGenerator.get_all_types()
+
+        elif isinstance(self.feature_types, str):
+            self.feature_types = [self.feature_types]
+
         # Parallel processing of records using joblib
         results = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
             delayed(self._single_process)(
-                record, self.mol_col, self.activity_col, self.ID_col, feature_types
+                record, self.mol_col, self.activity_col, self.id_col, self.feature_types
             )
             for record in data
         )
@@ -161,16 +197,14 @@ class FeatureGenerator:
 
         feature_dfs = {}
 
-        for feature_type in feature_types:
+        for feature_type in self.feature_types:
             fp_df = pd.DataFrame(np.stack(results[feature_type]), index=results.index)
             feature_df = pd.concat(
-                [results[[self.ID_col, self.activity_col]], fp_df], axis=1
+                [results[[self.id_col, self.activity_col]], fp_df], axis=1
             )
 
             if self.save_dir:
-
                 os.makedirs(self.save_dir, exist_ok=True)
-
                 save_path = os.path.join(self.save_dir, f"{feature_type}.csv")
                 feature_df.to_csv(save_path, index=False)
 

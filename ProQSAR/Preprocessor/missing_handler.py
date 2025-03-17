@@ -1,4 +1,6 @@
+import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
 from sklearn.linear_model import BayesianRidge
@@ -9,27 +11,29 @@ import os
 import logging
 
 
-class MissingHandler:
+class MissingHandler(BaseEstimator, TransformerMixin):
     """
     A class to handle missing data by performing imputation and removing columns with
     missing values exceeding a specified threshold.
 
     Attributes:
-        id_col (Optional[str]): Column name for identifiers.
-        activity_col (Optional[str]): Column name for activity values.
-        missing_thresh (float): Threshold for missing values to drop columns.
-        imputation_strategy (str): Imputation strategy for missing values.
-        n_neighbors (int): Number of neighbors for KNN imputation.
-        save_method (bool): Whether to save the imputation model.
-        save_dir (Optional[str]): Directory to save the imputation model and transformed data.
-        save_trans_data (bool): Whether to save the transformed data after imputation.
-        trans_data_name (str): Name of the transformed data file.
+        - id_col (Optional[str]): Column name for identifiers.
+        - activity_col (Optional[str]): Column name for activity values.
+        - missing_thresh (float): Threshold for missing values to drop columns.
+        - imputation_strategy (str): Imputation strategy for missing values.
+            Supported strategy: 'mean', 'median', 'mode', 'knn', or 'mice'.
+        - n_neighbors (int): Number of neighbors for KNN imputation.
+        - save_method (bool): Whether to save the imputation model.
+        - save_dir (Optional[str]): Directory to save the imputation model and transformed data.
+        - save_trans_data (bool): Whether to save the transformed data after imputation.
+        - trans_data_name (str): Name of the transformed data file.
+        - deactivate (bool): Flag to deactivate the process.
     """
 
     def __init__(
         self,
-        id_col: Optional[str] = None,
         activity_col: Optional[str] = None,
+        id_col: Optional[str] = None,
         missing_thresh: float = 40.0,
         imputation_strategy: str = "mean",
         n_neighbors: int = 5,
@@ -37,12 +41,13 @@ class MissingHandler:
         save_dir: Optional[str] = "Project/MissingHandler",
         save_trans_data: bool = False,
         trans_data_name: str = "mh_trans_data",
+        deactivate: bool = False,
     ):
         """
         Initializes the MissingHandler object with the given parameters.
         """
-        self.id_col = id_col
         self.activity_col = activity_col
+        self.id_col = id_col
         self.missing_thresh = missing_thresh
         self.imputation_strategy = imputation_strategy
         self.n_neighbors = n_neighbors
@@ -50,6 +55,8 @@ class MissingHandler:
         self.save_dir = save_dir
         self.save_trans_data = save_trans_data
         self.trans_data_name = trans_data_name
+        self.deactivate = deactivate
+        self.fitted = False
         self.binary_imputer = None
         self.non_binary_imputer = None
 
@@ -122,7 +129,7 @@ class MissingHandler:
 
         return binary_imputer, non_binary_imputer
 
-    def fit(self, data: pd.DataFrame) -> None:
+    def fit(self, data: pd.DataFrame, y=None) -> "MissingHandler":
         """
         Fits the imputation models to the data and optionally saves the configuration and models.
 
@@ -132,6 +139,10 @@ class MissingHandler:
         Returns:
         Tuple[SimpleImputer, Optional[SimpleImputer]]: The fitted binary and non-binary imputers.
         """
+        if self.deactivate:
+            logging.info("MissingHandler is deactivated. Skipping fit.")
+            return self
+
         try:
             data_to_impute = data.drop(
                 columns=[self.id_col, self.activity_col], errors="ignore"
@@ -154,6 +165,7 @@ class MissingHandler:
                 imputation_strategy=self.imputation_strategy,
                 n_neighbors=self.n_neighbors,
             )
+            self.fitted = True
 
             if self.save_method:
                 if self.save_dir and not os.path.exists(self.save_dir):
@@ -191,8 +203,12 @@ class MissingHandler:
         NotFittedError
             If imputation models have not been fitted.
         """
+        if self.deactivate:
+            logging.info("MissingHandler is deactivated. Returning unmodified data.")
+            return data
+
         try:
-            if self.binary_imputer is None and self.non_binary_imputer is None:
+            if not self.fitted:
                 raise NotFittedError(
                     "MissingHandler is not fitted yet. Call 'fit' before using this method."
                 )
@@ -201,6 +217,9 @@ class MissingHandler:
                 columns=[self.id_col, self.activity_col], errors="ignore"
             )
             data_to_impute.drop(columns=self.drop_cols, inplace=True, errors="ignore")
+
+            if data_to_impute.isnull().any().any():
+                transformed_data = data
 
             data_binary = data_to_impute[self.binary_cols]
             data_non_binary = data_to_impute.drop(
@@ -211,6 +230,7 @@ class MissingHandler:
                 pd.DataFrame(
                     self.binary_imputer.transform(data_binary),
                     columns=data_binary.columns,
+                    dtype=np.int64,
                 )
                 if self.binary_imputer
                 else data_binary
@@ -268,7 +288,7 @@ class MissingHandler:
             logging.error(f"Error in transforming data: {e}")
             raise
 
-    def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
+    def fit_transform(self, data: pd.DataFrame, y=None) -> pd.DataFrame:
         """
         Fits the imputation models to the data and transforms the data using the fitted models.
 
@@ -278,5 +298,9 @@ class MissingHandler:
         Returns:
         pd.DataFrame: The transformed (imputed) DataFrame.
         """
+        if self.deactivate:
+            logging.info("MissingHandler is deactivated. Returning unmodified data.")
+            return data
+
         self.fit(data)
         return self.transform(data)

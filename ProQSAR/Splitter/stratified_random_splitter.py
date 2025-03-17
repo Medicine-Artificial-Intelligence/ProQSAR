@@ -10,7 +10,6 @@ class StratifiedRandomSplitter:
 
     def __init__(
         self,
-        data: pd.DataFrame,
         activity_col: str,
         smiles_col: str,
         test_size: float = 0.2,
@@ -21,8 +20,6 @@ class StratifiedRandomSplitter:
 
         Parameters:
         -----------
-        data : pd.DataFrame
-            The dataset containing the features and labels.
         activity_col : str
             The name of the column representing the activity or target label.
         smiles_col : str
@@ -32,15 +29,22 @@ class StratifiedRandomSplitter:
         random_state : int, optional
             The random seed used by the random number generator (default is 42).
         """
-        self.data = data
         self.test_size = test_size
         self.random_state = random_state
         self.activity_col = activity_col
         self.smiles_col = smiles_col
 
-    def fit(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def fit(
+        self,
+        data: pd.DataFrame,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Splits the data into training and testing sets.
+
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            The dataset containing the features and labels.
 
         Returns:
         --------
@@ -48,9 +52,9 @@ class StratifiedRandomSplitter:
             The training and testing sets as pandas DataFrames.
         """
         data_train, data_test = train_test_split(
-            self.data,
+            data,
             test_size=self.test_size,
             random_state=self.random_state,
-            stratify=self.data[self.activity_col],
+            stratify=data[self.activity_col],
         )
         return data_train, data_test

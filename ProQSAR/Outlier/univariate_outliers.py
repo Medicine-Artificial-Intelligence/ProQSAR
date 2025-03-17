@@ -4,10 +4,11 @@ import logging
 import numpy as np
 import pandas as pd
 from copy import deepcopy
+from typing import Tuple, Optional, List, Dict
 from sklearn.exceptions import NotFittedError
 from sklearn.preprocessing import PowerTransformer, QuantileTransformer
+from sklearn.base import BaseEstimator, TransformerMixin
 from ProQSAR.Preprocessor.missing_handler import MissingHandler
-from typing import Tuple, Optional, List, Dict
 
 
 def _iqr_threshold(data: pd.DataFrame) -> Dict[str, Dict[str, float]]:
@@ -93,6 +94,9 @@ def _feature_quality(
             for col in temp_data.columns
             if not temp_data[col].dropna().isin([0, 1]).all()
         ]
+
+        if not non_binary_cols:
+            logging.warning("No non-binary columns to handle outliers.")
 
         iqr_thresholds = _iqr_threshold(temp_data[non_binary_cols])
         for col, thresh in iqr_thresholds.items():
@@ -333,7 +337,7 @@ class ImputationHandler:
         return self.transform(data)
 
 
-class UnivariateOutliersHandler:
+class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
     """
     A class for handling univariate outliers in a dataset using various methods
     (e.g., IQR, Winsorization, imputation, etc.).
@@ -342,10 +346,16 @@ class UnivariateOutliersHandler:
     - activity_col: Optional; The column with activity data to exclude from analysis.
     - id_col: Optional; The column with IDs to exclude from analysis.
     - select_method: The method to use for outlier handling (e.g., "iqr", "winsorization").
+    - imputation_strategy: Strategy for imputing missing values ("mean", "median", etc.)
+    will be used if select_method = "imputation".
+    - missing_thresh: Threshold for missing values to drop columns.
+    - n_neighbors: Number of neighbors for KNN imputation
+    will be used if select_method = "imputation" and imputation_strategy = "knn".
     - save_method: Boolean indicating if the method should be saved.
     - save_dir: Directory to save the fitted handler model.
     - save_trans_data: Boolean indicating if transformed data should be saved.
     - trans_data_name: Name for the saved transformed data file.
+    - deactivate (bool): Flag to deactivate the process.
 
     Methods:
     - fit: Fits the outlier handler based on the selected method.
@@ -366,6 +376,7 @@ class UnivariateOutliersHandler:
         save_dir: Optional[str] = "Project/OutlierHandler",
         save_trans_data: bool = False,
         trans_data_name: str = "uo_trans_data",
+        deactivate: bool = False,
     ):
         self.activity_col = activity_col
         self.id_col = id_col
@@ -377,10 +388,11 @@ class UnivariateOutliersHandler:
         self.save_dir = save_dir
         self.save_trans_data = save_trans_data
         self.trans_data_name = trans_data_name
+        self.deactivate = deactivate
         self.uni_outlier_handler = None
         self.bad = []
 
-    def fit(self, data: pd.DataFrame) -> "UnivariateOutliersHandler":
+    def fit(self, data: pd.DataFrame, y=None) -> "UnivariateOutliersHandler":
         """
         Fits the outlier handler by identifying bad features and selecting the method for outlier handling.
 
@@ -390,6 +402,10 @@ class UnivariateOutliersHandler:
         Returns:
         - The UnivariateOutliersHandler instance (for method chaining).
         """
+        if self.deactivate:
+            logging.info("UnivariateOutliersHandler is deactivated. Skipping fit.")
+            return self
+
         try:
             _, self.bad = _feature_quality(
                 data, id_col=self.id_col, activity_col=self.activity_col
@@ -441,6 +457,12 @@ class UnivariateOutliersHandler:
         Returns:
         - Transformed DataFrame with outliers handled based on the selected method.
         """
+        if self.deactivate:
+            logging.info(
+                "UnivariateOutliersHandler is deactivated. Returning unmodified data."
+            )
+            return data
+
         try:
             transformed_data = deepcopy(data)
             if not self.bad:
@@ -481,7 +503,7 @@ class UnivariateOutliersHandler:
             logging.error(f"Error during transformation: {e}")
             raise
 
-    def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
+    def fit_transform(self, data: pd.DataFrame, y=None) -> pd.DataFrame:
         """
         Fit the handler and transform the data in one step.
 
@@ -491,6 +513,12 @@ class UnivariateOutliersHandler:
         Returns:
         - Transformed DataFrame with outliers handled.
         """
+        if self.deactivate:
+            logging.info(
+                "UnivariateOutliersHandler is deactivated. Returning unmodified data."
+            )
+            return data
+
         self.fit(data)
         return self.transform(data)
 

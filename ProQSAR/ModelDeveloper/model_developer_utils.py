@@ -25,6 +25,7 @@ from sklearn.ensemble import (
     AdaBoostClassifier,
     AdaBoostRegressor,
 )
+from sklearn.dummy import DummyClassifier, DummyRegressor
 from xgboost import XGBClassifier, XGBRegressor
 from catboost import CatBoostClassifier, CatBoostRegressor
 from sklearn.neural_network import MLPClassifier, MLPRegressor
@@ -89,6 +90,7 @@ def _get_model_map(
     """
     if task_type == "C":
         model_map = {
+            "DummyClassifier": DummyClassifier(),
             "LogisticRegression": LogisticRegression(
                 max_iter=10000, solver="liblinear", random_state=42, n_jobs=n_jobs
             ),
@@ -112,6 +114,7 @@ def _get_model_map(
         }
     elif task_type == "R":
         model_map = {
+            "DummyClassifier": DummyRegressor(),
             "LinearRegression": LinearRegression(n_jobs=n_jobs),
             "KNeighborsRegressor": KNeighborsRegressor(n_jobs=n_jobs),
             "SVR": SVR(),

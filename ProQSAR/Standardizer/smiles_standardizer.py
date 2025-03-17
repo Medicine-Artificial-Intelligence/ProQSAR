@@ -164,12 +164,12 @@ class SMILESStandardizer:
             )
 
         standardized_results = Parallel(n_jobs=n_jobs, verbose=1)(
-            delayed(self.standardize_smiles)(reaction_data.get(key, ""), **kwargs)
-            for reaction_data in data_input
+            delayed(self.standardize_smiles)(record.get(key, ""), **kwargs)
+            for record in data_input
         )
 
-        for i, reaction_data in enumerate(data_input):
-            reaction_data["standardized_" + key], reaction_data["standardized_mol"] = (
+        for i, record in enumerate(data_input):
+            record["standardized_" + key], record["standardized_mol"] = (
                 standardized_results[i]
             )
 

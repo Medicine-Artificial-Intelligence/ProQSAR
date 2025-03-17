@@ -48,7 +48,7 @@ class TestModelDeveloper(unittest.TestCase):
         self.model_dev = ModelDeveloper(
             activity_col="Activity",
             id_col="ID",
-            select_model="best",
+            best=True,
             scoring="accuracy",
             add_model={"NewModel": RandomForestClassifier()},
         )

@@ -89,7 +89,17 @@ class TestFeatureSelector(unittest.TestCase):
         self.classification_data = create_classification_data()
         self.regression_data = create_regression_data()
         self.fs = FeatureSelector(
-            activity_col="Activity", id_col="ID", save_method=True, save_trans_data=True
+            activity_col="Activity",
+            id_col="ID",
+            save_method=True,
+            save_trans_data=True,
+            select_method=[
+                "NoFS",
+                "Anova",
+                "RandomForestClassifier",
+                "ExtraTreesClassifier",
+            ],
+            best=True,
         )
         self.fs.save_dir = self.temp_dir.name  # Use the temporary directory for saving
 
@@ -101,7 +111,10 @@ class TestFeatureSelector(unittest.TestCase):
         """Test proper initialization of the FeatureSelector instance"""
         self.assertEqual(self.fs.activity_col, "Activity")
         self.assertEqual(self.fs.id_col, "ID")
-        self.assertEqual(self.fs.select_method, "best")
+        self.assertEqual(
+            self.fs.select_method,
+            ["NoFS", "Anova", "RandomForestClassifier", "ExtraTreesClassifier"],
+        )
 
     def test_fit_classification(self):
         """Test the fit method on classification data"""
@@ -152,6 +165,14 @@ class TestFeatureSelector(unittest.TestCase):
             os.path.exists(os.path.join(self.fs.save_dir, "fs_trans_data.csv"))
         )
         self.assertIsInstance(transformed_data, pd.DataFrame)
+
+    def test_deactivate(self):
+        self.fs.deactivate = True
+        self.fs.fit(self.classification_data)
+        transformed_data = self.fs.transform(self.classification_data)
+
+        self.assertEqual(self.fs.feature_selector, None)
+        self.assertEqual(transformed_data.equals(self.classification_data), True)
 
 
 if __name__ == "__main__":

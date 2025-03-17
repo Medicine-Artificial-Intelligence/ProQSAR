@@ -3,7 +3,7 @@ import pickle
 import logging
 import pandas as pd
 from sklearn.exceptions import NotFittedError
-from typing import Optional
+from typing import Optional, Union, List
 
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_task_type,
@@ -68,11 +68,12 @@ class ModelDeveloper:
         self,
         activity_col: str,
         id_col: str,
-        select_model: str = "best",
+        select_model: Optional[Union[str, List[str]]] = None,
         add_model: Optional[dict] = None,
         scoring: Optional[str] = None,
-        n_splits: int = 10,
-        n_repeats: int = 3,
+        best: bool = True,
+        n_splits: int = 5,
+        n_repeats: int = 5,
         save_model: bool = None,
         save_pred_result: bool = False,
         pred_result_name: str = "pred_result",
@@ -89,6 +90,7 @@ class ModelDeveloper:
         self.id_col = id_col
         self.select_model = select_model
         self.add_model = add_model
+        self.best = best
         self.scoring = scoring
         self.n_splits = n_splits
         self.n_repeats = n_repeats
@@ -105,6 +107,7 @@ class ModelDeveloper:
         self.model = None
         self.task_type = None
         self.cv = None
+        self.comparison = None
         self.classes_ = None
 
     def fit(self, data: pd.DataFrame) -> "ModelDeveloper":
@@ -127,37 +130,45 @@ class ModelDeveloper:
                 self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
             )
 
-            if self.select_model == "best":
-                self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
-                comparison_df = ModelValidation.cross_validation_report(
-                    data=data,
-                    activity_col=self.activity_col,
-                    id_col=self.id_col,
-                    add_model=self.add_model,
-                    scoring_list=[self.scoring],
-                    n_splits=self.n_splits,
-                    n_repeats=self.n_repeats,
-                    visualize=self.visualize,
-                    save_fig=self.save_fig,
-                    fig_prefix=self.fig_prefix,
-                    save_csv=self.save_cv_report,
-                    csv_name=self.cv_report_name,
-                    save_dir=self.save_dir,
-                    n_jobs=self.n_jobs,
-                )
+            if isinstance(self.select_model, list) or not self.select_model:
+                if self.best:
+                    self.scoring = (
+                        self.scoring or "f1" if self.task_type == "C" else "r2"
+                    )
+                    self.comparison = ModelValidation.cross_validation_report(
+                        data=data,
+                        activity_col=self.activity_col,
+                        id_col=self.id_col,
+                        add_model=self.add_model,
+                        select_model=self.select_model,
+                        scoring_list=self.scoring,
+                        n_splits=self.n_splits,
+                        n_repeats=self.n_repeats,
+                        visualize=self.visualize,
+                        save_fig=self.save_fig,
+                        fig_prefix=self.fig_prefix,
+                        save_csv=self.save_cv_report,
+                        csv_name=self.cv_report_name,
+                        save_dir=self.save_dir,
+                        n_jobs=self.n_jobs,
+                    )
 
-                self.select_model = (
-                    comparison_df.set_index(["scoring", "cv_cycle"])
-                    .loc[(f"{self.scoring}", "mean")]
-                    .idxmax()
-                )
+                    self.select_model = (
+                        self.comparison.set_index(["scoring", "cv_cycle"])
+                        .loc[(f"{self.scoring}", "mean")]
+                        .idxmax()
+                    )
+                else:
+                    raise AttributeError(
+                        "'select_model' is entered as a list."
+                        "To evaluate and use the best method among the entered methods, turn 'best = True'."
+                        "Otherwise, select_model must be a string as the name of the method."
+                    )
 
-                self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
-            elif self.select_model in self.model_map:
-                self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
-            else:
+            if self.select_model not in self.model_map:
                 raise ValueError(f"Model '{self.select_model}' is not recognized.")
 
+            self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
             self.classes_ = self.model.classes_ if self.task_type == "C" else None
 
             if self.save_model:
@@ -169,11 +180,11 @@ class ModelDeveloper:
 
             logging.info("Model fitting completed successfully.")
 
+            return self
+
         except Exception as e:
             logging.error(f"Error in model fitting: {e}")
             raise
-
-        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """

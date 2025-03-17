@@ -5,10 +5,12 @@ import pandas as pd
 from copy import deepcopy
 from typing import Optional
 from sklearn.preprocessing import KBinsDiscretizer
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin
 from ProQSAR.Outlier.univariate_outliers import _feature_quality
 
 
-class KBinHandler:
+class KBinHandler(BaseEstimator, TransformerMixin):
     """
     A handler for detecting and transforming univariate outliers in data using KBinsDiscretizer.
 
@@ -26,6 +28,7 @@ class KBinHandler:
         save_dir (Optional[str]): Directory path where the model and data should be saved.
         save_trans_data (bool): Whether to save the transformed data to a CSV file.
         trans_data_name (str): The name of the CSV file for transformed data.
+        deactivate (bool): Flag to deactivate the process.
         kbin (Optional[KBinsDiscretizer]): The fitted KBinsDiscretizer object.
         bad (list[str]): List of columns identified as having outliers.
     """
@@ -41,10 +44,11 @@ class KBinHandler:
         save_dir: Optional[str] = "Project/OutlierHandler",
         save_trans_data: bool = False,
         trans_data_name: str = "kbin_trans_data",
+        deactivate: bool = False,
     ) -> None:
 
-        self.id_col = id_col
         self.activity_col = activity_col
+        self.id_col = id_col
         self.n_bins = n_bins
         self.encode = encode
         self.strategy = strategy
@@ -52,10 +56,11 @@ class KBinHandler:
         self.save_dir = save_dir
         self.save_trans_data = save_trans_data
         self.trans_data_name = trans_data_name
+        self.deactivate = deactivate
         self.kbin = None
         self.bad = []
 
-    def fit(self, data: pd.DataFrame) -> "KBinHandler":
+    def fit(self, data: pd.DataFrame, y=None) -> "KBinHandler":
         """
         Fit the KBinsDiscretizer to features with univariate outliers.
 
@@ -65,14 +70,18 @@ class KBinHandler:
         Returns:
             KBinHandler: Returns self for chaining.
         """
+        if self.deactivate:
+            logging.info("KBinHandler is deactivated. Skipping fit.")
+            return self
+
         try:
             _, self.bad = _feature_quality(
                 data, id_col=self.id_col, activity_col=self.activity_col
             )
 
             if not self.bad:
-                print(
-                    "No bad features (univariate outliers) found. Skipping outlier handling."
+                logging.info(
+                    "No bad features (univariate outliers) found. Skipping KBin handling."
                 )
                 return self
 
@@ -105,10 +114,16 @@ class KBinHandler:
         Returns:
             pd.DataFrame: The transformed dataset with "bad" features discretized.
         """
+        if self.deactivate:
+            logging.info("KBinHandler is deactivated. Returning unmodified data.")
+            return data
+
         try:
             transformed_data = deepcopy(data)
             if not self.bad or transformed_data[self.bad].empty:
-                print("No bad features (outliers) to handle. Returning original data.")
+                logging.info(
+                    "No bad features (outliers) to handle. Returning original data."
+                )
                 return transformed_data
 
             new_bad_data = pd.DataFrame(self.kbin.transform(transformed_data[self.bad]))
@@ -145,7 +160,7 @@ class KBinHandler:
             logging.error(f"Error in transforming the data: {e}")
             raise
 
-    def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
+    def fit_transform(self, data: pd.DataFrame, y=None) -> pd.DataFrame:
         """
         Fit the KBinsDiscretizer to the data and transform it in a single step.
 
@@ -155,5 +170,9 @@ class KBinHandler:
         Returns:
             pd.DataFrame: The transformed dataset with "bad" features discretized.
         """
+        if self.deactivate:
+            logging.info("KBinHandler is deactivated. Returning unmodified data.")
+            return data
+
         self.fit(data)
         return self.transform(data)
