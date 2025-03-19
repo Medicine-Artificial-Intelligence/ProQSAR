@@ -39,9 +39,9 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         novelty: bool = False,
         n_jobs: int = -1,
         save_method: bool = False,
-        save_dir: Optional[str] = "Project/OutlierHandler",
+        save_dir: Optional[str] = "Project/MultivOutlierHandler",
         save_trans_data: bool = False,
-        trans_data_name: str = "mo_trans_data",
+        trans_data_name: str = "trans_data",
         deactivate: bool = False,
     ) -> None:
         """
@@ -212,6 +212,15 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
         self.fit(data)
         return self.transform(data)
+    
+    def setting(self, **kwargs):
+        valid_keys = self.__dict__.keys()
+        for key in kwargs:
+            if key not in valid_keys:
+                raise KeyError(f"'{key}' is not a valid attribute of MultivariateOutlierHandler.")
+        self.__dict__.update(**kwargs)
+
+        return self
 
     @staticmethod
     def compare_multivariate_methods(

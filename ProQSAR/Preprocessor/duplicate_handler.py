@@ -14,7 +14,7 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
         save_method: bool = False,
         save_dir: str = "Project/DuplicateHandler",
         save_trans_data: bool = False,
-        trans_data_name: str = "dh_trans_data",
+        trans_data_name: str = "trans_data",
         deactivate: bool = False,
     ):
         """
@@ -143,3 +143,12 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
 
         self.fit(data)
         return self.transform(data)
+    
+    def setting(self, **kwargs):
+        valid_keys = self.__dict__.keys()
+        for key in kwargs:
+            if key not in valid_keys:
+                raise KeyError(f"'{key}' is not a valid attribute of DuplicateHandler.")
+        self.__dict__.update(**kwargs)
+
+        return self

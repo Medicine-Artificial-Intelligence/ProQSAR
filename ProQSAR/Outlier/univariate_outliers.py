@@ -375,7 +375,7 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
         save_method: bool = False,
         save_dir: Optional[str] = "Project/OutlierHandler",
         save_trans_data: bool = False,
-        trans_data_name: str = "uo_trans_data",
+        trans_data_name: str = "trans_data",
         deactivate: bool = False,
     ):
         self.activity_col = activity_col
@@ -521,7 +521,15 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
         self.fit(data)
         return self.transform(data)
+    
+    def setting(self, **kwargs):
+        valid_keys = self.__dict__.keys()
+        for key in kwargs:
+            if key not in valid_keys:
+                raise KeyError(f"'{key}' is not a valid attribute of UnivariateOutliersHandler.")
+        self.__dict__.update(**kwargs)
 
+        return self
     @staticmethod
     def compare_univariate_methods(
         data1: pd.DataFrame,

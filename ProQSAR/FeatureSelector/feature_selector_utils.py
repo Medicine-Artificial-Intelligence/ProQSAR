@@ -218,7 +218,7 @@ def evaluate_feature_selectors(
         if select_method is None:
             methods_to_compare = method_map
         else:
-            for name in select_method:
+            for name in select_method + list(add_method.keys()):
                 if name in method_map:
                     methods_to_compare.update({name: method_map[name]})
                 else:

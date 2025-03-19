@@ -38,9 +38,9 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
         visualize: bool = False,
         save_image: bool = False,
         image_name: str = "variance_analysis.png",
-        save_dir: str = "Project/VarianceHandler",
+        save_dir: str = "Project/LowVarianceHandler",
         save_trans_data: bool = False,
-        trans_data_name: str = "lvh_trans_data",
+        trans_data_name: str = "trans_data",
         deactivate: bool = False,
     ):
         """
@@ -325,3 +325,12 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
 
         self.fit(data)
         return self.transform(data)
+
+    def setting(self, **kwargs):
+        valid_keys = self.__dict__.keys()
+        for key in kwargs:
+            if key not in valid_keys:
+                raise KeyError(f"'{key}' is not a valid attribute of LowVarianceHandler.")
+        self.__dict__.update(**kwargs)
+
+        return self

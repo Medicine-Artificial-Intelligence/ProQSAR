@@ -11,9 +11,10 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_cv_strategy,
 )
 from ProQSAR.ModelDeveloper.model_validation import ModelValidation
+from ProQSAR.validation_config import CrossValidationConfig
 
 
-class ModelDeveloper:
+class ModelDeveloper(CrossValidationConfig):
     """
     Class to handle model development for machine learning tasks.
 
@@ -24,7 +25,7 @@ class ModelDeveloper:
     id_col : str
         Name of the ID column in the dataset.
     select_model : str, optional
-        The model to use for model development, 'best' or a specific model (default: 'best').
+        The model to use for model development.
     add_model : Optional[dict], optional
         Additional models to be added (default: None).
     scoring : Optional[str], optional
@@ -44,13 +45,13 @@ class ModelDeveloper:
     save_cv_report : bool, optional
         Whether to save the IV report (default: False).
     cv_report_name : str, optional
-        Name of the IV report file (default: 'comparison_cv_report').
+        Name of the IV report file (default: 'cv_report').
     visualize : Optional[str], optional
         Visualization option for report (default: None).
     save_fig : bool, optional
         Whether to save figures (default: False).
     fig_prefix : str, optional
-        Name of the figure file (default: 'comparison_cv_graph').
+        Name of the figure file (default: 'cv_graph').
     n_jobs : int, optional
         Number of jobs to run in parallel (default: -1).
 
@@ -66,48 +67,34 @@ class ModelDeveloper:
 
     def __init__(
         self,
-        activity_col: str,
-        id_col: str,
+        activity_col: str = "activity",
+        id_col: str = "id",
         select_model: Optional[Union[str, List[str]]] = None,
         add_model: Optional[dict] = None,
-        scoring: Optional[str] = None,
-        best: bool = True,
-        n_splits: int = 5,
-        n_repeats: int = 5,
-        save_model: bool = None,
+        compare: bool = True,
+        save_model: bool = False,
         save_pred_result: bool = False,
         pred_result_name: str = "pred_result",
         save_dir: Optional[str] = "Project/ModelDeveloper",
-        save_cv_report: bool = False,
-        cv_report_name: str = "md_cv_report",
-        visualize: Optional[str] = None,
-        save_fig: bool = False,
-        fig_prefix: str = "md_cv_graph",
         n_jobs: int = -1,
+        **kwargs
     ):
         """Initializes the ModelDeveloper with necessary attributes."""
+        super().__init__(**kwargs)
         self.activity_col = activity_col
         self.id_col = id_col
         self.select_model = select_model
         self.add_model = add_model
-        self.best = best
-        self.scoring = scoring
-        self.n_splits = n_splits
-        self.n_repeats = n_repeats
+        self.compare = compare
         self.save_model = save_model
         self.save_pred_result = save_pred_result
         self.pred_result_name = pred_result_name
         self.save_dir = save_dir
-        self.save_cv_report = save_cv_report
-        self.cv_report_name = cv_report_name
-        self.visualize = visualize
-        self.save_fig = save_fig
-        self.fig_prefix = fig_prefix
         self.n_jobs = n_jobs
         self.model = None
         self.task_type = None
         self.cv = None
-        self.comparison = None
+        self.report = None
         self.classes_ = None
 
     def fit(self, data: pd.DataFrame) -> "ModelDeveloper":
@@ -129,19 +116,26 @@ class ModelDeveloper:
             self.cv = _get_cv_strategy(
                 self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
             )
+            # Set scorings
+            self.scoring_target = (
+                self.scoring_target or "f1" if self.task_type == "C" else "r2"
+            )
+            if self.scoring_list:
+                if isinstance(self.scoring_list, str):
+                    self.scoring_list = [self.scoring_list]
+
+                if self.scoring_target not in self.scoring_list:
+                    self.scoring_list.append(self.scoring_target)
 
             if isinstance(self.select_model, list) or not self.select_model:
-                if self.best:
-                    self.scoring = (
-                        self.scoring or "f1" if self.task_type == "C" else "r2"
-                    )
-                    self.comparison = ModelValidation.cross_validation_report(
+                if self.compare:
+                    self.report = ModelValidation.cross_validation_report(
                         data=data,
                         activity_col=self.activity_col,
                         id_col=self.id_col,
                         add_model=self.add_model,
                         select_model=self.select_model,
-                        scoring_list=self.scoring,
+                        scoring_list=self.scoring_list,
                         n_splits=self.n_splits,
                         n_repeats=self.n_repeats,
                         visualize=self.visualize,
@@ -154,21 +148,41 @@ class ModelDeveloper:
                     )
 
                     self.select_model = (
-                        self.comparison.set_index(["scoring", "cv_cycle"])
-                        .loc[(f"{self.scoring}", "mean")]
+                        self.report.set_index(["scoring", "cv_cycle"])
+                        .loc[(f"{self.scoring_target}", "mean")]
                         .idxmax()
                     )
+                    self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
                 else:
                     raise AttributeError(
                         "'select_model' is entered as a list."
-                        "To evaluate and use the best method among the entered methods, turn 'best = True'."
+                        "To evaluate and use the best method among the entered methods, turn 'compare = True'."
                         "Otherwise, select_model must be a string as the name of the method."
                     )
 
-            if self.select_model not in self.model_map:
-                raise ValueError(f"Model '{self.select_model}' is not recognized.")
+            elif isinstance(self.select_model, str):
+                if self.select_model not in self.model_map:
+                    raise ValueError(f"Model '{self.select_model}' is not recognized.")
+                else:
+                    self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
+                    self.report = ModelValidation.cross_validation_report(
+                        data=data,
+                        activity_col=self.activity_col,
+                        id_col=self.id_col,
+                        add_model=self.add_model,
+                        select_model=None if self.compare else self.select_model,
+                        scoring_list=self.scoring_list,
+                        n_splits=self.n_splits,
+                        n_repeats=self.n_repeats,
+                        visualize=self.visualize,
+                        save_fig=self.save_fig,
+                        fig_prefix=self.fig_prefix,
+                        save_csv=self.save_cv_report,
+                        csv_name=self.cv_report_name,
+                        save_dir=self.save_dir,
+                        n_jobs=self.n_jobs,
+                    )
 
-            self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
             self.classes_ = self.model.classes_ if self.task_type == "C" else None
 
             if self.save_model:
@@ -239,3 +253,12 @@ class ModelDeveloper:
         except Exception as e:
             logging.error(f"Error during prediction: {e}")
             raise
+
+    def setting(self, **kwargs):
+        valid_keys = self.__dict__.keys()
+        for key in kwargs:
+            if key not in valid_keys:
+                raise KeyError(f"'{key}' is not a valid attribute of ModelDeveloper.")
+        self.__dict__.update(**kwargs)
+
+        return self

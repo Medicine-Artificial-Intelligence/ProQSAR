@@ -27,6 +27,31 @@ class SMILESStandardizer:
         standardize_dict_smiles: Standardizes SMILES strings within a pandas DataFrame or a list of dictionaries.
     """
 
+    def __init__(
+            self,
+            smiles_col: str = "SMILES",
+            normalize: bool = True,
+            tautomerize: bool = True,
+            remove_salts: bool = False,
+            handle_charges: bool = False,
+            uncharge: bool = False,
+            handle_stereo: bool = True,
+            remove_fragments: bool = False,
+            largest_fragment_only: bool = False,
+            n_jobs: int = 4,
+            ):
+        self.smiles_col = smiles_col
+        self.normalize = normalize
+        self.tautomerize = tautomerize
+        self.remove_salts = remove_salts
+        self.handle_charges = handle_charges
+        self.uncharge = uncharge
+        self.handle_stereo = handle_stereo
+        self.remove_fragments = remove_fragments
+        self.largest_fragment_only = largest_fragment_only
+        self.n_jobs = n_jobs
+
+
     @staticmethod
     def smiles2mol(smiles: str) -> Optional[Chem.Mol]:
         """
@@ -52,14 +77,6 @@ class SMILESStandardizer:
     def standardize_mol(
         self,
         mol: Chem.Mol,
-        normalize: bool = True,
-        tautomerize: bool = True,
-        remove_salts: bool = False,
-        handle_charges: bool = False,
-        uncharge: bool = False,
-        handle_stereo: bool = True,
-        remove_fragments: bool = False,
-        largest_fragment_only: bool = False,
     ) -> Optional[Chem.Mol]:
         """
         Applies a series of standardization procedures to an RDKit Mol object based on specified options.
@@ -89,26 +106,26 @@ class SMILESStandardizer:
         Chem.GetSymmSSSR(mol)
 
         # Apply standardization steps
-        if normalize:
+        if self.normalize:
             mol = normalize_molecule(mol)
-        if tautomerize:
+        if self.tautomerize:
             mol = canonicalize_tautomer(mol)
-        if remove_salts:
+        if self.remove_salts:
             mol = salts_remover(mol)
-        if handle_charges:
+        if self.handle_charges:
             mol = reionize_charges(mol)
-        if uncharge:
+        if self.uncharge:
             mol = uncharge_molecule(mol)
-        if handle_stereo:
+        if self.handle_stereo:
             assign_stereochemistry(mol, cleanIt=True, force=True)
-        if remove_fragments or largest_fragment_only:
+        if self.remove_fragments or self.largest_fragment_only:
             mol = fragments_remover(mol)
 
         # Finalize by removing explicit hydrogens and sanitizing
         return remove_hydrogens_and_sanitize(mol)
 
     def standardize_smiles(
-        self, smiles: str, **kwargs
+        self, smiles: str
     ) -> Tuple[Optional[str], Optional[Chem.Mol]]:
         """
         Converts a SMILES string to a standardized RDKit Mol object and returns both the SMILES and Mol.
@@ -125,7 +142,7 @@ class SMILESStandardizer:
             return None, None
 
         try:
-            standardized_mol = self.standardize_mol(original_mol, **kwargs)
+            standardized_mol = self.standardize_mol(original_mol)
             standardized_smiles = Chem.MolToSmiles(standardized_mol)
             return standardized_smiles, standardized_mol
         except Exception as e:
@@ -135,9 +152,6 @@ class SMILESStandardizer:
     def standardize_dict_smiles(
         self,
         data_input: Union[pd.DataFrame, List[dict]],
-        key: str = "SMILES",
-        n_jobs: int = 4,
-        **kwargs,
     ) -> Union[pd.DataFrame, List[dict]]:
         """
         Standardizes SMILES strings within a pandas DataFrame or a list of dictionaries using parallel processing.
@@ -151,8 +165,7 @@ class SMILESStandardizer:
             DataFrame or list of dicts: The input data with additional columns/keys for
             standardized SMILES and Mol objects.
         """
-        data_type = type(data_input)
-        print(data_type)
+
         if isinstance(data_input, pd.DataFrame):
             data_input = data_input.to_dict("records")
 
@@ -163,14 +176,57 @@ class SMILESStandardizer:
                 "Input must be either a pandas DataFrame or a list of dictionaries."
             )
 
-        standardized_results = Parallel(n_jobs=n_jobs, verbose=1)(
-            delayed(self.standardize_smiles)(record.get(key, ""), **kwargs)
+        standardized_results = Parallel(n_jobs=self.n_jobs, verbose=1)(
+            delayed(self.standardize_smiles)(record.get(self.smiles_col, ""))
             for record in data_input
         )
 
         for i, record in enumerate(data_input):
-            record["standardized_" + key], record["standardized_mol"] = (
+            record["standardized_" + self.smiles_col], record["standardized_mol"] = (
                 standardized_results[i]
             )
 
         return data_input
+    
+    def setting(self, **kwargs):
+        valid_keys = self.__dict__.keys()
+        for key in kwargs:
+            if key not in valid_keys:
+                raise KeyError(f"'{key}' is not a valid attribute of SMILESStandardizer.")
+        self.__dict__.update(**kwargs)
+
+        return self
+
+    def get_params(self, deep=True):
+        """Get parameters for this estimator.
+        
+        Parameters
+        ----------
+        deep : bool, default=True
+            If True, return the parameters of sub-estimators as well.
+
+        Returns
+        -------
+        params : dict
+            Dictionary of parameter names mapped to their values.
+        """
+        out = {}
+        for key in self.__dict__:
+            value = getattr(self, key)
+            if deep and hasattr(value, "get_params"):
+                deep_items = value.get_params().items()
+                for sub_key, sub_value in deep_items:
+                    out[f"{key}__{sub_key}"] = sub_value
+            out[key] = value
+            
+        return out
+    
+    def __repr__(self):
+        """Return a string representation of the estimator."""
+        class_name = self.__class__.__name__
+        params = self.get_params(deep=False)
+        param_str = ", ".join(f"{key}={repr(value)}" for key, value in params.items())
+        return f"{class_name}({param_str})"
+
+
+

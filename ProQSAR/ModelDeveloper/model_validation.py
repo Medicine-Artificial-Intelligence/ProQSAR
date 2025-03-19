@@ -333,7 +333,7 @@ class ModelValidation:
             if select_model is None:
                 models_to_compare = model_map
             else:
-                for name in select_model:
+                for name in select_model + list(add_model.keys()):
                     if name in model_map:
                         models_to_compare.update({name: model_map[name]})
                     else:
@@ -462,7 +462,7 @@ class ModelValidation:
             if select_model is None:
                 models_to_compare = model_map
             else:
-                for name in select_model:
+                for name in select_model + list(add_model.keys()):
                     if name in model_map:
                         models_to_compare.update({name: model_map[name]})
                     else:
@@ -574,7 +574,7 @@ class ModelValidation:
             if select_model is None:
                 models_to_compare = model_map
             else:
-                for name in select_model:
+                for name in select_model + list(add_model.keys()):
                     if name in model_map:
                         models_to_compare.update({name: model_map[name]})
                     else:
@@ -691,7 +691,7 @@ class ModelValidation:
             if select_model is None:
                 models_to_compare = model_map
             else:
-                for name in select_model:
+                for name in select_model + list(add_model.keys()):
                     if name in model_map:
                         models_to_compare.update({name: model_map[name]})
                     else:

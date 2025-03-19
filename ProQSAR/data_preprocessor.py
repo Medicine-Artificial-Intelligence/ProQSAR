@@ -1,42 +1,40 @@
 import logging
 from sklearn.pipeline import Pipeline
-from ProQSAR.Preprocessor.duplicate_handler import DuplicateHandler
-from ProQSAR.Preprocessor.missing_handler import MissingHandler
-from ProQSAR.Preprocessor.low_variance_handler import LowVarianceHandler
-from ProQSAR.Outlier.univariate_outliers import UnivariateOutliersHandler
-from ProQSAR.Outlier.kbin_handler import KBinHandler
-from ProQSAR.Outlier.multivariate_outliers import MultivariateOutliersHandler
-from ProQSAR.Rescaler.rescaler import Rescaler
+from ProQSAR.config import Config
 
 
 class DataPreprocessor:
-    def __init__(self, activity_col, id_col, deactivate: bool = False):
+    def __init__(
+            self, 
+            activity_col: str, 
+            id_col: str, 
+            deactivate: bool = False, 
+            config=None
+        ):
+        
         self.activity_col = activity_col
         self.id_col = id_col
         self.deactivate = deactivate
+        self.config = config or Config()
 
-        self.duplicatehandler = DuplicateHandler(activity_col, id_col)
-        self.missinghandler = MissingHandler(activity_col, id_col)
-        self.lowvariancehandler = LowVarianceHandler(activity_col, id_col)
-        self.univariateoutliershandler = UnivariateOutliersHandler(activity_col, id_col)
-        self.kbinhandler = KBinHandler(activity_col, id_col)
-        self.multivariateoutliershandler = MultivariateOutliersHandler(activity_col, id_col)
-        self.rescaler = Rescaler(activity_col, id_col)
+        for attr in ["duplicate", "missing", "lowvar", "univ_outlier", "kbin", "multiv_outlier", "rescaler"]:
+            setattr(self, attr, getattr(self.config, attr).setting(activity_col=self.activity_col, id_col=self.id_col))
 
-        self.stages = [
-            ("duplicatehandler", self.duplicatehandler),
-            ("missinghandler", self.missinghandler),
-            ("lowvariancehandler", self.lowvariancehandler),
-            ("univariateoutliershandler", self.univariateoutliershandler),
-            ("kbinhandler", self.kbinhandler),
-            ("multivariateoutliershandler", self.multivariateoutliershandler),
+        self.datapreprocessor = Pipeline(
+            [
+            ("duplicate", self.duplicate),
+            ("missing", self.missing),
+            ("lowvar", self.lowvar),
+            ("univ_outlier", self.univ_outlier),
+            ("kbin", self.kbin),
+            ("multiv_outlier", self.multiv_outlier),
             ("rescaler", self.rescaler),
         ]
-
-        self.datapreprocessor = Pipeline(self.stages)
+        )
 
     def fit(self, data):
         """Fit all preprocessing steps on the training data."""
+
         if self.deactivate:
             logging.info("DataPreprocessor is deactivated. Skipping fit.")
             return self
@@ -75,59 +73,19 @@ class DataPreprocessor:
         self.fit(data)
         return self.transform(data)
 
-    def set_params(self, stage, **kwargs):
-        """Set parameters for a specific preprocessing stage."""
-        component = getattr(self, stage.lower(), None)
-        if component and isinstance(
-            component,
-            (
-                DuplicateHandler,
-                MissingHandler,
-                LowVarianceHandler,
-                UnivariateOutliersHandler,
-                KBinHandler,
-                MultivariateOutliersHandler,
-                Rescaler,
-            ),
-        ):
-            for key, value in kwargs.items():
-                if hasattr(component, key):
-                    setattr(component, key, value)
-                else:
-                    raise AttributeError(
-                        f"{stage} does not have a parameter named '{key}'"
-                    )
-        else:
-            raise ValueError(f"Invalid stage name: {stage}")
 
-    def get_params(self, deep=False):
-        """
-        Get parameters of the DataGenerator class as a dictionary.
+    def get_params(self, deep=True) -> dict:
+        """Return all hyperparameters as a dictionary."""
+        out = {}
+        for key in self.__dict__:
+            if key == "datapreprocessor":
+                continue
+            value = getattr(self, key)
+            if deep and hasattr(value, "get_params"):
+                deep_items = value.get_params().items()
+                for sub_key, sub_value in deep_items:
+                    out[f"{key}__{sub_key}"] = sub_value
+            out[key] = value
 
-        Parameters
-        ----------
-        deep : bool, optional, default=True
-            If True, will include parameters of the underlying components.
+        return out
 
-        Returns
-        -------
-        params : dict
-            Dictionary containing parameters and their values.
-        """
-        # Parameters from the DataGenerator itself
-        params = {
-            "datapreprocessor__activity_col": self.activity_col,
-            "datapreprocessor__id_col": self.id_col,
-            "datapreprocessor__deactivate": self.deactivate,
-        }
-
-        pipeline_params = self.datapreprocessor.get_params()
-        stage_params = {
-            k: v
-            for k, v in pipeline_params.items()
-            if k not in ["memory", "steps", "verbose"]
-        }
-
-        params.update(stage_params)
-
-        return params

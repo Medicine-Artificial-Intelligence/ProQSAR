@@ -1,8 +1,5 @@
 import pandas as pd
-from typing import Union
-from ProQSAR.Standardizer.smiles_standardizer import SMILESStandardizer
-from ProQSAR.Featurizer.feature_generator import FeatureGenerator
-
+from ProQSAR.config import Config
 
 class DataGenerator:
     def __init__(
@@ -10,28 +7,27 @@ class DataGenerator:
             activity_col: str, 
             id_col: str, 
             smiles_col: str, 
-            **kwargs
+            config=None,
         ):
-        
+
         self.activity_col = activity_col
         self.id_col = id_col
         self.smiles_col = smiles_col
+        self.config = config or Config()
 
-        self.smilesstandardizer = SMILESStandardizer()
-
-        self.featuregenerator = FeatureGenerator(
+        self.standardizer = self.config.standardizer.setting(smiles_col=self.smiles_col)
+        self.featurizer = self.config.featurizer.setting(
             mol_col="standardized_mol",
-            activity_col=activity_col,
-            id_col=id_col,
-            **kwargs
-
+            activity_col=self.activity_col,
+            id_col=self.id_col,
         )
+
 
     def generate(self, data):
         standardized_data = pd.DataFrame(
-            self.smilesstandardizer.standardize_dict_smiles(data, key=self.smiles_col)
+            self.standardizer.standardize_dict_smiles(data)
         )
-        features = self.featuregenerator.generate_features(standardized_data)
+        features = self.featurizer.generate_features(standardized_data)
 
         for df in features.values():
             df["standardized_" + self.smiles_col] = standardized_data[
@@ -40,58 +36,17 @@ class DataGenerator:
 
         return features
 
+    
+    def get_params(self, deep=True) -> dict:
+        """Return all hyperparameters as a dictionary."""
+        out = {}
+        for key in self.__dict__:
+            value = getattr(self, key)
+            if deep and hasattr(value, "get_params"):
+                deep_items = value.get_params().items()
+                for sub_key, sub_value in deep_items:
+                    out[f"{key}__{sub_key}"] = sub_value
+            out[key] = value
 
-    # CO NEN XOA KO???
-    def set_params(self, stage, **kwargs):
-        component = getattr(self, stage.lower(), None)
-        if component and isinstance(component, (SMILESStandardizer, FeatureGenerator)):
-            for key, value in kwargs.items():
-                if hasattr(component, key):
-                    setattr(component, key, value)
-                else:
-                    raise AttributeError(
-                        f"{stage} does not have a parameter named '{key}'"
-                    )
-        else:
-            raise ValueError(f"Invalid stage name: {stage}")
+        return out
 
-
-    def get_params(self):
-        """
-        Get parameters of the DataGenerator class as a dictionary.
-
-        Parameters
-        ----------
-        deep : bool, optional, default=True
-            If True, will include parameters of the underlying components (SMILESStandardizer, FeatureGenerator).
-
-        Returns
-        -------
-        params : dict
-            Dictionary containing parameters and their values.
-        """
-        params = {
-            "datapreprocessor__smiles_col": self.smiles_col,
-            "datagenerator__activity_col": self.activity_col,
-            "datagenerator__id_col": self.id_col,
-        }
-
-        # Include parameters from SMILESStandardizer
-        smilesstandardizer_params = self.smilesstandardizer.__dict__
-        params.update(
-            {
-                "smilesstandardizer__" + key: value
-                for key, value in smilesstandardizer_params.items()
-            }
-        )
-
-        # Include parameters from FeatureGenerator
-        featuregenerator_params = self.featuregenerator.__dict__
-        params.update(
-            {
-                "featuregenerator__" + key: value
-                for key, value in featuregenerator_params.items()
-            }
-        )
-
-        return params

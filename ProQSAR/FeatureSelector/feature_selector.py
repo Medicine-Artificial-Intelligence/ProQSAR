@@ -13,16 +13,17 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_task_type,
     _get_cv_strategy,
 )
+from ProQSAR.validation_config import CrossValidationConfig
 
 
-class FeatureSelector:
+class FeatureSelector(CrossValidationConfig):
     """
     A class for selecting features from a dataset based on specified criteria.
 
     Attributes:
         activity_col (str): Column name for the target variable.
         id_col (str): Column name for the unique identifier.
-        select_method (str): Feature selection method. Defaults to "best".
+        select_method (str): Feature selection method. 
         add_method (Optional[dict]): Additional feature selection methods.
         scoring (Optional[str]): Scoring metric for model evaluation.
         n_splits (int): Number of splits for cross-validation.
@@ -50,55 +51,41 @@ class FeatureSelector:
 
     def __init__(
         self,
-        activity_col: str,
-        id_col: str,
+        activity_col: str = "activity",
+        id_col: str = "id",
         select_method: Optional[Union[str, List[str]]] = None,
         add_method: Optional[dict] = None,
-        best: bool = True,
-        scoring: Optional[str] = None,
-        n_splits: int = 5,
-        n_repeats: int = 5,
+        compare: bool = True,
         save_method: bool = False,
         save_trans_data: bool = False,
-        trans_data_name: str = "fs_trans_data",
+        trans_data_name: str = "trans_data",
         save_dir: Optional[str] = "Project/FeatureSelector",
-        save_cv_report: bool = False,
-        cv_report_name: str = "fs_cv_report",
-        visualize: Optional[str] = None,
-        save_fig: bool = False,
-        fig_prefix: str = "fs_cv_graph",
         n_jobs: int = -1,
         deactivate: bool = False,
+        **kwargs
     ):
         """
         Initializes the FeatureSelector with the specified parameters.
 
         Parameters are set based on selection and cross-validation criteria.
         """
-
+        super().__init__(**kwargs)
         self.activity_col = activity_col
         self.id_col = id_col
         self.select_method = select_method
         self.add_method = add_method
-        self.best = best
-        self.scoring = scoring
-        self.n_splits = n_splits
-        self.n_repeats = n_repeats
+        self.compare = compare
         self.save_method = save_method
         self.save_trans_data = save_trans_data
         self.trans_data_name = trans_data_name
         self.save_dir = save_dir
-        self.save_cv_report = save_cv_report
-        self.cv_report_name = cv_report_name
-        self.visualize = visualize
-        self.save_fig = save_fig
-        self.fig_prefix = fig_prefix
         self.n_jobs = n_jobs
         self.deactivate = deactivate
+        
         self.feature_selector = None
         self.task_type = None
         self.cv = None
-        self.comparison = None
+        self.report = None
 
     def fit(self, data: pd.DataFrame) -> object:
         """
@@ -132,18 +119,26 @@ class FeatureSelector:
             self.cv = _get_cv_strategy(
                 self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
             )
+            # Set scorings
+            self.scoring_target = (
+                self.scoring_target or "f1" if self.task_type == "C" else "r2"
+            )
+            if self.scoring_list:
+                if isinstance(self.scoring_list, str):
+                    self.scoring_list = [self.scoring_list]
+
+                if self.scoring_target not in self.scoring_list:
+                    self.scoring_list.append(self.scoring_target)
+
             if isinstance(self.select_method, list) or not self.select_method:
-                if self.best:
-                    self.scoring = (
-                        self.scoring or "f1" if self.task_type == "C" else "r2"
-                    )
-                    self.comparison = evaluate_feature_selectors(
+                if self.compare:
+                    self.report = evaluate_feature_selectors(
                         data=data,
                         activity_col=self.activity_col,
                         id_col=self.id_col,
                         select_method=self.select_method,
                         add_method=self.add_method,
-                        scoring_list=self.scoring,
+                        scoring_list=self.scoring_list,
                         n_splits=self.n_splits,
                         n_repeats=self.n_repeats,
                         visualize=self.visualize,
@@ -156,8 +151,8 @@ class FeatureSelector:
                     )
 
                     self.select_method = (
-                        self.comparison.set_index(["scoring", "cv_cycle"])
-                        .loc[(f"{self.scoring}", "mean")]
+                        self.report.set_index(["scoring", "cv_cycle"])
+                        .loc[(f"{self.scoring_target}", "mean")]
                         .idxmax()
                     )
                     if self.select_method == "NoFS":
@@ -166,19 +161,41 @@ class FeatureSelector:
                             "Skipping feature selection is considered to be the optimal method."
                         )
                         return self
+                    else:
+                        self.feature_selector = self.method_map[self.select_method].fit(
+                            X=X_data, y=y_data
+                        )
                 else:
                     raise AttributeError(
                         "'select_method' is entered as a list."
-                        "To evaluate and use the best method among the entered methods, turn 'best = True'."
+                        "To evaluate and use the best method among the entered methods, turn 'compare = True'."
                         "Otherwise, select_method must be a string as the name of the method."
                     )
+            elif isinstance(self.select_method, str):
+                if self.select_method not in self.method_map:
+                    raise ValueError(f"Method '{self.select_method}' not recognized.")
+                else:
+                    self.feature_selector = self.method_map[self.select_method].fit(
+                        X=X_data, y=y_data
+                    )
+                    self.report = evaluate_feature_selectors(
+                        data=data,
+                        activity_col=self.activity_col,
+                        id_col=self.id_col,
+                        select_method=None if self.compare else self.select_method,
+                        add_method=self.add_method,
+                        scoring_list=self.scoring_list,
+                        n_splits=self.n_splits,
+                        n_repeats=self.n_repeats,
+                        visualize=self.visualize,
+                        save_fig=self.save_fig,
+                        fig_prefix=self.fig_prefix,
+                        save_csv=self.save_cv_report,
+                        csv_name=self.cv_report_name,
+                        save_dir=self.save_dir,
+                        n_jobs=self.n_jobs,
+                    )
 
-            if self.select_method not in self.method_map:
-                raise ValueError(f"Method '{self.select_method}' not recognized.")
-
-            self.feature_selector = self.method_map[self.select_method].fit(
-                X=X_data, y=y_data
-            )
             logging.info(
                 f"Feature selection method '{self.select_method}' applied successfully."
             )
@@ -271,3 +288,12 @@ class FeatureSelector:
 
         self.fit(data)
         return self.transform(data)
+    
+    def setting(self, **kwargs):
+        valid_keys = self.__dict__.keys()
+        for key in kwargs:
+            if key not in valid_keys:
+                raise KeyError(f"'{key}' is not a valid attribute of FeatureSelector.")
+        self.__dict__.update(**kwargs)
+
+        return self
