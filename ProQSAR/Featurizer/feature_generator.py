@@ -26,6 +26,7 @@ class FeatureGenerator:
         save_dir: Optional[str] = None,
         n_jobs=-1,
         verbose=1,
+        deactivate: bool = False,
     ):
 
         self.mol_col = mol_col
@@ -35,6 +36,7 @@ class FeatureGenerator:
         self.save_dir = save_dir
         self.n_jobs = n_jobs
         self.verbose = verbose
+        self.deactivate = deactivate
 
     @staticmethod
     def _mol_process(
@@ -170,6 +172,10 @@ class FeatureGenerator:
         Raises:
         - ValueError: If the input data type is neither a pandas DataFrame nor a list of dictionaries.
         """
+        if self.deactivate:
+            logging.info("FeatureGenerator is deactivated. Skipping generate feature.")
+            return df
+
         if isinstance(df, pd.DataFrame):
             data = df.to_dict("records")
 
@@ -222,7 +228,6 @@ class FeatureGenerator:
 
         return self
 
-
     def get_params(self, deep=True) -> dict:
         """Return all hyperparameters as a dictionary."""
         out = {}
@@ -233,7 +238,7 @@ class FeatureGenerator:
                 for sub_key, sub_value in deep_items:
                     out[f"{key}__{sub_key}"] = sub_value
             out[key] = value
-            
+
         return out
 
     def __repr__(self):

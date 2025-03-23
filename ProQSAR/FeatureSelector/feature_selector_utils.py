@@ -36,7 +36,7 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
 
 def _get_method_map(
     task_type: str,
-    add_method: Optional[dict] = None,
+    add_method: dict = {},
     n_jobs: int = -1,
 ) -> dict[str, object]:
     """
@@ -46,7 +46,7 @@ def _get_method_map(
     -----------
     task_type : str
         Specifies the type of task: 'C' for classification or 'R' for regression.
-    add_method : Optional[Dict[str, object]]
+    add_method :
         Additional feature selection methods to include, with method names as keys and selectors as values.
     n_jobs : int
         Number of parallel jobs for methods that support parallel processing. Default is -1 (use all processors).
@@ -135,7 +135,7 @@ def evaluate_feature_selectors(
     data: pd.DataFrame,
     activity_col: str,
     id_col: str,
-    add_method: Optional[dict[str, object]] = None,
+    add_method: dict = {},
     select_method: Optional[Union[list, str]] = None,
     scoring_list: Optional[Union[list, str]] = None,
     n_splits: int = 5,
@@ -218,7 +218,7 @@ def evaluate_feature_selectors(
         if select_method is None:
             methods_to_compare = method_map
         else:
-            for name in select_method + list(add_method.keys()):
+            for name in select_method:
                 if name in method_map:
                     methods_to_compare.update({name: method_map[name]})
                 else:

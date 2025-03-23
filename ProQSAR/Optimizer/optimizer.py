@@ -63,16 +63,17 @@ class Optimizer:
 
     def __init__(
         self,
-        activity_col: str,
-        id_col: str,
+        activity_col: str = "activity",
+        id_col: str = "id",
         select_model: Optional[List[str]] = None,
         scoring: Optional[str] = None,
         param_ranges: Dict[str, Dict[str, Any]] = {},
         add_model: Dict[str, Tuple[Any, Dict[str, Any]]] = {},
-        n_trials: int = 100,
+        n_trials: int = 50,
         n_splits: int = 5,
-        n_repeats: int = 2,
+        n_repeats: int = 5,
         n_jobs: int = -1,
+        deactivate: bool = False
     ) -> None:
         """
         Initializes the Optimizer class with user-defined parameters.
@@ -87,6 +88,7 @@ class Optimizer:
         self.n_splits = n_splits
         self.n_repeats = n_repeats
         self.n_jobs = n_jobs
+        self.deactivate = deactivate
         self.best_model = None
         self.best_params = None
         self.best_score = None
@@ -127,14 +129,20 @@ class Optimizer:
             model_list = self.select_model or _get_model_list(
                 self.task_type, self.add_model
             )
+            if isinstance(model_list, str):
+                model_list = [model_list]
 
             def objective(trial):
                 try:
-                    model_name = trial.suggest_categorical("model", model_list)
+                    # If only one model is provided, use it directly.
+                    if len(model_list) == 1:
+                        model_name = model_list[0]
+                    else:
+                        model_name = trial.suggest_categorical("model", model_list)
+                        
                     model, params = _get_model_and_params(
                         trial, model_name, self.param_ranges, self.add_model
                     )
-
                     model.set_params(**params)
                     score = cross_val_score(
                         model,
@@ -206,3 +214,12 @@ class Optimizer:
                 "Attempted to access 'best_score' before running 'optimize'. "
                 "Run 'optimize' to obtain the best score."
             )
+        
+    def setting(self, **kwargs):
+        valid_keys = self.__dict__.keys()
+        for key in kwargs:
+            if key not in valid_keys:
+                raise KeyError(f"'{key}' is not a valid attribute of Optimizer.")
+        self.__dict__.update(**kwargs)
+
+        return self

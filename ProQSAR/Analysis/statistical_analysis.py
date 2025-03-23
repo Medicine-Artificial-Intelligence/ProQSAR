@@ -1142,7 +1142,7 @@ class StatisticalAnalysis:
             figure, axes = plt.subplots(
                 len(scoring_list),
                 1,
-                figsize=(12, (1.2 + 0.25*ncouple)*len(scoring_list)),
+                figsize=(12, (1.2 + 0.25 * ncouple) * len(scoring_list)),
                 sharex=False,
             )
 

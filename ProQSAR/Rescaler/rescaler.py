@@ -5,7 +5,6 @@ from sklearn.preprocessing import (
     MinMaxScaler,
     StandardScaler,
     RobustScaler,
-    FunctionTransformer,
 )
 from sklearn.exceptions import NotFittedError
 from sklearn.base import BaseEstimator, TransformerMixin

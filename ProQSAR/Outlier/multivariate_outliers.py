@@ -212,12 +212,14 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
         self.fit(data)
         return self.transform(data)
-    
+
     def setting(self, **kwargs):
         valid_keys = self.__dict__.keys()
         for key in kwargs:
             if key not in valid_keys:
-                raise KeyError(f"'{key}' is not a valid attribute of MultivariateOutlierHandler.")
+                raise KeyError(
+                    f"'{key}' is not a valid attribute of MultivariateOutlierHandler."
+                )
         self.__dict__.update(**kwargs)
 
         return self

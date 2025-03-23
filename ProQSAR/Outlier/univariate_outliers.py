@@ -521,15 +521,18 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
         self.fit(data)
         return self.transform(data)
-    
+
     def setting(self, **kwargs):
         valid_keys = self.__dict__.keys()
         for key in kwargs:
             if key not in valid_keys:
-                raise KeyError(f"'{key}' is not a valid attribute of UnivariateOutliersHandler.")
+                raise KeyError(
+                    f"'{key}' is not a valid attribute of UnivariateOutliersHandler."
+                )
         self.__dict__.update(**kwargs)
 
         return self
+
     @staticmethod
     def compare_univariate_methods(
         data1: pd.DataFrame,

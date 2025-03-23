@@ -4,40 +4,43 @@ from ProQSAR.config import Config
 
 
 class DataPreprocessor:
-    def __init__(
-            self, 
-            activity_col: str, 
-            id_col: str, 
-            deactivate: bool = False, 
-            config=None
-        ):
-        
+    def __init__(self, activity_col: str, id_col: str, config=None):
+
         self.activity_col = activity_col
         self.id_col = id_col
-        self.deactivate = deactivate
         self.config = config or Config()
 
-        for attr in ["duplicate", "missing", "lowvar", "univ_outlier", "kbin", "multiv_outlier", "rescaler"]:
-            setattr(self, attr, getattr(self.config, attr).setting(activity_col=self.activity_col, id_col=self.id_col))
+        for attr in [
+            "duplicate",
+            "missing",
+            "lowvar",
+            "univ_outlier",
+            "kbin",
+            "multiv_outlier",
+            "rescaler",
+        ]:
+            setattr(
+                self,
+                attr,
+                getattr(self.config, attr).setting(
+                    activity_col=self.activity_col, id_col=self.id_col
+                ),
+            )
 
         self.datapreprocessor = Pipeline(
             [
-            ("duplicate", self.duplicate),
-            ("missing", self.missing),
-            ("lowvar", self.lowvar),
-            ("univ_outlier", self.univ_outlier),
-            ("kbin", self.kbin),
-            ("multiv_outlier", self.multiv_outlier),
-            ("rescaler", self.rescaler),
-        ]
+                ("duplicate", self.duplicate),
+                ("missing", self.missing),
+                ("lowvar", self.lowvar),
+                ("univ_outlier", self.univ_outlier),
+                ("kbin", self.kbin),
+                ("multiv_outlier", self.multiv_outlier),
+                ("rescaler", self.rescaler),
+            ]
         )
 
     def fit(self, data):
         """Fit all preprocessing steps on the training data."""
-
-        if self.deactivate:
-            logging.info("DataPreprocessor is deactivated. Skipping fit.")
-            return self
 
         logging.info("Fitting data preprocessing pipeline.")
         self.datapreprocessor.fit(data)
@@ -45,9 +48,6 @@ class DataPreprocessor:
 
     def transform(self, data):
         """Apply transformations to the dataset."""
-        if self.deactivate:
-            logging.info("DataPreprocessor is deactivated. Returning unmodified data.")
-            return data
 
         logging.info("Transforming data using the preprocessing pipeline.")
         transformed_data = self.datapreprocessor.transform(data)
@@ -66,13 +66,9 @@ class DataPreprocessor:
 
     def fit_transform(self, data):
         """Fit and transform in one step."""
-        if self.deactivate:
-            logging.info("DataPreprocessor is deactivated. Returning unmodified data.")
-            return data
 
         self.fit(data)
         return self.transform(data)
-
 
     def get_params(self, deep=True) -> dict:
         """Return all hyperparameters as a dictionary."""
@@ -89,3 +85,9 @@ class DataPreprocessor:
 
         return out
 
+    def __repr__(self):
+        """Return a string representation of the estimator."""
+        class_name = self.__class__.__name__
+        params = self.get_params(deep=False)
+        param_str = ", ".join(f"{key}={repr(value)}" for key, value in params.items())
+        return f"{class_name}({param_str})"

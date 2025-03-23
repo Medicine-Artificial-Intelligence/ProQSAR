@@ -143,7 +143,7 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
 
         self.fit(data)
         return self.transform(data)
-    
+
     def setting(self, **kwargs):
         valid_keys = self.__dict__.keys()
         for key in kwargs:

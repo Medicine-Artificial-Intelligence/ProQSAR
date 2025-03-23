@@ -70,14 +70,14 @@ class ModelDeveloper(CrossValidationConfig):
         activity_col: str = "activity",
         id_col: str = "id",
         select_model: Optional[Union[str, List[str]]] = None,
-        add_model: Optional[dict] = None,
+        add_model: dict = {},
         compare: bool = True,
         save_model: bool = False,
         save_pred_result: bool = False,
         pred_result_name: str = "pred_result",
         save_dir: Optional[str] = "Project/ModelDeveloper",
         n_jobs: int = -1,
-        **kwargs
+        **kwargs,
     ):
         """Initializes the ModelDeveloper with necessary attributes."""
         super().__init__(**kwargs)
@@ -112,10 +112,10 @@ class ModelDeveloper(CrossValidationConfig):
             y_data = data[self.activity_col]
 
             self.task_type = _get_task_type(data, self.activity_col)
-            self.model_map = _get_model_map(self.task_type, self.add_model, self.n_jobs)
             self.cv = _get_cv_strategy(
                 self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
             )
+            model_map = _get_model_map(self.task_type, self.add_model, self.n_jobs)
             # Set scorings
             self.scoring_target = (
                 self.scoring_target or "f1" if self.task_type == "C" else "r2"
@@ -152,7 +152,7 @@ class ModelDeveloper(CrossValidationConfig):
                         .loc[(f"{self.scoring_target}", "mean")]
                         .idxmax()
                     )
-                    self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
+                    self.model = model_map[self.select_model].fit(X=X_data, y=y_data)
                 else:
                     raise AttributeError(
                         "'select_model' is entered as a list."
@@ -161,10 +161,10 @@ class ModelDeveloper(CrossValidationConfig):
                     )
 
             elif isinstance(self.select_model, str):
-                if self.select_model not in self.model_map:
+                if self.select_model not in model_map:
                     raise ValueError(f"Model '{self.select_model}' is not recognized.")
                 else:
-                    self.model = self.model_map[self.select_model].fit(X=X_data, y=y_data)
+                    self.model = model_map[self.select_model].fit(X=X_data, y=y_data)
                     self.report = ModelValidation.cross_validation_report(
                         data=data,
                         activity_col=self.activity_col,
@@ -182,6 +182,11 @@ class ModelDeveloper(CrossValidationConfig):
                         save_dir=self.save_dir,
                         n_jobs=self.n_jobs,
                     )
+            else:
+                raise AttributeError(
+                    f"'select_model' is entered as a {type(self.select_model)}"
+                    "Please input a string or a list or None."
+                )
 
             self.classes_ = self.model.classes_ if self.task_type == "C" else None
 
@@ -262,3 +267,34 @@ class ModelDeveloper(CrossValidationConfig):
         self.__dict__.update(**kwargs)
 
         return self
+
+    def get_params(self, deep=True):
+        """Get parameters for this estimator.
+
+        Parameters
+        ----------
+        deep : bool, default=True
+            If True, return the parameters of sub-estimators as well.
+
+        Returns
+        -------
+        params : dict
+            Dictionary of parameter names mapped to their values.
+        """
+        out = {}
+        for key in self.__dict__:
+            value = getattr(self, key)
+            if deep and hasattr(value, "get_params"):
+                deep_items = value.get_params().items()
+                for sub_key, sub_value in deep_items:
+                    out[f"{key}__{sub_key}"] = sub_value
+            out[key] = value
+
+        return out
+
+    def __repr__(self):
+        """Return a string representation of the estimator."""
+        class_name = self.__class__.__name__
+        params = self.get_params(deep=False)
+        param_str = ", ".join(f"{key}={repr(value)}" for key, value in params.items())
+        return f"{class_name}({param_str})"

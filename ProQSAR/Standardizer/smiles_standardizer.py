@@ -28,18 +28,19 @@ class SMILESStandardizer:
     """
 
     def __init__(
-            self,
-            smiles_col: str = "SMILES",
-            normalize: bool = True,
-            tautomerize: bool = True,
-            remove_salts: bool = False,
-            handle_charges: bool = False,
-            uncharge: bool = False,
-            handle_stereo: bool = True,
-            remove_fragments: bool = False,
-            largest_fragment_only: bool = False,
-            n_jobs: int = 4,
-            ):
+        self,
+        smiles_col: str = "SMILES",
+        normalize: bool = True,
+        tautomerize: bool = True,
+        remove_salts: bool = False,
+        handle_charges: bool = False,
+        uncharge: bool = False,
+        handle_stereo: bool = True,
+        remove_fragments: bool = False,
+        largest_fragment_only: bool = False,
+        n_jobs: int = 4,
+        deactivate: bool = False,
+    ):
         self.smiles_col = smiles_col
         self.normalize = normalize
         self.tautomerize = tautomerize
@@ -50,7 +51,7 @@ class SMILESStandardizer:
         self.remove_fragments = remove_fragments
         self.largest_fragment_only = largest_fragment_only
         self.n_jobs = n_jobs
-
+        self.deactivate = deactivate
 
     @staticmethod
     def smiles2mol(smiles: str) -> Optional[Chem.Mol]:
@@ -165,6 +166,9 @@ class SMILESStandardizer:
             DataFrame or list of dicts: The input data with additional columns/keys for
             standardized SMILES and Mol objects.
         """
+        if self.deactivate:
+            logging.info("SMILESStandardizer is deactivated. Skipping standardization.")
+            return data_input
 
         if isinstance(data_input, pd.DataFrame):
             data_input = data_input.to_dict("records")
@@ -187,19 +191,21 @@ class SMILESStandardizer:
             )
 
         return data_input
-    
+
     def setting(self, **kwargs):
         valid_keys = self.__dict__.keys()
         for key in kwargs:
             if key not in valid_keys:
-                raise KeyError(f"'{key}' is not a valid attribute of SMILESStandardizer.")
+                raise KeyError(
+                    f"'{key}' is not a valid attribute of SMILESStandardizer."
+                )
         self.__dict__.update(**kwargs)
 
         return self
 
     def get_params(self, deep=True):
         """Get parameters for this estimator.
-        
+
         Parameters
         ----------
         deep : bool, default=True
@@ -218,15 +224,12 @@ class SMILESStandardizer:
                 for sub_key, sub_value in deep_items:
                     out[f"{key}__{sub_key}"] = sub_value
             out[key] = value
-            
+
         return out
-    
+
     def __repr__(self):
         """Return a string representation of the estimator."""
         class_name = self.__class__.__name__
         params = self.get_params(deep=False)
         param_str = ", ".join(f"{key}={repr(value)}" for key, value in params.items())
         return f"{class_name}({param_str})"
-
-
-

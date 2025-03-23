@@ -23,7 +23,7 @@ class FeatureSelector(CrossValidationConfig):
     Attributes:
         activity_col (str): Column name for the target variable.
         id_col (str): Column name for the unique identifier.
-        select_method (str): Feature selection method. 
+        select_method (str): Feature selection method.
         add_method (Optional[dict]): Additional feature selection methods.
         scoring (Optional[str]): Scoring metric for model evaluation.
         n_splits (int): Number of splits for cross-validation.
@@ -62,7 +62,7 @@ class FeatureSelector(CrossValidationConfig):
         save_dir: Optional[str] = "Project/FeatureSelector",
         n_jobs: int = -1,
         deactivate: bool = False,
-        **kwargs
+        **kwargs,
     ):
         """
         Initializes the FeatureSelector with the specified parameters.
@@ -81,11 +81,6 @@ class FeatureSelector(CrossValidationConfig):
         self.save_dir = save_dir
         self.n_jobs = n_jobs
         self.deactivate = deactivate
-        
-        self.feature_selector = None
-        self.task_type = None
-        self.cv = None
-        self.report = None
 
     def fit(self, data: pd.DataFrame) -> object:
         """
@@ -130,6 +125,8 @@ class FeatureSelector(CrossValidationConfig):
                 if self.scoring_target not in self.scoring_list:
                     self.scoring_list.append(self.scoring_target)
 
+            self.feature_selector = None
+            self.report = None
             if isinstance(self.select_method, list) or not self.select_method:
                 if self.compare:
                     self.report = evaluate_feature_selectors(
@@ -195,6 +192,11 @@ class FeatureSelector(CrossValidationConfig):
                         save_dir=self.save_dir,
                         n_jobs=self.n_jobs,
                     )
+            else:
+                raise AttributeError(
+                    f"'select_method' is entered as a {type(self.select_method)}"
+                    "Please input a string or a list or None."
+                )
 
             logging.info(
                 f"Feature selection method '{self.select_method}' applied successfully."
@@ -288,7 +290,7 @@ class FeatureSelector(CrossValidationConfig):
 
         self.fit(data)
         return self.transform(data)
-    
+
     def setting(self, **kwargs):
         valid_keys = self.__dict__.keys()
         for key in kwargs:

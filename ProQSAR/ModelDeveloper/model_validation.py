@@ -255,7 +255,7 @@ class ModelValidation:
         data: pd.DataFrame,
         activity_col: str,
         id_col: str,
-        add_model: Optional[dict] = None,
+        add_model: dict = {},
         select_model: Optional[Union[list, str]] = None,
         scoring_list: Optional[Union[list, str]] = None,
         n_splits: int = 5,
@@ -333,7 +333,7 @@ class ModelValidation:
             if select_model is None:
                 models_to_compare = model_map
             else:
-                for name in select_model + list(add_model.keys()):
+                for name in select_model:
                     if name in model_map:
                         models_to_compare.update({name: model_map[name]})
                     else:

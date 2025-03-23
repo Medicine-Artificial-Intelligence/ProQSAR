@@ -330,7 +330,9 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
         valid_keys = self.__dict__.keys()
         for key in kwargs:
             if key not in valid_keys:
-                raise KeyError(f"'{key}' is not a valid attribute of LowVarianceHandler.")
+                raise KeyError(
+                    f"'{key}' is not a valid attribute of LowVarianceHandler."
+                )
         self.__dict__.update(**kwargs)
 
         return self
