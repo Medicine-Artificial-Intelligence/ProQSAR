@@ -11,6 +11,8 @@ from ProQSAR.Splitter.data_splitter import Splitter
 from ProQSAR.FeatureSelector.feature_selector import FeatureSelector
 from ProQSAR.ModelDeveloper.model_developer import ModelDeveloper
 from ProQSAR.Optimizer.optimizer import Optimizer
+from ProQSAR.ApplicabilityDomain.applicability_domain import ApplicabilityDomain
+from ProQSAR.Uncertainty.conformal_predictor import ConformalPredictor
 
 
 class Config:
@@ -30,6 +32,8 @@ class Config:
         feature_selector=None,
         model_dev=None,
         optimizer=None,
+        ad=None,
+        conf_pred=None,
     ):
         self.standardizer = self._create_instance(standardizer, SMILESStandardizer)
         self.featurizer = self._create_instance(featurizer, FeatureGenerator)
@@ -48,6 +52,8 @@ class Config:
         self.feature_selector = self._create_instance(feature_selector, FeatureSelector)
         self.model_dev = self._create_instance(model_dev, ModelDeveloper)
         self.optimizer = self._create_instance(optimizer, Optimizer)
+        self.ad = self._create_instance(ad, ApplicabilityDomain)
+        self.conf_pred = self._create_instance(conf_pred, ConformalPredictor)
 
     def _create_instance(self, param, cls):
         """
@@ -63,8 +69,8 @@ class Config:
         if param is None:
             return cls()
         elif isinstance(param, dict):
-            return cls().setting(**param)
+            return cls().set_params(**param)
         elif isinstance(param, (tuple, list)):
-            return cls().setting(**dict(param))
+            return cls().set_params(**dict(param))
         else:
             return param

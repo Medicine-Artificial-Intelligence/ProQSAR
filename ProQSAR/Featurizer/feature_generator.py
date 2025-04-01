@@ -4,6 +4,7 @@ import logging
 import os
 from joblib import Parallel, delayed
 from rdkit import Chem
+from sklearn.base import BaseEstimator
 from ProQSAR.Featurizer.PubChem import calcPubChemFingerAll
 from ProQSAR.Featurizer.featurizer_wrapper import (
     RDKFp,
@@ -16,7 +17,7 @@ from ProQSAR.Featurizer.featurizer_wrapper import (
 from typing import Optional, Union, Dict, Any, List
 
 
-class FeatureGenerator:
+class FeatureGenerator(BaseEstimator):
     def __init__(
         self,
         mol_col: str = "mol",
@@ -25,7 +26,7 @@ class FeatureGenerator:
         feature_types: Union[list, str] = ["ECFP4", "RDK5", "FCFP4"],
         save_dir: Optional[str] = None,
         n_jobs=-1,
-        verbose=1,
+        verbose=0,
         deactivate: bool = False,
     ):
 
@@ -218,32 +219,3 @@ class FeatureGenerator:
             feature_dfs[feature_type] = feature_df
 
         return feature_dfs
-
-    def setting(self, **kwargs):
-        valid_keys = self.__dict__.keys()
-        for key in kwargs:
-            if key not in valid_keys:
-                raise KeyError(f"'{key}' is not a valid attribute of FeatureGenerator.")
-        self.__dict__.update(**kwargs)
-
-        return self
-
-    def get_params(self, deep=True) -> dict:
-        """Return all hyperparameters as a dictionary."""
-        out = {}
-        for key in self.__dict__:
-            value = getattr(self, key)
-            if deep and hasattr(value, "get_params"):
-                deep_items = value.get_params().items()
-                for sub_key, sub_value in deep_items:
-                    out[f"{key}__{sub_key}"] = sub_value
-            out[key] = value
-
-        return out
-
-    def __repr__(self):
-        """Return a string representation of the estimator."""
-        class_name = self.__class__.__name__
-        params = self.get_params(deep=False)
-        param_str = ", ".join(f"{key}={repr(value)}" for key, value in params.items())
-        return f"{class_name}({param_str})"

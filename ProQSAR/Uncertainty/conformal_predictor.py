@@ -2,26 +2,31 @@ import os
 import pickle
 import logging
 import pandas as pd
+import numpy as np
 from sklearn.base import BaseEstimator
-from sklearn.utils.validation import check_is_fitted
 from sklearn.exceptions import NotFittedError
-from typing import Optional, Union, List
-from crepes import WrapClassifier, WrapRegressor
-from ProQSAR.ModelDeveloper.model_developer import ModelDeveloper
+from typing import Optional, Union, Iterable
 from ProQSAR.ModelDeveloper.model_developer_utils import _get_task_type
+from ProQSAR.ModelDeveloper.model_developer import ModelDeveloper
+from mapie.regression import MapieRegressor
+from mapie.classification import MapieClassifier
 
 
-class ConformalPredictor:
+class ConformalPredictor(BaseEstimator):
     """
     A class to perform conformal prediction for classification and regression models.
     """
 
     def __init__(
         self,
-        model: Union[ModelDeveloper, BaseEstimator],
-        activity_col: str,
-        id_col: str,
+        model: Optional[Union[ModelDeveloper, BaseEstimator]] = None,
+        activity_col: str = "activity",
+        id_col: str = "id",
+        n_jobs: int = -1,
+        random_state: Optional[int] = 42,
         save_dir: Optional[str] = "Project/ConformalPredictor",
+        deactivate: bool = False,
+        **kwargs,
     ) -> None:
         """
         Initialize the ConformalPredictor class.
@@ -32,30 +37,27 @@ class ConformalPredictor:
             id_col (str): The identifier column name.
             save_dir (Optional[str]): Directory to save calibration and prediction results.
         """
-        self.model = model.model if isinstance(model, ModelDeveloper) else model
+        self.model = model
         self.activity_col = activity_col
         self.id_col = id_col
+        self.n_jobs = n_jobs
+        self.random_state = random_state
         self.save_dir = save_dir
+        self.deactivate = deactivate
+        self.cp_kwargs = kwargs
         self.task_type = None
-        self.cp = None
-        self.pred_result = None
-        self.evaluate_result = None
+        self.cp_kwargs = kwargs
 
-    def calibrate(self, data, **kwargs) -> "ConformalPredictor":
-        """
-        Calibrate the conformal predictor using the provided dataset.
+    def fit(self, data: pd.DataFrame):
 
-        Args:
-            data (pd.DataFrame): Training dataset for calibration.
-            **kwargs: Additional parameters for calibration.
+        if self.deactivate:
+            logging.info("ConformalPredictor is deactivated. Skipping calibrate.")
+            return self
 
-        Returns:
-            ConformalPredictor: The instance itself after calibration.
-        """
+        if isinstance(self.model, ModelDeveloper):
+            self.model = self.model.model
+
         try:
-            # check if model is fitted or not
-            check_is_fitted(self.model)
-
             # get X & y
             X_data = data.drop(
                 [self.activity_col, self.id_col], axis=1, errors="ignore"
@@ -66,13 +68,20 @@ class ConformalPredictor:
             self.task_type = _get_task_type(data, self.activity_col)
 
             if self.task_type == "C":
-                self.cp = WrapClassifier(self.model)
+                self.cp = MapieClassifier()
             elif self.task_type == "R":
-                self.cp = WrapRegressor(self.model)
+                self.cp = MapieRegressor()
             else:
                 raise ValueError("Unsupported task type detected.")
 
-            self.cp.calibrate(X=X_data, y=y_data, **kwargs)
+            self.cp.set_params(
+                estimator=self.model,
+                n_jobs=self.n_jobs,
+                random_state=self.random_state,
+                **self.cp_kwargs,
+            )
+            self.cp.fit(X=X_data, y=y_data)
+            self.cp.conformity_scores_ = self.cp.conformity_scores_.astype(np.float64)
 
             if self.save_dir:
                 os.makedirs(self.save_dir, exist_ok=True)
@@ -87,7 +96,9 @@ class ConformalPredictor:
             raise
 
     def predict(
-        self, data: pd.DataFrame, confidence: float = 0.95, **kwargs
+        self,
+        data: pd.DataFrame,
+        alpha: Optional[Union[float, Iterable[float]]] = None,
     ) -> pd.DataFrame:
         """
         Generate conformal prediction intervals or sets.
@@ -109,110 +120,62 @@ class ConformalPredictor:
             X_data = data.drop(
                 [self.activity_col, self.id_col], axis=1, errors="ignore"
             )
+            y_pred = self.cp.predict(X=X_data, alpha=alpha)
 
-            if self.task_type == "C":
-                classes = self.model.classes_
+            results_list = []
+            if isinstance(alpha, float):
+                alpha = [alpha]
 
-                # predict p
-                self.p_values = self.cp.predict_p(X_data, **kwargs)
+            for i in range(len(X_data)):
+                # Get ID
+                sample_data = {self.id_col: data[self.id_col].iloc[i]}
 
-                # predict set
-                self.sets = self.cp.predict_set(
-                    X=X_data, confidence=confidence, **kwargs
-                )
+                # Get actual value if available
+                if self.activity_col in data.columns:
+                    sample_data[self.activity_col] = data[self.activity_col].iloc[i]
 
-                predicted_labels = []
-                for i in range(len(self.sets)):
-                    present_labels = [
-                        str(classes[j])
-                        for j in range(len(classes))
-                        if self.sets[i][j] == 1
-                    ]
-                    predicted_labels.append(", ".join(present_labels))
+                if alpha:
+                    sample_data["Predicted value"] = y_pred[0][i]
+                    sample_cal = y_pred[1][i, :, :]
+                    for k, a in enumerate(alpha):
+                        if self.task_type == "C":
+                            class_labels = self.cp.classes_
+                            set_indices = np.where(sample_cal[:, k])[0]
+                            result = class_labels[set_indices]
 
-                # return result in dataframe format
-                self.pred_result = pd.DataFrame(
-                    {
-                        "ID": data[self.id_col].values,
-                        "Predicted set": predicted_labels,
-                        f"P-value for class {classes[0]}": self.p_values[:, 0],
-                        f"P-value for class {classes[1]}": self.p_values[:, 1],
-                    }
-                )
+                        elif self.task_type == "R":
+                            result = np.round(sample_cal[:, k], decimals=3)
 
-            elif self.task_type == "R":
-                y_pred = self.model.predict(X_data)
+                        sample_data[
+                            (
+                                f"Prediction Set (alpha={a})"
+                                if self.task_type == "C"
+                                else f"Prediction Interval (alpha={a})"
+                            )
+                        ] = result
+                else:
+                    sample_data["Predicted value"] = y_pred[i]
 
-                self.interval = self.cp.predict_int(X=X_data, **kwargs)
+                results_list.append(sample_data)
 
-                self.pred_result = pd.DataFrame(
-                    {
-                        "ID": data[self.id_col].values,
-                        "Predicted values": y_pred,
-                        "Lower Bound": self.interval[:, 0],
-                        "Upper Bound": self.interval[:, 1],
-                    }
-                )
-
-            if self.activity_col in data.columns:
-                self.pred_result["Actual values"] = data[self.activity_col]
+            pred_result = pd.DataFrame(results_list)
 
             if self.save_dir:
                 os.makedirs(self.save_dir, exist_ok=True)
-                self.pred_result.to_csv(f"{self.save_dir}/conformal_pred_result.csv")
+                pred_result.to_csv(f"{self.save_dir}/conformal_pred_result.csv")
 
             logging.info("Prediction completed successfully.")
-            return self.pred_result
+            return pred_result
 
         except Exception as e:
             logging.error(f"Error during prediction: {e}")
             raise
 
-    def evaluate(
-        self, data: pd.DataFrame, confidence: Union[float, List[float]] = 0.95, **kwargs
-    ) -> pd.DataFrame:
-        """
-        Evaluate the conformal predictor performance on a dataset.
+    def set_params(self, **kwargs):
+        valid_keys = self.__dict__.keys()
+        for key in kwargs:
+            if key not in valid_keys:
+                raise KeyError(f"'{key}' is not a valid attribute.")
+        self.__dict__.update(**kwargs)
 
-        Args:
-            data (pd.DataFrame): Dataset for evaluation.
-            confidence (Union[float, List[float]]): Confidence levels to evaluate.
-            **kwargs: Additional parameters for evaluation.
-
-        Returns:
-            pd.DataFrame: DataFrame containing evaluation results.
-        """
-        if self.activity_col not in data.columns:
-            raise KeyError(
-                f"'{self.activity_col}' column is not found in the provided data. "
-                "Please ensure that the data contains this column in order to use this function."
-            )
-
-        if isinstance(confidence, float):
-            confidence = [confidence]
-
-        try:
-            X_data = data.drop(
-                [self.activity_col, self.id_col], axis=1, errors="ignore"
-            )
-            y_data = data[self.activity_col]
-
-            result = {
-                conf: self.cp.evaluate(X=X_data, y=y_data, confidence=conf, **kwargs)
-                for conf in confidence
-            }
-
-            self.evaluate_result = pd.DataFrame(result)
-
-            if self.save_dir:
-                os.makedirs(self.save_dir, exist_ok=True)
-                self.evaluate_result.to_csv(
-                    f"{self.save_dir}/conformal_evaluate_result.csv"
-                )
-
-            logging.info("Evaluation completed successfully.")
-            return self.evaluate_result
-
-        except Exception as e:
-            logging.error(f"Error during evaluation: {e}")
-            raise
+        return self

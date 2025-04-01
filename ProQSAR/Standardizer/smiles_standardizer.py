@@ -3,6 +3,7 @@ import pandas as pd
 from rdkit import Chem
 from joblib import Parallel, delayed
 from typing import List, Optional, Tuple, Union
+from sklearn.base import BaseEstimator
 from ProQSAR.Standardizer.standardizer_wrapper import (
     normalize_molecule,
     canonicalize_tautomer,
@@ -15,7 +16,7 @@ from ProQSAR.Standardizer.standardizer_wrapper import (
 )
 
 
-class SMILESStandardizer:
+class SMILESStandardizer(BaseEstimator):
     """
     Class for comprehensive standardization of chemical structures represented in SMILES format.
     Utilizes RDKit to process and normalize chemical structures, ensuring consistency and comparability
@@ -180,7 +181,7 @@ class SMILESStandardizer:
                 "Input must be either a pandas DataFrame or a list of dictionaries."
             )
 
-        standardized_results = Parallel(n_jobs=self.n_jobs, verbose=1)(
+        standardized_results = Parallel(n_jobs=self.n_jobs, verbose=0)(
             delayed(self.standardize_smiles)(record.get(self.smiles_col, ""))
             for record in data_input
         )
@@ -191,45 +192,3 @@ class SMILESStandardizer:
             )
 
         return data_input
-
-    def setting(self, **kwargs):
-        valid_keys = self.__dict__.keys()
-        for key in kwargs:
-            if key not in valid_keys:
-                raise KeyError(
-                    f"'{key}' is not a valid attribute of SMILESStandardizer."
-                )
-        self.__dict__.update(**kwargs)
-
-        return self
-
-    def get_params(self, deep=True):
-        """Get parameters for this estimator.
-
-        Parameters
-        ----------
-        deep : bool, default=True
-            If True, return the parameters of sub-estimators as well.
-
-        Returns
-        -------
-        params : dict
-            Dictionary of parameter names mapped to their values.
-        """
-        out = {}
-        for key in self.__dict__:
-            value = getattr(self, key)
-            if deep and hasattr(value, "get_params"):
-                deep_items = value.get_params().items()
-                for sub_key, sub_value in deep_items:
-                    out[f"{key}__{sub_key}"] = sub_value
-            out[key] = value
-
-        return out
-
-    def __repr__(self):
-        """Return a string representation of the estimator."""
-        class_name = self.__class__.__name__
-        params = self.get_params(deep=False)
-        param_str = ", ".join(f"{key}={repr(value)}" for key, value in params.items())
-        return f"{class_name}({param_str})"

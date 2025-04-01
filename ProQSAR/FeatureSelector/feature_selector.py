@@ -4,7 +4,7 @@ import logging
 import pandas as pd
 from sklearn.exceptions import NotFittedError
 from typing import Optional, Union, List
-
+from sklearn.base import BaseEstimator
 from ProQSAR.FeatureSelector.feature_selector_utils import (
     _get_method_map,
     evaluate_feature_selectors,
@@ -13,10 +13,10 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_task_type,
     _get_cv_strategy,
 )
-from ProQSAR.validation_config import CrossValidationConfig
+from ProQSAR.Config.validation_config import CrossValidationConfig
 
 
-class FeatureSelector(CrossValidationConfig):
+class FeatureSelector(BaseEstimator, CrossValidationConfig):
     """
     A class for selecting features from a dataset based on specified criteria.
 
@@ -61,6 +61,7 @@ class FeatureSelector(CrossValidationConfig):
         trans_data_name: str = "trans_data",
         save_dir: Optional[str] = "Project/FeatureSelector",
         n_jobs: int = -1,
+        random_state: Optional[int] = 42,
         deactivate: bool = False,
         **kwargs,
     ):
@@ -80,6 +81,7 @@ class FeatureSelector(CrossValidationConfig):
         self.trans_data_name = trans_data_name
         self.save_dir = save_dir
         self.n_jobs = n_jobs
+        self.random_state = random_state
         self.deactivate = deactivate
 
     def fit(self, data: pd.DataFrame) -> object:
@@ -109,10 +111,16 @@ class FeatureSelector(CrossValidationConfig):
 
             self.task_type = _get_task_type(data, self.activity_col)
             self.method_map = _get_method_map(
-                self.task_type, self.add_method, self.n_jobs
+                self.task_type,
+                self.add_method,
+                self.n_jobs,
+                random_state=self.random_state,
             )
             self.cv = _get_cv_strategy(
-                self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
+                self.task_type,
+                n_splits=self.n_splits,
+                n_repeats=self.n_repeats,
+                random_state=self.random_state,
             )
             # Set scorings
             self.scoring_target = (
@@ -145,6 +153,7 @@ class FeatureSelector(CrossValidationConfig):
                         csv_name=self.cv_report_name,
                         save_dir=self.save_dir,
                         n_jobs=self.n_jobs,
+                        random_state=self.random_state,
                     )
 
                     self.select_method = (
@@ -191,6 +200,7 @@ class FeatureSelector(CrossValidationConfig):
                         csv_name=self.cv_report_name,
                         save_dir=self.save_dir,
                         n_jobs=self.n_jobs,
+                        random_state=self.random_state,
                     )
             else:
                 raise AttributeError(
@@ -291,11 +301,11 @@ class FeatureSelector(CrossValidationConfig):
         self.fit(data)
         return self.transform(data)
 
-    def setting(self, **kwargs):
+    def set_params(self, **kwargs):
         valid_keys = self.__dict__.keys()
         for key in kwargs:
             if key not in valid_keys:
-                raise KeyError(f"'{key}' is not a valid attribute of FeatureSelector.")
+                raise KeyError(f"'{key}' is not a valid attribute.")
         self.__dict__.update(**kwargs)
 
         return self

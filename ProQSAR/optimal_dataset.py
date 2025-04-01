@@ -11,8 +11,8 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_cv_strategy,
     _get_cv_scoring,
 )
-from ProQSAR.validation_config import CrossValidationConfig
-from ProQSAR.config import Config
+from ProQSAR.Config.validation_config import CrossValidationConfig
+from ProQSAR.Config.config import Config
 from copy import deepcopy
 
 
@@ -33,13 +33,17 @@ class OptimalDataset(CrossValidationConfig):
         super().__init__(**kwargs)
         self.activity_col = activity_col
         self.id_col = id_col
-        self.smiles_col = smiles_col
         self.save_data = save_data
         self.save_dir = save_dir
         self.n_jobs = n_jobs
         self.config = config or Config()
+        self.smiles_col = (
+            smiles_col
+            if self.config.standardizer.deactivate
+            else f"standardized_{smiles_col}"
+        )
 
-        self.features = None
+        self.data_features = None
         self.train, self.test = {}, {}
         self.report = None
         self.optimal_set = None
@@ -47,15 +51,15 @@ class OptimalDataset(CrossValidationConfig):
         self.datagenerator = DataGenerator(
             activity_col, id_col, smiles_col, mol_col, n_jobs=n_jobs, config=config
         )
-        self.splitter = self.config.splitter.setting(
-            activity_col=activity_col, smiles_col=f"standardized_{smiles_col}"
+        self.splitter = self.config.splitter.set_params(
+            activity_col=activity_col, smiles_col=self.smiles_col
         )
         self.datapreprocessor = DataPreprocessor(activity_col, id_col, config=config)
 
     def run(self, data):
 
         # Generate all features
-        self.features = self.datagenerator.generate(data)
+        self.data_features = self.datagenerator.generate(data)
 
         # Set metrics to perform cross validation
         self.task_type = _get_task_type(data, self.activity_col)
@@ -86,9 +90,11 @@ class OptimalDataset(CrossValidationConfig):
         result = []
         self.dataprep_fitted = {}
 
-        for i in self.features.keys():
+        for i in self.data_features.keys():
             # Split each feature set into train set & test set
-            self.train[i], self.test[i] = self.splitter.fit(self.features[i])
+            self.train[i], self.test[i] = self.splitter.fit(self.data_features[i])
+            self.train[i] = self.train[i].drop(columns=self.smiles_col)
+            self.test[i] = self.test[i].drop(columns=self.smiles_col)
 
             # Apply DataPreprocessor pipeline to train & test set
             self.datapreprocessor.fit(self.train[i])
@@ -167,7 +173,7 @@ class OptimalDataset(CrossValidationConfig):
         if self.save_data:
             if self.save_dir and not os.path.exists(self.save_dir):
                 os.makedirs(self.save_dir, exist_ok=True)
-            for key, value in self.features.items():
+            for key, value in self.data_features.items():
                 value.to_csv(f"{self.save_dir}/{key}.csv", index=False)
             for key, value in self.train.items():
                 value.to_csv(f"{self.save_dir}/train_{key}.csv", index=False)
@@ -178,7 +184,7 @@ class OptimalDataset(CrossValidationConfig):
 
     def get_params(self, deep=True) -> dict:
         """Return all hyperparameters as a dictionary, filtering nested parameters for specific attributes."""
-        excluded_keys = {"features", "train", "test", "report", "optimal_set"}
+        excluded_keys = {"data_features", "train", "test", "report", "optimal_set"}
         out = {}
 
         for key, value in self.__dict__.items():

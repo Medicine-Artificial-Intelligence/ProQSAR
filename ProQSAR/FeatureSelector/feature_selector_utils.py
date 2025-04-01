@@ -38,6 +38,7 @@ def _get_method_map(
     task_type: str,
     add_method: dict = {},
     n_jobs: int = -1,
+    random_state: Optional[int] = 42,
 ) -> dict[str, object]:
     """
     Creates a dictionary of feature selection methods based on the task type.
@@ -67,23 +68,25 @@ def _get_method_map(
                 "Anova": SelectKBest(score_func=f_classif, k=20),
                 "MutualInformation": SelectKBest(score_func=mutual_info_classif, k=20),
                 "RandomForestClassifier": SelectFromModel(
-                    RandomForestClassifier(random_state=42, n_jobs=n_jobs)
+                    RandomForestClassifier(random_state=random_state, n_jobs=n_jobs)
                 ),
                 "ExtraTreesClassifier": SelectFromModel(
-                    ExtraTreesClassifier(random_state=42, n_jobs=n_jobs)
+                    ExtraTreesClassifier(random_state=random_state, n_jobs=n_jobs)
                 ),
                 "AdaBoostClassifier": SelectFromModel(
-                    AdaBoostClassifier(random_state=42)
+                    AdaBoostClassifier(random_state=random_state)
                 ),
                 "GradientBoostingClassifier": SelectFromModel(
-                    GradientBoostingClassifier(random_state=42)
+                    GradientBoostingClassifier(random_state=random_state)
                 ),
                 "XGBClassifier": SelectFromModel(
-                    XGBClassifier(random_state=42, verbosity=0, eval_metric="logloss")
+                    XGBClassifier(
+                        random_state=random_state, verbosity=0, eval_metric="logloss"
+                    )
                 ),
                 "LogisticRegression": SelectFromModel(
                     LogisticRegression(
-                        random_state=42,
+                        random_state=random_state,
                         penalty="elasticnet",
                         solver="saga",
                         l1_ratio=0.5,
@@ -99,21 +102,25 @@ def _get_method_map(
                     score_func=mutual_info_regression, k=20
                 ),
                 "RandomForestRegressor": SelectFromModel(
-                    RandomForestRegressor(random_state=42, n_jobs=n_jobs)
+                    RandomForestRegressor(random_state=random_state, n_jobs=n_jobs)
                 ),
                 "ExtraTreesRegressor": SelectFromModel(
-                    ExtraTreesRegressor(random_state=42, n_jobs=n_jobs)
+                    ExtraTreesRegressor(random_state=random_state, n_jobs=n_jobs)
                 ),
                 "AdaBoostRegressor": SelectFromModel(
-                    AdaBoostRegressor(random_state=42)
+                    AdaBoostRegressor(random_state=random_state)
                 ),
                 "GradientBoostingRegressor": SelectFromModel(
-                    GradientBoostingRegressor(random_state=42)
+                    GradientBoostingRegressor(random_state=random_state)
                 ),
                 "XGBRegressor": SelectFromModel(
-                    XGBRegressor(random_state=42, verbosity=0, eval_metric="rmse")
+                    XGBRegressor(
+                        random_state=random_state, verbosity=0, eval_metric="rmse"
+                    )
                 ),
-                "LassoCV": SelectFromModel(LassoCV(random_state=42, n_jobs=n_jobs)),
+                "LassoCV": SelectFromModel(
+                    LassoCV(random_state=random_state, n_jobs=n_jobs)
+                ),
             }
 
         else:
@@ -148,6 +155,7 @@ def evaluate_feature_selectors(
     csv_name: str = "fs_report",
     save_dir: str = "Project/FeatureSelector",
     n_jobs: int = -1,
+    random_state: Optional[int] = 42,
 ) -> pd.DataFrame:
     """
     Evaluates various feature selection methods using cross-validation on the given dataset.
@@ -208,9 +216,13 @@ def evaluate_feature_selectors(
         y_data = data[activity_col]
 
         task_type = _get_task_type(data, activity_col)
-        method_map = _get_method_map(task_type, add_method, n_jobs)
+        method_map = _get_method_map(
+            task_type, add_method, n_jobs, random_state=random_state
+        )
         method_map.update({"NoFS": None})
-        cv = _get_cv_strategy(task_type, n_splits=n_splits, n_repeats=n_repeats)
+        cv = _get_cv_strategy(
+            task_type, n_splits=n_splits, n_repeats=n_repeats, random_state=random_state
+        )
         scoring_list = scoring_list or _get_cv_scoring(task_type)
 
         methods_to_compare = {}
@@ -234,9 +246,9 @@ def evaluate_feature_selectors(
                 selected_X = selector.transform(X_data)
 
             model = (
-                RandomForestClassifier(random_state=42)
+                RandomForestClassifier(random_state=random_state)
                 if task_type == "C"
-                else RandomForestRegressor(random_state=42)
+                else RandomForestRegressor(random_state=random_state)
             )
             result.append(
                 ModelValidation._perform_cross_validation(

@@ -268,6 +268,7 @@ class ModelValidation:
         csv_name: str = "cv_report",
         save_dir: str = "Project/ModelDevelopment",
         n_jobs: int = -1,
+        random_state: Optional[int] = 42,
     ) -> pd.DataFrame:
         """
         Performs internal validation (cross-validation) for multiple models and generates a report.
@@ -323,8 +324,15 @@ class ModelValidation:
             y_data = data[activity_col]
 
             task_type = _get_task_type(data, activity_col)
-            model_map = _get_model_map(task_type, add_model, n_jobs)
-            cv = _get_cv_strategy(task_type, n_splits=n_splits, n_repeats=n_repeats)
+            model_map = _get_model_map(
+                task_type, add_model, n_jobs, random_state=random_state
+            )
+            cv = _get_cv_strategy(
+                task_type,
+                n_splits=n_splits,
+                n_repeats=n_repeats,
+                random_state=random_state,
+            )
 
             scoring_list = scoring_list or _get_cv_scoring(task_type)
 
@@ -462,7 +470,7 @@ class ModelValidation:
             if select_model is None:
                 models_to_compare = model_map
             else:
-                for name in select_model + list(add_model.keys()):
+                for name in select_model:
                     if name in model_map:
                         models_to_compare.update({name: model_map[name]})
                     else:

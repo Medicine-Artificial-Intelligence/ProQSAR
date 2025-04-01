@@ -76,6 +76,7 @@ def _get_model_map(
     task_type: Optional[str] = None,
     add_model: dict = {},
     n_jobs: int = -1,
+    random_state: Optional[int] = 42,
 ) -> dict:
     """
     Retrieves a dictionary mapping model names to their corresponding estimators.
@@ -92,46 +93,60 @@ def _get_model_map(
     model_map_c = {
         "DummyClassifier": DummyClassifier(),
         "LogisticRegression": LogisticRegression(
-            max_iter=10000, solver="liblinear", random_state=42, n_jobs=n_jobs
+            max_iter=10000, solver="liblinear", random_state=random_state, n_jobs=n_jobs
         ),
         "KNeighborsClassifier": KNeighborsClassifier(n_neighbors=20, n_jobs=n_jobs),
         "SVC": SVC(probability=True, max_iter=10000),
         "RandomForestClassifier": RandomForestClassifier(
-            random_state=42, n_jobs=n_jobs
+            random_state=random_state, n_jobs=n_jobs
         ),
         "ExtraTreesClassifier": ExtraTreesClassifier(
-            random_state=42, n_jobs=n_jobs
+            random_state=random_state, n_jobs=n_jobs
         ),
-        "AdaBoostClassifier": AdaBoostClassifier(n_estimators=100, random_state=42),
-        "GradientBoostingClassifier": GradientBoostingClassifier(random_state=42),
+        "AdaBoostClassifier": AdaBoostClassifier(
+            n_estimators=100, random_state=random_state
+        ),
+        "GradientBoostingClassifier": GradientBoostingClassifier(
+            random_state=random_state
+        ),
         "XGBClassifier": XGBClassifier(
-            random_state=42, verbosity=0, eval_metric="logloss"
+            random_state=random_state, verbosity=0, eval_metric="logloss"
         ),
-        "CatBoostClassifier": CatBoostClassifier(random_state=42, verbose=0),
+        "CatBoostClassifier": CatBoostClassifier(random_state=random_state, verbose=0),
         "MLPClassifier": MLPClassifier(
-            alpha=0.01, max_iter=10000, hidden_layer_sizes=(150,), random_state=42
+            alpha=0.01,
+            max_iter=10000,
+            hidden_layer_sizes=(150,),
+            random_state=random_state,
         ),
     }
 
     model_map_r = {
-        "DummyClassifier": DummyRegressor(),
+        "DummyRegressor": DummyRegressor(),
         "LinearRegression": LinearRegression(n_jobs=n_jobs),
         "KNeighborsRegressor": KNeighborsRegressor(n_jobs=n_jobs),
         "SVR": SVR(),
         "RandomForestRegressor": RandomForestRegressor(
-            random_state=42, n_jobs=n_jobs
+            random_state=random_state, n_jobs=n_jobs
         ),
-        "ExtraTreesRegressor": ExtraTreesRegressor(random_state=42, n_jobs=n_jobs),
-        "AdaBoostRegressor": AdaBoostRegressor(random_state=42),
-        "GradientBoostingRegressor": GradientBoostingRegressor(random_state=42),
+        "ExtraTreesRegressor": ExtraTreesRegressor(
+            random_state=random_state, n_jobs=n_jobs
+        ),
+        "AdaBoostRegressor": AdaBoostRegressor(random_state=random_state),
+        "GradientBoostingRegressor": GradientBoostingRegressor(
+            random_state=random_state
+        ),
         "XGBRegressor": XGBRegressor(
-            random_state=42,
+            random_state=random_state,
             verbosity=0,
             objective="reg:squarederror",
         ),
-        "CatBoostRegressor": CatBoostRegressor(random_state=42, verbose=0),
+        "CatBoostRegressor": CatBoostRegressor(random_state=random_state, verbose=0),
         "MLPRegressor": MLPRegressor(
-            alpha=0.01, max_iter=10000, hidden_layer_sizes=(150,), random_state=42
+            alpha=0.01,
+            max_iter=10000,
+            hidden_layer_sizes=(150,),
+            random_state=random_state,
         ),
         "Ridge": Ridge(),
         "ElasticNetCV": ElasticNetCV(cv=5, n_jobs=n_jobs),
@@ -157,6 +172,7 @@ def _get_cv_strategy(
     task_type: str,
     n_splits: int = 10,
     n_repeats: int = 3,
+    random_state: Optional[int] = 42,
 ) -> Union[RepeatedStratifiedKFold, RepeatedKFold]:
     """
     Defines the cross-validation strategy based on task type.
@@ -171,10 +187,12 @@ def _get_cv_strategy(
     """
     if task_type == "C":
         return RepeatedStratifiedKFold(
-            n_splits=n_splits, n_repeats=n_repeats, random_state=42
+            n_splits=n_splits, n_repeats=n_repeats, random_state=random_state
         )
     elif task_type == "R":
-        return RepeatedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=42)
+        return RepeatedKFold(
+            n_splits=n_splits, n_repeats=n_repeats, random_state=random_state
+        )
     else:
         raise ValueError(
             "Invalid task_type. Please choose 'C' for classification or 'R' for regression."

@@ -1,8 +1,9 @@
 import pandas as pd
-from ProQSAR.config import Config
+from sklearn.base import BaseEstimator
+from ProQSAR.Config.config import Config
 
 
-class DataGenerator:
+class DataGenerator(BaseEstimator):
     def __init__(
         self,
         activity_col: str,
@@ -16,12 +17,14 @@ class DataGenerator:
         self.activity_col = activity_col
         self.id_col = id_col
         self.smiles_col = smiles_col
+        self.mol_col = mol_col
+        self.n_jobs = n_jobs
         self.config = config or Config()
 
-        self.standardizer = self.config.standardizer.setting(
+        self.standardizer = self.config.standardizer.set_params(
             smiles_col=smiles_col, n_jobs=n_jobs
         )
-        self.featurizer = self.config.featurizer.setting(
+        self.featurizer = self.config.featurizer.set_params(
             mol_col=mol_col if self.standardizer.deactivate else "standardized_mol",
             activity_col=activity_col,
             id_col=id_col,
@@ -32,14 +35,18 @@ class DataGenerator:
         standardized_data = pd.DataFrame(
             self.standardizer.standardize_dict_smiles(data)
         )
-        features = self.featurizer.generate_features(standardized_data)
+        data_features = self.featurizer.generate_features(standardized_data)
 
-        for df in features.values():
-            df["standardized_" + self.smiles_col] = standardized_data[
-                "standardized_" + self.smiles_col
-            ]
+        if not self.standardizer.deactivate:
+            for df in data_features.values():
+                df["standardized_" + self.smiles_col] = standardized_data[
+                    "standardized_" + self.smiles_col
+                ]
 
-        return features
+        if len(data_features.keys()) == 1:
+            return list(data_features.values())[0]
+        else:
+            return data_features
 
     def get_params(self, deep=True) -> dict:
         """Return all hyperparameters as a dictionary."""
@@ -53,10 +60,3 @@ class DataGenerator:
             out[key] = value
 
         return out
-
-    def __repr__(self):
-        """Return a string representation of the estimator."""
-        class_name = self.__class__.__name__
-        params = self.get_params(deep=False)
-        param_str = ", ".join(f"{key}={repr(value)}" for key, value in params.items())
-        return f"{class_name}({param_str})"

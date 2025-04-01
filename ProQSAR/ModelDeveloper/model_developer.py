@@ -2,19 +2,19 @@ import os
 import pickle
 import logging
 import pandas as pd
-from sklearn.exceptions import NotFittedError
 from typing import Optional, Union, List
-
+from sklearn.exceptions import NotFittedError
+from sklearn.base import BaseEstimator
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_task_type,
     _get_model_map,
     _get_cv_strategy,
 )
 from ProQSAR.ModelDeveloper.model_validation import ModelValidation
-from ProQSAR.validation_config import CrossValidationConfig
+from ProQSAR.Config.validation_config import CrossValidationConfig
 
 
-class ModelDeveloper(CrossValidationConfig):
+class ModelDeveloper(BaseEstimator, CrossValidationConfig):
     """
     Class to handle model development for machine learning tasks.
 
@@ -77,6 +77,7 @@ class ModelDeveloper(CrossValidationConfig):
         pred_result_name: str = "pred_result",
         save_dir: Optional[str] = "Project/ModelDeveloper",
         n_jobs: int = -1,
+        random_state: Optional[int] = 42,
         **kwargs,
     ):
         """Initializes the ModelDeveloper with necessary attributes."""
@@ -91,6 +92,7 @@ class ModelDeveloper(CrossValidationConfig):
         self.pred_result_name = pred_result_name
         self.save_dir = save_dir
         self.n_jobs = n_jobs
+        self.random_state = random_state
         self.model = None
         self.task_type = None
         self.cv = None
@@ -113,9 +115,17 @@ class ModelDeveloper(CrossValidationConfig):
 
             self.task_type = _get_task_type(data, self.activity_col)
             self.cv = _get_cv_strategy(
-                self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
+                self.task_type,
+                n_splits=self.n_splits,
+                n_repeats=self.n_repeats,
+                random_state=self.random_state,
             )
-            model_map = _get_model_map(self.task_type, self.add_model, self.n_jobs)
+            model_map = _get_model_map(
+                self.task_type,
+                self.add_model,
+                self.n_jobs,
+                random_state=self.random_state,
+            )
             # Set scorings
             self.scoring_target = (
                 self.scoring_target or "f1" if self.task_type == "C" else "r2"
@@ -145,6 +155,7 @@ class ModelDeveloper(CrossValidationConfig):
                         csv_name=self.cv_report_name,
                         save_dir=self.save_dir,
                         n_jobs=self.n_jobs,
+                        random_state=self.random_state,
                     )
 
                     self.select_model = (
@@ -181,6 +192,7 @@ class ModelDeveloper(CrossValidationConfig):
                         csv_name=self.cv_report_name,
                         save_dir=self.save_dir,
                         n_jobs=self.n_jobs,
+                        random_state=self.random_state,
                     )
             else:
                 raise AttributeError(
@@ -231,21 +243,24 @@ class ModelDeveloper(CrossValidationConfig):
             )
             y_pred = self.model.predict(X_data)
             result = {
-                "ID": data[self.id_col].values,
-                "Predicted values": y_pred,
+                f"{self.id_col}": data[self.id_col].values,
+                "Predicted value": y_pred,
             }
+            # Get actual value if available
+            if self.activity_col in data.columns:
+                result[self.activity_col] = data[self.activity_col].values
 
             if self.task_type == "C":
                 y_proba = self.model.predict_proba(X_data)
                 result[f"Probability for class {self.classes_[0]}"] = y_proba[:, 0]
                 result[f"Probability for class {self.classes_[1]}"] = y_proba[:, 1]
 
-            self.pred_result = pd.DataFrame(result)
+            pred_result = pd.DataFrame(result)
 
             if self.save_pred_result:
                 if self.save_dir and not os.path.exists(self.save_dir):
                     os.makedirs(self.save_dir, exist_ok=True)
-                self.pred_result.to_csv(
+                pred_result.to_csv(
                     f"{self.save_dir}/{self.pred_result_name}.csv", index=False
                 )
                 logging.info(
@@ -253,48 +268,17 @@ class ModelDeveloper(CrossValidationConfig):
                 )
 
             logging.info("Predictions completed successfully.")
-            return self.pred_result
+            return pred_result
 
         except Exception as e:
             logging.error(f"Error during prediction: {e}")
             raise
 
-    def setting(self, **kwargs):
+    def set_params(self, **kwargs):
         valid_keys = self.__dict__.keys()
         for key in kwargs:
             if key not in valid_keys:
-                raise KeyError(f"'{key}' is not a valid attribute of ModelDeveloper.")
+                raise KeyError(f"'{key}' is not a valid attribute.")
         self.__dict__.update(**kwargs)
 
         return self
-
-    def get_params(self, deep=True):
-        """Get parameters for this estimator.
-
-        Parameters
-        ----------
-        deep : bool, default=True
-            If True, return the parameters of sub-estimators as well.
-
-        Returns
-        -------
-        params : dict
-            Dictionary of parameter names mapped to their values.
-        """
-        out = {}
-        for key in self.__dict__:
-            value = getattr(self, key)
-            if deep and hasattr(value, "get_params"):
-                deep_items = value.get_params().items()
-                for sub_key, sub_value in deep_items:
-                    out[f"{key}__{sub_key}"] = sub_value
-            out[key] = value
-
-        return out
-
-    def __repr__(self):
-        """Return a string representation of the estimator."""
-        class_name = self.__class__.__name__
-        params = self.get_params(deep=False)
-        param_str = ", ".join(f"{key}={repr(value)}" for key, value in params.items())
-        return f"{class_name}({param_str})"

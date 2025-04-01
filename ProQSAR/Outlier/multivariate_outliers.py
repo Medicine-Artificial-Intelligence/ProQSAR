@@ -38,6 +38,7 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         select_method: str = "LocalOutlierFactor",
         novelty: bool = False,
         n_jobs: int = -1,
+        random_state: Optional[int] = 42,
         save_method: bool = False,
         save_dir: Optional[str] = "Project/MultivOutlierHandler",
         save_trans_data: bool = False,
@@ -64,6 +65,7 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         self.select_method = select_method
         self.novelty = novelty
         self.n_jobs = n_jobs
+        self.random_state = random_state
         self.save_method = save_method
         self.save_dir = save_dir
         self.save_trans_data = save_trans_data
@@ -98,15 +100,17 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
                 "IsolationForest": IsolationForest(
                     n_estimators=100,
                     contamination="auto",
-                    random_state=42,
+                    random_state=self.random_state,
                     n_jobs=self.n_jobs,
                 ),
                 "OneClassSVM": OneClassSVM(),
                 "RobustCovariance": EllipticEnvelope(
-                    contamination=0.1, random_state=42
+                    contamination=0.1, random_state=self.random_state
                 ),
                 "EmpiricalCovariance": EllipticEnvelope(
-                    contamination=0.1, support_fraction=1, random_state=42
+                    contamination=0.1,
+                    support_fraction=1,
+                    random_state=self.random_state,
                 ),
             }
             if self.select_method not in method_map:
@@ -212,17 +216,6 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
         self.fit(data)
         return self.transform(data)
-
-    def setting(self, **kwargs):
-        valid_keys = self.__dict__.keys()
-        for key in kwargs:
-            if key not in valid_keys:
-                raise KeyError(
-                    f"'{key}' is not a valid attribute of MultivariateOutlierHandler."
-                )
-        self.__dict__.update(**kwargs)
-
-        return self
 
     @staticmethod
     def compare_multivariate_methods(

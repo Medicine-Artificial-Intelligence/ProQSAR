@@ -8,9 +8,10 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_cv_strategy,
 )
 from ProQSAR.Optimizer.optimizer_utils import _get_model_list, _get_model_and_params
+from sklearn.base import BaseEstimator
 
 
-class Optimizer:
+class Optimizer(BaseEstimator):
     """
     A class to optimize machine learning models using Optuna for hyperparameter tuning.
 
@@ -73,7 +74,7 @@ class Optimizer:
         n_splits: int = 5,
         n_repeats: int = 5,
         n_jobs: int = -1,
-        deactivate: bool = False
+        deactivate: bool = False,
     ) -> None:
         """
         Initializes the Optimizer class with user-defined parameters.
@@ -115,6 +116,10 @@ class Optimizer:
         Tuple[Dict[str, Any], float]
             The best hyperparameters and the best score obtained during optimization.
         """
+        if self.deactivate:
+            logging.info("Optimizer is deactivated. Skipping optimize.")
+            return self
+
         try:
             logging.info("Starting optimization process...")
             X = data.drop([self.activity_col, self.id_col], axis=1)
@@ -139,7 +144,7 @@ class Optimizer:
                         model_name = model_list[0]
                     else:
                         model_name = trial.suggest_categorical("model", model_list)
-                        
+
                     model, params = _get_model_and_params(
                         trial, model_name, self.param_ranges, self.add_model
                     )
@@ -214,12 +219,3 @@ class Optimizer:
                 "Attempted to access 'best_score' before running 'optimize'. "
                 "Run 'optimize' to obtain the best score."
             )
-        
-    def setting(self, **kwargs):
-        valid_keys = self.__dict__.keys()
-        for key in kwargs:
-            if key not in valid_keys:
-                raise KeyError(f"'{key}' is not a valid attribute of Optimizer.")
-        self.__dict__.update(**kwargs)
-
-        return self

@@ -8,9 +8,10 @@ from sklearn.svm import OneClassSVM
 from sklearn.exceptions import NotFittedError
 from sklearn.neighbors import NearestNeighbors, LocalOutlierFactor
 from scipy.spatial.distance import cdist
+from sklearn.base import BaseEstimator
 
 
-class ApplicabilityDomain:
+class ApplicabilityDomain(BaseEstimator):
     """
     A class to determine the applicability domain of a model using different methods.
 
@@ -22,9 +23,9 @@ class ApplicabilityDomain:
 
     def __init__(
         self,
-        method: str = "lof",
         activity_col: Optional[str] = None,
         id_col: Optional[str] = None,
+        method: str = "lof",
         rate_of_outliers: float = 0.01,
         gamma="auto",
         nu=0.5,
@@ -32,6 +33,7 @@ class ApplicabilityDomain:
         metric="minkowski",
         p=2,
         save_dir: Optional[str] = "Project/ApplicabilityDomain",
+        deactivate: bool = False,
     ):
         """
         Initialize the applicability domain with the specified method and parameters.
@@ -41,7 +43,7 @@ class ApplicabilityDomain:
         method_name: str, default 'ocsvm'
             The name of method to set AD. 'knn', 'lof', or 'ocsvm'
         rate_of_outliers: float, default 0.01
-            Rate of outlier samples. This is used to set threshold
+            Rate of outlier samples. This is used to set threshold.
         gamma : (only for 'ocsvm') float, default ’auto’
             Kernel coefficient for ‘rbf’.
             Current default is ‘auto’ which optimize gamma to maximize variance in Gram matrix
@@ -79,6 +81,7 @@ class ApplicabilityDomain:
         self.metric = metric
         self.p = p
         self.save_dir = save_dir
+        self.deactivate = deactivate
         self.ad = None
         self.offset = None
 
@@ -89,6 +92,9 @@ class ApplicabilityDomain:
         Args:
             data (pd.DataFrame): Training dataset for fitting the model.
         """
+        if self.deactivate:
+            logging.info("ApplicabilityDomain is deactivated. Skipping fit.")
+            return None
         try:
             X_data = data.drop(
                 [self.activity_col, self.id_col], axis=1, errors="ignore"
@@ -134,7 +140,7 @@ class ApplicabilityDomain:
                 with open(f"{self.save_dir}/applicability_domain.pkl", "wb") as file:
                     pickle.dump(self, file)
 
-            logging.info("Applicability domain model fitted successfully.")
+            logging.info("ApplicabilityDomain model fitted successfully.")
             return self
 
         except Exception as e:

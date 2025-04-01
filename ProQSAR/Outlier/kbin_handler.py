@@ -6,7 +6,6 @@ from copy import deepcopy
 from typing import Optional
 from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.base import BaseEstimator, TransformerMixin
 from ProQSAR.Outlier.univariate_outliers import _feature_quality
 
 
@@ -176,12 +175,3 @@ class KBinHandler(BaseEstimator, TransformerMixin):
 
         self.fit(data)
         return self.transform(data)
-
-    def setting(self, **kwargs):
-        valid_keys = self.__dict__.keys()
-        for key in kwargs:
-            if key not in valid_keys:
-                raise KeyError(f"'{key}' is not a valid attribute of KBinHandler.")
-        self.__dict__.update(**kwargs)
-
-        return self

@@ -2,12 +2,13 @@ from ProQSAR.Splitter.random_splitter import RandomSplitter
 from ProQSAR.Splitter.stratified_random_splitter import StratifiedRandomSplitter
 from ProQSAR.Splitter.scaffold_splitter import ScaffoldSplitter
 from ProQSAR.Splitter.stratified_scaffold_splitter import StratifiedScaffoldSplitter
+from sklearn.base import BaseEstimator
 from typing import Tuple
 import pandas as pd
 import logging
 
 
-class Splitter:
+class Splitter(BaseEstimator):
     """
     A class to handle various data partitioning strategies for training and testing sets.
     """
@@ -97,8 +98,8 @@ class Splitter:
                 )
 
             data_train, data_test = splitter.fit(data)
-            data_train = data_train.reset_index(drop=True).drop(columns=self.smiles_col)
-            data_test = data_test.reset_index(drop=True).drop(columns=self.smiles_col)
+            data_train = data_train.reset_index(drop=True)
+            data_test = data_test.reset_index(drop=True)
 
             logging.info(
                 f"Data successfully partitioned using the '{self.option}' method."
@@ -113,43 +114,3 @@ class Splitter:
         except Exception as e:
             logging.error(f"Unexpected error: {e}")
             raise
-
-    def setting(self, **kwargs):
-        valid_keys = self.__dict__.keys()
-        for key in kwargs:
-            if key not in valid_keys:
-                raise KeyError(f"'{key}' is not a valid attribute of Splitter.")
-        self.__dict__.update(**kwargs)
-
-        return self
-
-    def get_params(self, deep=True):
-        """Get parameters for this estimator.
-        
-        Parameters
-        ----------
-        deep : bool, default=True
-            If True, return the parameters of sub-estimators as well.
-
-        Returns
-        -------
-        params : dict
-            Dictionary of parameter names mapped to their values.
-        """
-        out = {}
-        for key in self.__dict__:
-            value = getattr(self, key)
-            if deep and hasattr(value, "get_params"):
-                deep_items = value.get_params().items()
-                for sub_key, sub_value in deep_items:
-                    out[f"{key}__{sub_key}"] = sub_value
-            out[key] = value
-            
-        return out
-    
-    def __repr__(self):
-        """Return a string representation of the estimator."""
-        class_name = self.__class__.__name__
-        params = self.get_params(deep=False)
-        param_str = ", ".join(f"{key}={repr(value)}" for key, value in params.items())
-        return f"{class_name}({param_str})"

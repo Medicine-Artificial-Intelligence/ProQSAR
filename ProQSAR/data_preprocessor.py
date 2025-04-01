@@ -1,9 +1,10 @@
 import logging
 from sklearn.pipeline import Pipeline
-from ProQSAR.config import Config
+from sklearn.base import BaseEstimator
+from ProQSAR.Config.config import Config
 
 
-class DataPreprocessor:
+class DataPreprocessor(BaseEstimator):
     def __init__(self, activity_col: str, id_col: str, config=None):
 
         self.activity_col = activity_col
@@ -22,7 +23,7 @@ class DataPreprocessor:
             setattr(
                 self,
                 attr,
-                getattr(self.config, attr).setting(
+                getattr(self.config, attr).set_params(
                     activity_col=self.activity_col, id_col=self.id_col
                 ),
             )
@@ -84,10 +85,3 @@ class DataPreprocessor:
             out[key] = value
 
         return out
-
-    def __repr__(self):
-        """Return a string representation of the estimator."""
-        class_name = self.__class__.__name__
-        params = self.get_params(deep=False)
-        param_str = ", ".join(f"{key}={repr(value)}" for key, value in params.items())
-        return f"{class_name}({param_str})"
