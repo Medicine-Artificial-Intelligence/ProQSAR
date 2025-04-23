@@ -172,7 +172,7 @@ class ModelValidation:
                 if save_dir and not os.path.exists(save_dir):
                     os.makedirs(save_dir, exist_ok=True)
                 plt.savefig(
-                    f"{save_dir}/{fig_prefix}_{graph_type}.png",
+                    f"{save_dir}/{fig_prefix}_{graph_type}.pdf",
                     dpi=300,
                     bbox_inches="tight",
                 )
@@ -267,7 +267,7 @@ class ModelValidation:
         fig_prefix: str = "cv_graph",
         csv_name: str = "cv_report",
         save_dir: str = "Project/ModelDevelopment",
-        n_jobs: int = -1,
+        n_jobs: int = 1,
         random_state: Optional[int] = 42,
     ) -> pd.DataFrame:
         """
@@ -312,8 +312,6 @@ class ModelValidation:
             DataFrame containing the validation results for each model.
         """
         try:
-            logging.info("Starting cross validation.")
-
             if isinstance(scoring_list, str):
                 scoring_list = [scoring_list]
 
@@ -395,7 +393,6 @@ class ModelValidation:
                     f"Cross validation report saved at: {save_dir}/{csv_name}.csv"
                 )
 
-            logging.info("Cross validation completed successfully.")
             return result_df
 
         except Exception as e:
@@ -414,7 +411,7 @@ class ModelValidation:
         save_csv: bool = False,
         csv_name: str = "ev_report",
         save_dir: str = "Project/ModelDevelopment",
-        n_jobs: int = -1,
+        n_jobs: int = 1,
     ) -> pd.DataFrame:
         """
         Performs external validation (on test data) for multiple models and generates a report.
@@ -450,8 +447,6 @@ class ModelValidation:
             DataFrame containing the evaluation results for each model.
         """
         try:
-            logging.info("Starting external validation.")
-
             if isinstance(scoring_list, str):
                 scoring_list = [scoring_list]
 
@@ -509,7 +504,6 @@ class ModelValidation:
                 logging.info(
                     f"External validation report saved at: {save_dir}/{csv_name}.csv"
                 )
-            logging.info("External validation completed successfully.")
             return ev_df
 
         except Exception as e:
@@ -517,19 +511,24 @@ class ModelValidation:
             raise
 
     @staticmethod
-    def make_roc_curve(
+    def make_curve(
         data_train: pd.DataFrame,
         data_test: pd.DataFrame,
         activity_col: str,
         id_col: str,
-        select_model: Optional[List[str]] = None,
+        curve_type: Union[str, List[str]] = [
+            "roc",
+            "pr",
+        ],  # Can be a single string or a list of strings.
+        select_model: Optional[Union[list, str]] = None,
         add_model: Optional[dict] = None,
-        legend_loc: Union[str, Tuple[float, float]] = "lower right",
-        save_dir: str = "Project/ModelDevelopment",
-        fig_name: str = "roc_curve_plot",
+        legend_loc: Optional[Union[str, Tuple[float, float]]] = "best",
+        save_dir: Optional[str] = "Project/ModelDevelopment",
+        fig_name: Optional[str] = None,
+        n_jobs: int = 1,
     ):
         """
-        Draws ROC curves for selected models and saves the plot.
+        Draws ROC and/or Precision-Recall curves for selected models and saves the plot.
 
         Parameters:
         -----------
@@ -541,111 +540,157 @@ class ModelValidation:
             The target column in the dataset.
         id_col : str
             The identifier column in the dataset.
+        curve_type : Union[str, List[str]], default="roc"
+            The type of curve(s) to generate. Can be a single value ("roc" or "pr")
+            or a list of values (e.g., ["roc", "pr"]).
         select_model : Optional[List[str]]
             List of models to be selected for plotting. If None, all models are used.
         add_model : Optional[dict]
             Dictionary of additional models to include.
-        legend_loc : Union[str, Tuple[float, float]], default='lower right'
-            The location for the legend in the plot. This can either be:
-            - A string specifying the position (e.g., 'upper right', 'lower left', etc.),
-            - Or a tuple of floats (x, y) indicating the position relative to the axes (from 0 to 1).
-            This corresponds to the `loc` parameter in the `matplotlib.pyplot.legend()` function.
-        save_dir : str
+        legend_loc : Optional[Union[str, Tuple[float, float]]]
+            The location for the legend in the plot. If not provided, defaults are set based on the curve type.
+            For ROC: "lower right", for PR: "lower left".
+        save_dir : str, default="Project/ModelDevelopment"
             Directory where the figure will be saved.
-        save_filename : str
-            The name of the file where the plot will be saved.
+        fig_name : Optional[str]
+            The base name of the file where the plot will be saved. If multiple curves are plotted,
+            a suffix is added based on the curve type.
+        n_jobs : int, default=1
+            The number of jobs to run in parallel when fitting models.
 
         Returns:
         --------
         None
         """
         try:
-            logging.info("Starting ROC curve generation.")
+            # Normalize curve_type to a list.
+            if isinstance(curve_type, str):
+                curve_types = [curve_type.lower()]
+            elif isinstance(curve_type, list):
+                curve_types = [ct.lower() for ct in curve_type]
+            else:
+                raise ValueError("curve_type must be a string or a list of strings.")
 
-            if isinstance(select_model, str):
-                select_model = [select_model]
-
-            # Prepare data
+            # Prepare training and testing data.
             X_train = data_train.drop([activity_col, id_col], axis=1)
             y_train = data_train[activity_col]
             X_test = data_test.drop([activity_col, id_col], axis=1)
             y_test = data_test[activity_col]
 
+            # Check if the task is classification.
             task_type = _get_task_type(data_train, activity_col)
-
             if task_type != "C":
                 raise ValueError("This function only supports classification tasks.")
 
-            model_map = _get_model_map(task_type, add_model, n_jobs=-1)
+            # Get available models.
+            model_map = _get_model_map(task_type, add_model, n_jobs=n_jobs)
 
+            # Select models to compare.
             models_to_compare = {}
             if select_model is None:
                 models_to_compare = model_map
             else:
-                for name in select_model + list(add_model.keys()):
+                for name in select_model:
                     if name in model_map:
-                        models_to_compare.update({name: model_map[name]})
+                        models_to_compare[name] = model_map[name]
                     else:
                         raise ValueError(f"Model '{name}' is not recognized.")
 
-            # Initialize plot
-            plt.figure(figsize=(10, 8))
-
-            # Iterate over selected models and plot ROC curve
+            # Precompute predictions for each model.
+            model_predictions = {}
             for name, model in models_to_compare.items():
                 model.fit(X=X_train, y=y_train)
-                y_test_proba = model.predict_proba(X_test)[:, 1]
+                # Store probability predictions (assuming binary classification).
+                model_predictions[name] = model.predict_proba(X_test)[:, 1]
 
-                if y_test_proba is not None:
-                    # Compute ROC curve and ROC AUC
-                    fpr, tpr, _ = roc_curve(y_test, y_test_proba)
-                    auc = roc_auc_score(y_test, y_test_proba)
+            # Set up the plotting figure.
+            n_plots = len(curve_types)
+            if n_plots == 1:
+                fig, ax = plt.subplots(figsize=(10, 8))
+                axes = [ax]
+            else:
+                fig, axes = plt.subplots(1, n_plots, figsize=(10 * n_plots, 8))
 
-                    # Plot ROC curve
-                    plt.plot(fpr, tpr, label=f"{name} (AUC = {auc:.3f})")
+            # Loop through each curve type and plot.
+            for idx, ct in enumerate(curve_types):
+                ax = axes[idx]
+                # Set defaults for legend location based on curve type if not provided.
+                for name, y_test_proba in model_predictions.items():
+                    if y_test_proba is not None:
+                        if ct == "roc":
+                            # Compute ROC curve and AUC.
+                            fpr, tpr, _ = roc_curve(y_test, y_test_proba)
+                            auc = roc_auc_score(y_test, y_test_proba)
+                            ax.plot(fpr, tpr, label=f"{name} (AUC = {auc:.3f})")
+                        elif ct == "pr":
+                            # Compute Precision-Recall curve and average precision score.
+                            precision, recall, _ = precision_recall_curve(
+                                y_test, y_test_proba
+                            )
+                            pr_auc = average_precision_score(y_test, y_test_proba)
+                            ax.plot(
+                                recall,
+                                precision,
+                                label=f"{name} (PR AUC = {pr_auc:.3f})",
+                            )
+                        else:
+                            raise ValueError(
+                                "curve_type values must be either 'roc' or 'pr'."
+                            )
 
-            # Add diagonal line (random classifier)
-            plt.plot(
-                [0, 1],
-                [0, 1],
-                color="gray",
-                linestyle="--",
-                linewidth=0.5,
-            )
+                # For ROC, add a diagonal line for a random classifier.
+                if ct == "roc":
+                    ax.plot([0, 1], [0, 1], color="gray", linestyle="--", linewidth=0.5)
+                    ax.set_xlabel("False Positive Rate")
+                    ax.set_ylabel("True Positive Rate")
+                    ax.set_title("Receiver Operating Characteristic (ROC) Curve")
+                else:
+                    ax.set_xlabel("Recall")
+                    ax.set_ylabel("Precision")
+                    ax.set_title("Precision-Recall Curve")
 
-            # Set plot labels and title
-            plt.xlabel("False Positive Rate")
-            plt.ylabel("True Positive Rate")
-            plt.title("Receiver Operating Characteristic (ROC) Curve")
-            plt.legend(loc=legend_loc)
-            plt.grid(True, color="gray", linestyle="-", linewidth=0.5, alpha=0.5)
+                ax.legend(loc=legend_loc)
+                ax.grid(True, color="gray", linestyle="-", linewidth=0.5, alpha=0.5)
 
+            plt.tight_layout()
+
+            # Save the plot.
             if save_dir:
                 os.makedirs(save_dir, exist_ok=True)
-                plt.savefig(f"{save_dir}/{fig_name}.png", dpi=300, bbox_inches="tight")
-                logging.info(f"ROC curve plot saved at: {save_dir}/{fig_name}.png")
+                # If a single curve type is plotted, use the provided fig_name or default.
+                if n_plots == 1:
+                    final_name = fig_name or (f"{curve_types[0]}_curve_plot")
+                else:
+                    # For multiple curves, append the curve type to the base file name.
+                    final_name = fig_name or "_".join(curve_types) + "_curve_plot"
+
+                full_path = f"{save_dir}/{final_name}.pdf"
+                plt.savefig(full_path, dpi=300, bbox_inches="tight")
+                logging.info(f"Curve plot saved at: {full_path}")
 
             plt.show()
-            logging.info("ROC curve generation completed successfully.")
 
         except Exception as e:
-            logging.error(f"Error during ROC curve generation: {e}")
+            logging.error(f"Error during curve generation: {e}")
             raise
 
     @staticmethod
-    def make_pr_curve(
+    def make_scatter_plot(
         data_train: pd.DataFrame,
         data_test: pd.DataFrame,
         activity_col: str,
         id_col: str,
-        select_model: Optional[List[str]] = None,
+        select_model: Optional[Union[list, str]] = None,
         add_model: Optional[dict] = None,
-        legend_loc: Union[str, Tuple[float, float]] = "lower left",
+        scoring_df: Optional[pd.DataFrame] = None,
+        scoring_loc: Tuple[float, float] = (0.05, 0.95),
         save_dir: str = "Project/ModelDevelopment",
-        fig_name: str = "pr_curve_plot",
+        fig_name: str = "scatter_plot",
+        n_jobs: int = 1,
     ):
         """
-        Draws Precision-Recall (PR) curves for selected models and saves the plot.
+        Generates separate scatter plots (using subplots) for regression tasks, each comparing
+        actual vs. predicted values for a selected model.
 
         Parameters:
         -----------
@@ -654,91 +699,132 @@ class ModelValidation:
         data_test : pd.DataFrame
             Test data used for evaluating the models.
         activity_col : str
-            The target column in the dataset.
+            The target column (response variable) in the dataset.
         id_col : str
             The identifier column in the dataset.
         select_model : Optional[List[str]]
-            List of models to be selected for plotting. If None, all models are used.
+            List of model names to be selected for plotting. If None, all available models are used.
         add_model : Optional[dict]
             Dictionary of additional models to include.
-        legend_loc : Union[str, Tuple[float, float]], default='lower left'
-            The location for the legend in the plot. This can either be:
-            - A string specifying the position (e.g., 'upper right', 'lower left', etc.),
-            - Or a tuple of floats (x, y) indicating the position relative to the axes (from 0 to 1).
-            This corresponds to the `loc` parameter in the `matplotlib.pyplot.legend()` function.
-        save_dir : str
+        legend_loc : Union[str, Tuple[float, float]], default="best"
+            The location for the legend in each subplot.
+        save_dir : str, default="Project/ModelDevelopment"
             Directory where the figure will be saved.
-        fig_name : str
-            The name of the file where the plot will be saved.
+        fig_name : str, default="scatter_plot"
+            The base name of the file where the plot will be saved.
+        n_jobs : int, default=1
+            The number of jobs to run in parallel when fitting models.
 
         Returns:
         --------
         None
         """
         try:
-            logging.info("Starting Precision-Recall curve generation.")
-
             if isinstance(select_model, str):
                 select_model = [select_model]
 
-            # Prepare data
+            # Prepare training and testing data.
             X_train = data_train.drop([activity_col, id_col], axis=1)
             y_train = data_train[activity_col]
             X_test = data_test.drop([activity_col, id_col], axis=1)
             y_test = data_test[activity_col]
 
+            # Verify that the task is regression.
             task_type = _get_task_type(data_train, activity_col)
+            if task_type != "R":
+                raise ValueError("This function only supports regression tasks.")
 
-            if task_type != "C":
-                raise ValueError("This function only supports classification tasks.")
+            # Get available models.
+            model_map = _get_model_map(task_type, add_model, n_jobs=n_jobs)
 
-            model_map = _get_model_map(task_type, add_model, n_jobs=-1)
-
-            # Select models to compare
+            # Select models to compare.
             models_to_compare = {}
             if select_model is None:
                 models_to_compare = model_map
             else:
-                for name in select_model + list(add_model.keys()):
+                for name in select_model:
                     if name in model_map:
-                        models_to_compare.update({name: model_map[name]})
+                        models_to_compare[name] = model_map[name]
                     else:
                         raise ValueError(f"Model '{name}' is not recognized.")
 
-            # Initialize plot
-            plt.figure(figsize=(10, 8))
+            n_models = len(models_to_compare)
+            if n_models == 0:
+                raise ValueError("No valid models selected for plotting.")
 
-            # Iterate over selected models and plot PR curve
-            for name, model in models_to_compare.items():
+            # Determine subplot grid dimensions.
+            # Here, we compute a grid with a reasonable layout.
+            n_cols = int(np.ceil(np.sqrt(n_models)))
+            n_rows = int(np.ceil(n_models / n_cols))
+
+            fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows))
+            # Flatten axes array for easier iteration if it's multi-dimensional.
+            if n_models > 1:
+                axes = np.array(axes).flatten()
+            else:
+                axes = [axes]
+
+            # Loop through each model, fit, predict, and create its subplot.
+            for idx, (name, model) in enumerate(models_to_compare.items()):
+                ax = axes[idx]
                 model.fit(X=X_train, y=y_train)
-                y_test_proba = model.predict_proba(X_test)[:, 1]
+                y_pred = model.predict(X_test)
 
-                if y_test_proba is not None:
-                    # Compute Precision-Recall curve and AUC
-                    precision, recall, _ = precision_recall_curve(y_test, y_test_proba)
-                    pr_auc = average_precision_score(y_test, y_test_proba)
+                # Scatter plot: actual vs. predicted values.
+                ax.scatter(y_pred, y_test, alpha=0.4, color=plt.cm.tab10(idx % 10))
 
-                    # Plot PR curve
-                    plt.plot(recall, precision, label=f"{name} (PR AUC = {pr_auc:.3f})")
-
-            # Set plot labels and title
-            plt.xlabel("Recall")
-            plt.ylabel("Precision")
-            plt.title("Precision-Recall Curve")
-            plt.legend(loc=legend_loc)
-            plt.grid(True, color="gray", linestyle="-", linewidth=0.5, alpha=0.5)
-
-            # Save plot
-            if save_dir:
-                os.makedirs(save_dir, exist_ok=True)
-                plt.savefig(f"{save_dir}/{fig_name}.png", dpi=300, bbox_inches="tight")
-                logging.info(
-                    f"Precision-Recall curve plot saved at: {save_dir}/{fig_name}.png"
+                # Determine min and max for the reference line.
+                min_val = min(y_test.min(), y_pred.min())
+                max_val = max(y_test.max(), y_pred.max())
+                ax.plot(
+                    [min_val, max_val],
+                    [min_val, max_val],
+                    color="gray",
+                    linestyle="--",
+                    linewidth=1,
                 )
 
+                # Fetch and display all scores for this model
+
+                if scoring_df is not None and name in scoring_df.columns:
+                    scores = scoring_df[name]
+                    score_text = "\n".join(
+                        [
+                            f"{metric}: {scores[metric]:.3f}"
+                            for metric in scoring_df.index
+                        ]
+                    )
+
+                    ax.text(
+                        scoring_loc[0],
+                        scoring_loc[1],
+                        score_text,
+                        transform=ax.transAxes,
+                        fontsize=9,
+                        verticalalignment="top",
+                    )
+
+                # Set labels and title.
+                ax.set_xlabel("Predicted")
+                ax.set_ylabel("Actual")
+                ax.set_title(name)
+                ax.grid(True, color="gray", linestyle="-", linewidth=0.5, alpha=0.5)
+
+            # Hide any unused subplots.
+            for j in range(idx + 1, len(axes)):
+                fig.delaxes(axes[j])
+
+            plt.tight_layout()
+
+            # Save the figure.
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
+                full_path = f"{save_dir}/{fig_name}.pdf"
+                plt.savefig(full_path, dpi=300, bbox_inches="tight")
+                logging.info(f"Scatter plot saved at: {full_path}")
+
             plt.show()
-            logging.info("Precision-Recall curve generation completed successfully.")
 
         except Exception as e:
-            logging.error(f"Error during Precision-Recall curve generation: {e}")
+            logging.error(f"Error during scatter plot generation: {e}")
             raise

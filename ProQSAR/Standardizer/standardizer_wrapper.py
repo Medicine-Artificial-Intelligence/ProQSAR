@@ -152,7 +152,6 @@ def remove_hydrogens_and_sanitize(mol: Chem.Mol) -> Optional[Chem.Mol]:
     try:
         mol = Chem.RemoveHs(mol)
         Chem.SanitizeMol(mol)
-        logging.info("Molecule sanitized after removing hydrogens.")
         return mol
     except Exception as e:
         logging.error(f"Failed to sanitize molecule: {e}")

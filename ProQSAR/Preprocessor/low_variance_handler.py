@@ -37,7 +37,7 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
         save_method: bool = False,
         visualize: bool = False,
         save_image: bool = False,
-        image_name: str = "variance_analysis.png",
+        image_name: str = "variance_analysis",
         save_dir: str = "Project/LowVarianceHandler",
         save_trans_data: bool = False,
         trans_data_name: str = "trans_data",
@@ -55,7 +55,7 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
         Default is True.
         - save_image (bool): Whether to save the plot as an image. Default is True.
         - image_name (str): The path to save the image if save_image is True.
-        Default is 'variance_analysis.png'.
+        Default is 'variance_analysis'.
         - save_dir (str): The directory to save the image and selected columns file.
         Default is "Project/VarianceHandler".
         - save_trans_data (bool): Whether to save the transformed data.
@@ -81,7 +81,7 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
         id_col: Optional[str] = None,
         set_style: str = "whitegrid",
         save_image: bool = False,
-        image_name: str = "variance_analysis.png",
+        image_name: str = "variance_analysis",
         save_dir: str = "Project/VarianceHandler",
     ) -> None:
         """
@@ -95,7 +95,7 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
         - set_style (str): The style of the seaborn plot. Default is "whitegrid".
         - save_image (bool): Whether to save the plot as an image. Default is False.
         - image_name (str): The path to save the image if save_image is True.
-            Default is 'variance_analysis.png'.
+            Default is 'variance_analysis'.
         - save_dir (str): The directory to save the image if save_image is True.
             Default is "Project/VarianceHandler".
         """
@@ -150,10 +150,12 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
                         os.makedirs(save_dir, exist_ok=True)
                     plt.savefig(os.path.join(save_dir, image_name))
                     logging.info(
-                        f"Variance threshold analysis figure save at: {save_dir}/{image_name}"
+                        f"LowVarianceHandler: Variance threshold analysis figure save at: {save_dir}/{image_name}.pdf"
                     )
             else:
-                logging.warning("No non-binary columns to apply variance threshold.")
+                logging.info(
+                    "LowVarianceHandler: No non-binary columns to apply variance threshold."
+                )
 
         except Exception as e:
             logging.error(f"Error in variance threshold analysis: {e}")
@@ -194,6 +196,9 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
 
             selected_features = []
             if non_binary_cols:
+                logging.info(
+                    f"LowVarianceHandler: Applying with threshold: {var_thresh}"
+                )
                 selector = VarianceThreshold(var_thresh)
                 try:
                     selector.fit(data[non_binary_cols])
@@ -202,9 +207,11 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
                 except ValueError:
                     pass
             else:
-                logging.warning("No non-binary columns to apply variance threshold.")
+                logging.warning(
+                    "LowVarianceHandler: No non-binary columns to apply variance threshold."
+                )
 
-            return columns_to_exclude + binary_cols + selected_features
+            return binary_cols + selected_features
 
         except Exception as e:
             logging.error(f"Error in feature selection by variance: {e}")
@@ -248,8 +255,6 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
                     f"LowVarianceHandler method saved at: {self.save_dir}/low_variance_handler.pkl"
                 )
 
-            logging.info("LowVarianceHandler fitted successfully.")
-
         except Exception as e:
             logging.error(f"Error in fitting LowVarianceHandler: {e}")
 
@@ -266,6 +271,7 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
         - pd.DataFrame: The transformed data with selected features.
         """
         if self.deactivate:
+            self.transformed_data = data
             logging.info(
                 "LowVarianceHandler is deactivated. Returning unmodified data."
             )
@@ -276,8 +282,12 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
                 raise NotFittedError(
                     "LowVarianceHandler is not fitted yet. call 'fit' before using this method."
                 )
-
-            transformed_data = data[self.selected_columns]
+            transformed_data = pd.concat([
+                data.filter(items=[self.id_col, self.activity_col]),
+                data[self.selected_columns],
+                ],
+                axis=1,
+            )
 
             if self.save_trans_data:
                 if self.save_dir and not os.path.exists(self.save_dir):
@@ -298,8 +308,9 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
 
                 transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
                 logging.info(
-                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                    f"LowVarianceHandler: Transformed data saved at: {self.save_dir}/{csv_name}.csv"
                 )
+            self.transformed_data = transformed_data
 
             return transformed_data
 

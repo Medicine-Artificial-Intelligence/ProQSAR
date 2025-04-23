@@ -22,9 +22,9 @@ class ConformalPredictor(BaseEstimator):
         model: Optional[Union[ModelDeveloper, BaseEstimator]] = None,
         activity_col: str = "activity",
         id_col: str = "id",
-        n_jobs: int = -1,
+        n_jobs: int = 1,
         random_state: Optional[int] = 42,
-        save_dir: Optional[str] = "Project/ConformalPredictor",
+        save_dir: Optional[str] = None,
         deactivate: bool = False,
         **kwargs,
     ) -> None:
@@ -83,12 +83,13 @@ class ConformalPredictor(BaseEstimator):
             self.cp.fit(X=X_data, y=y_data)
             self.cp.conformity_scores_ = self.cp.conformity_scores_.astype(np.float64)
 
+            logging.info(f"ConformalPredictor: Fitted a MAPIE {'Classifier' if self.task_type == 'C' else 'Regressor'}.")
+
             if self.save_dir:
                 os.makedirs(self.save_dir, exist_ok=True)
                 with open(f"{self.save_dir}/conformal_predictor.pkl", "wb") as file:
                     pickle.dump(self, file)
 
-            logging.info("Conformal predictor calibrated successfully.")
             return self
 
         except Exception as e:
@@ -162,9 +163,10 @@ class ConformalPredictor(BaseEstimator):
 
             if self.save_dir:
                 os.makedirs(self.save_dir, exist_ok=True)
-                pred_result.to_csv(f"{self.save_dir}/conformal_pred_result.csv")
+                pred_result.to_csv(
+                    f"{self.save_dir}/conformal_pred_result.csv", index=False
+                )
 
-            logging.info("Prediction completed successfully.")
             return pred_result
 
         except Exception as e:

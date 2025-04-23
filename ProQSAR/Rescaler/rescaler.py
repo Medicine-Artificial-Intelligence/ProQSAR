@@ -162,9 +162,14 @@ class Rescaler(BaseEstimator, TransformerMixin):
             ]
 
             if self.non_binary_cols:
+                logging.info(
+                    f"Rescaler: Using '{self.select_method}' method."
+                )
                 self.rescaler = self._get_scaler(self.select_method).fit(
                     data[self.non_binary_cols]
                 )
+            else:
+                logging.info("Rescaler: No non-binary columns to rescale.")
 
             self.fitted = True
 
@@ -196,6 +201,7 @@ class Rescaler(BaseEstimator, TransformerMixin):
             The transformed data.
         """
         if self.deactivate:
+            self.transformed_data = data
             logging.info("Rescaler is deactivated. Returning unmodified data.")
             return data
 
@@ -208,7 +214,7 @@ class Rescaler(BaseEstimator, TransformerMixin):
             transformed_data = deepcopy(data)
             if not self.non_binary_cols:
                 logging.info(
-                    "No non-binary columns found in the data. The data remains unchanged."
+                    "Rescaler: No non-binary columns found in the data. The data remains unchanged."
                 )
 
             else:
@@ -236,8 +242,10 @@ class Rescaler(BaseEstimator, TransformerMixin):
 
                 transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
                 logging.info(
-                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                    f"Rescaler: Transformed data saved at: {self.save_dir}/{csv_name}.csv"
                 )
+
+            self.transformed_data = transformed_data
 
             return transformed_data
 

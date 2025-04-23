@@ -11,7 +11,6 @@ class RandomSplitter:
     def __init__(
         self,
         activity_col: str,
-        smiles_col: str,
         test_size: float = 0.2,
         random_state: int = 42,
     ):
@@ -32,7 +31,6 @@ class RandomSplitter:
         self.test_size = test_size
         self.random_state = random_state
         self.activity_col = activity_col
-        self.smiles_col = smiles_col
 
     def fit(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """

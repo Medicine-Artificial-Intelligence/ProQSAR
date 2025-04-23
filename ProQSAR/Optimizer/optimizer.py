@@ -9,6 +9,7 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
 )
 from ProQSAR.Optimizer.optimizer_utils import _get_model_list, _get_model_and_params
 from sklearn.base import BaseEstimator
+from optuna.samplers import TPESampler
 
 
 class Optimizer(BaseEstimator):
@@ -72,8 +73,9 @@ class Optimizer(BaseEstimator):
         add_model: Dict[str, Tuple[Any, Dict[str, Any]]] = {},
         n_trials: int = 50,
         n_splits: int = 5,
-        n_repeats: int = 5,
-        n_jobs: int = -1,
+        n_repeats: int = 2,
+        n_jobs: int = 1,
+        random_state: int = 42,
         deactivate: bool = False,
     ) -> None:
         """
@@ -89,6 +91,7 @@ class Optimizer(BaseEstimator):
         self.n_splits = n_splits
         self.n_repeats = n_repeats
         self.n_jobs = n_jobs
+        self.random_state = random_state
         self.deactivate = deactivate
         self.best_model = None
         self.best_params = None
@@ -100,7 +103,6 @@ class Optimizer(BaseEstimator):
         self.param_ranges.update(
             {name: params for name, (model, params) in self.add_model.items()}
         )
-        logging.info("Optimizer initialized successfully.")
 
     def optimize(self, data: pd.DataFrame) -> Tuple[Dict[str, Any], float]:
         """
@@ -121,7 +123,6 @@ class Optimizer(BaseEstimator):
             return self
 
         try:
-            logging.info("Starting optimization process...")
             X = data.drop([self.activity_col, self.id_col], axis=1)
             y = data[self.activity_col]
 
@@ -155,7 +156,7 @@ class Optimizer(BaseEstimator):
                         y,
                         scoring=self.scoring,
                         cv=self.cv,
-                        n_jobs=self.n_jobs,
+                        n_jobs=1,
                     ).mean()
                     return score
 
@@ -163,13 +164,14 @@ class Optimizer(BaseEstimator):
                     logging.error(f"Error in objective function: {e}")
                     raise
 
-            study = optuna.create_study(direction="maximize")
-            study.optimize(objective, n_trials=self.n_trials, n_jobs=self.n_jobs)
+            study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=self.random_state))
+            study.optimize(objective, n_trials=self.n_trials, n_jobs=self.n_jobs, gc_after_trial=True)
 
             self.best_params = study.best_trial.params
             self.best_score = study.best_value
 
-            logging.info("Optimization completed successfully.")
+            logging.info(f"Optimizer: best_params are {self.best_params}, best_score is {self.best_score}.")
+
             return self.best_params, self.best_score
 
         except Exception as e:

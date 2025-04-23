@@ -36,8 +36,7 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         activity_col: Optional[str] = None,
         id_col: Optional[str] = None,
         select_method: str = "LocalOutlierFactor",
-        novelty: bool = False,
-        n_jobs: int = -1,
+        n_jobs: int = 1,
         random_state: Optional[int] = 42,
         save_method: bool = False,
         save_dir: Optional[str] = "Project/MultivOutlierHandler",
@@ -52,7 +51,6 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
             activity_col (Optional[str]): Column name for activity or target variable.
             id_col (Optional[str]): Column name for the unique identifier.
             select_method (str): Method to use for outlier detection.
-            novelty (bool): If True, enables novelty detection for certain methods.
             n_jobs (int): Number of parallel jobs to run (-1 uses all processors).
             save_method (bool): If True, saves the fitted model to disk.
             save_dir (Optional[str]): Directory path to save model and transformed data.
@@ -63,7 +61,6 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         self.activity_col = activity_col
         self.id_col = id_col
         self.select_method = select_method
-        self.novelty = novelty
         self.n_jobs = n_jobs
         self.random_state = random_state
         self.save_method = save_method
@@ -93,9 +90,11 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
                 columns=[self.id_col, self.activity_col], errors="ignore"
             ).columns
 
+            self.data_fit = data[self.features]
+
             method_map = {
                 "LocalOutlierFactor": LocalOutlierFactor(
-                    n_neighbors=20, n_jobs=self.n_jobs, novelty=self.novelty
+                    n_neighbors=20, n_jobs=self.n_jobs,
                 ),
                 "IsolationForest": IsolationForest(
                     n_estimators=100,
@@ -114,22 +113,24 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
                 ),
             }
             if self.select_method not in method_map:
-                raise ValueError(f"Unsupported method: {self.select_method}")
+                raise ValueError(
+                    f"MultivariateOutliersHandler: Unsupported method: {self.select_method}"
+                )
 
-            self.multi_outlier_handler = method_map[self.select_method]
-            if self.select_method == "LocalOutlierFactor" and self.novelty:
-                self.multi_outlier_handler.fit(data[self.features])
-            else:
-                self.multi_outlier_handler.fit(data[self.features])
+            self.multi_outlier_handler = method_map[self.select_method].fit(self.data_fit.values)
+
+            logging.info(
+                f"MultivariateOutliersHandler: Using '{self.select_method}' method."
+            )
 
             if self.save_method:
                 if self.save_dir and not os.path.exists(self.save_dir):
                     os.makedirs(self.save_dir, exist_ok=True)
                 with open(f"{self.save_dir}/multi_outlier_handler.pkl", "wb") as file:
                     pickle.dump(self, file)
-                logging.info("Multivariate outlier handler saved successfully.")
-
-            logging.info("Model fitting complete.")
+                logging.info(
+                    f"MultivariateOutliersHandler saved at: {self.save_dir}/multi_outlier_handler.pkl"
+                )
 
         except Exception as e:
             logging.error(f"Error in fitting: {e}")
@@ -151,6 +152,7 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
             NotFittedError: If the model has not been fitted yet.
         """
         if self.deactivate:
+            self.transformed_data = data
             logging.info(
                 "MultivariateOutlierHandler is deactivated. Returning unmodified data."
             )
@@ -161,13 +163,20 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
                 raise NotFittedError(
                     "MultivariateOutlierHandler is not fitted yet. Call 'fit' before using this method."
                 )
+            
 
-            if self.select_method == "LocalOutlierFactor" and not self.novelty:
-                outliers = (
-                    self.multi_outlier_handler.fit_predict(data[self.features]) == -1
-                )
+            if self.select_method == "LocalOutlierFactor":
+                novelty = not data[self.features].equals(self.data_fit)
+                self.multi_outlier_handler.set_params(novelty=novelty)
+
+                if novelty:
+                    self.multi_outlier_handler.fit(self.data_fit.values)
+                    outliers = self.multi_outlier_handler.predict(data[self.features].values) == -1
+                else:
+                    outliers = self.multi_outlier_handler.fit_predict(data[self.features].values) == -1
+
             else:
-                outliers = self.multi_outlier_handler.predict(data[self.features]) == -1
+                outliers = self.multi_outlier_handler.predict(data[self.features].values) == -1
 
             transformed_data = data[~outliers]
 
@@ -190,8 +199,10 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
                 transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
                 logging.info(
-                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                    f"MultivariateOutliersHandler: Transformed data saved at: {self.save_dir}/{csv_name}.csv"
                 )
+
+            self.transformed_data = transformed_data
 
             return transformed_data
         except Exception as e:
@@ -226,7 +237,7 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         activity_col: Optional[str] = None,
         id_col: Optional[str] = None,
         novelty: bool = False,
-        methods_to_compare: List[str] = None,
+        methods_to_compare: Optional[List[str]] = None,
         save_dir: Optional[str] = "Project/OutlierHandler",
     ) -> pd.DataFrame:
         """

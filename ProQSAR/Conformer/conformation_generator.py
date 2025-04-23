@@ -212,7 +212,7 @@ class ConformationGenerator:
         force_field_method: Optional[str] = "MMFF94",
         max_iter: Optional[Union[int, str]] = "auto",
         return_energies: bool = False,
-        n_jobs: int = -1,  # Use all available cores
+        n_jobs: int = 1,  # Use all available cores
         **kwargs: Any
     ) -> list:
         """

@@ -5,6 +5,7 @@ import os
 from joblib import Parallel, delayed
 from rdkit import Chem
 from sklearn.base import BaseEstimator
+from mordred import Calculator, descriptors
 from ProQSAR.Featurizer.PubChem import calcPubChemFingerAll
 from ProQSAR.Featurizer.featurizer_wrapper import (
     RDKFp,
@@ -13,6 +14,7 @@ from ProQSAR.Featurizer.featurizer_wrapper import (
     Avalon,
     RDKDes,
     mol2pharm2dgbfp,
+    MordredDes
 )
 from typing import Optional, Union, Dict, Any, List
 
@@ -25,7 +27,8 @@ class FeatureGenerator(BaseEstimator):
         id_col: str = "id",
         feature_types: Union[list, str] = ["ECFP4", "RDK5", "FCFP4"],
         save_dir: Optional[str] = None,
-        n_jobs=-1,
+        data_name: Optional[str] = None,
+        n_jobs=1,
         verbose=0,
         deactivate: bool = False,
     ):
@@ -35,6 +38,7 @@ class FeatureGenerator(BaseEstimator):
         self.id_col = id_col
         self.feature_types = feature_types
         self.save_dir = save_dir
+        self.data_name = data_name
         self.n_jobs = n_jobs
         self.verbose = verbose
         self.deactivate = deactivate
@@ -95,6 +99,8 @@ class FeatureGenerator(BaseEstimator):
                     result[fp] = calcPubChemFingerAll(mol)
                 elif fp == "pharm2dgbfp":
                     result[fp] = mol2pharm2dgbfp(mol)
+                elif fp == "mordred":
+                    result[fp] = MordredDes(mol)
                 else:
                     logging.error(f"Invalid fingerprint type: {fp}")
             except Exception as e:
@@ -125,11 +131,11 @@ class FeatureGenerator(BaseEstimator):
         """
         try:
             mol = record[mol_col]
-            act = record[activity_col]
             id = record[id_col]
             result = FeatureGenerator._mol_process(mol, feature_types=feature_types)
             result[id_col] = id
-            result[activity_col] = act
+            if activity_col in record.keys():
+                result[activity_col] = record[activity_col]
             return result
         except KeyError as e:
             logging.error(f"Missing key in record: {e}")
@@ -151,6 +157,7 @@ class FeatureGenerator(BaseEstimator):
             "avalon",
             "rdkdes",
             "pubchem",
+            "mordred",
             "pharm2dgbfp",
         ]
 
@@ -206,14 +213,27 @@ class FeatureGenerator(BaseEstimator):
 
         for feature_type in self.feature_types:
             fp_df = pd.DataFrame(np.stack(results[feature_type]), index=results.index)
-            feature_df = pd.concat(
-                [results[[self.id_col, self.activity_col]], fp_df], axis=1
-            )
+
+            if feature_type == "mordred":
+                calc = Calculator(descriptors, ignore_3D=True)
+                fp_df.columns = [str(des) for des in calc.descriptors]
+
+            # Concat with ID & Activity columns
+            feature_df = pd.concat([
+                results.filter(items=[self.id_col, self.activity_col]),
+                fp_df
+            ], axis=1)
+
             feature_df.columns = feature_df.columns.astype(str)
 
             if self.save_dir:
                 os.makedirs(self.save_dir, exist_ok=True)
-                save_path = os.path.join(self.save_dir, f"{feature_type}.csv")
+                if self.data_name:
+                    save_path = os.path.join(
+                        self.save_dir, f"{self.data_name}_{feature_type}.csv"
+                    )
+                else:
+                    save_path = os.path.join(self.save_dir, f"{feature_type}.csv")
                 feature_df.to_csv(save_path, index=False)
 
             feature_dfs[feature_type] = feature_df

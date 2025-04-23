@@ -1,4 +1,5 @@
 import pandas as pd
+from typing import Optional
 from sklearn.base import BaseEstimator
 from ProQSAR.Config.config import Config
 
@@ -10,7 +11,9 @@ class DataGenerator(BaseEstimator):
         id_col: str,
         smiles_col: str,
         mol_col: str = "mol",
-        n_jobs: int = -1,
+        n_jobs: int = 1,
+        save_dir: Optional[str] = "Project/DataGenerator",
+        data_name: Optional[str] = None,
         config=None,
     ):
 
@@ -19,23 +22,28 @@ class DataGenerator(BaseEstimator):
         self.smiles_col = smiles_col
         self.mol_col = mol_col
         self.n_jobs = n_jobs
+        self.save_dir = save_dir
+        self.data_name = data_name
         self.config = config or Config()
 
         self.standardizer = self.config.standardizer.set_params(
-            smiles_col=smiles_col, n_jobs=n_jobs
+            smiles_col=smiles_col, n_jobs=self.n_jobs
         )
         self.featurizer = self.config.featurizer.set_params(
             mol_col=mol_col if self.standardizer.deactivate else "standardized_mol",
             activity_col=activity_col,
             id_col=id_col,
-            n_jobs=n_jobs,
+            n_jobs=self.n_jobs,
+            save_dir=self.save_dir,
         )
 
     def generate(self, data):
         standardized_data = pd.DataFrame(
             self.standardizer.standardize_dict_smiles(data)
         )
-        data_features = self.featurizer.generate_features(standardized_data)
+        data_features = self.featurizer.set_params(
+            data_name=self.data_name
+        ).generate_features(standardized_data)
 
         if not self.standardizer.deactivate:
             for df in data_features.values():

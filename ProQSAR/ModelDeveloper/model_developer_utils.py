@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from typing import Union, Optional
+from typing import Union, Optional, List
+from sklearn.base import BaseEstimator
 from sklearn.model_selection import (
     RepeatedStratifiedKFold,
     RepeatedKFold,
@@ -40,6 +41,7 @@ from sklearn.metrics import (
     brier_score_loss,
     r2_score,
     mean_squared_error,
+    root_mean_squared_error,
     mean_absolute_error,
     median_absolute_error,
     mean_absolute_percentage_error,
@@ -75,7 +77,7 @@ def _get_task_type(data: pd.DataFrame, activity_col: str) -> str:
 def _get_model_map(
     task_type: Optional[str] = None,
     add_model: dict = {},
-    n_jobs: int = -1,
+    n_jobs: int = 1,
     random_state: Optional[int] = 42,
 ) -> dict:
     """
@@ -163,7 +165,11 @@ def _get_model_map(
         )
 
     if add_model:
-        model_map.update(add_model)
+        for name, val in add_model.items():
+            if isinstance(val, tuple) and isinstance(val[0], BaseEstimator):
+                model_map[name] = val[0]  # Use only the estimator part
+            else:
+                model_map[name] = val
 
     return model_map
 
@@ -272,9 +278,7 @@ def _get_ev_scoring(
         scoring_dict = {
             "r2": r2_score(y_test, y_test_pred),
             "mean_squared_error": mean_squared_error(y_test, y_test_pred),
-            "root_mean_squared_error": mean_squared_error(
-                y_test, y_test_pred, squared=False
-            ),
+            "root_mean_squared_error": root_mean_squared_error(y_test, y_test_pred),
             "mean_absolute_error": mean_absolute_error(y_test, y_test_pred),
             "median_absolute_error": median_absolute_error(y_test, y_test_pred),
             "mean_absolute_percentage_error": mean_absolute_percentage_error(
@@ -288,3 +292,17 @@ def _get_ev_scoring(
         )
 
     return scoring_dict
+
+
+def _match_cv_ev_metrics(cv_scoring: Union[str, List[str]]) -> List:
+
+    if isinstance(cv_scoring, str):
+        cv_scoring = [cv_scoring]
+
+    ev_scoring = []
+    for cv_name in cv_scoring:
+        # Determine the corresponding evaluation metric name by removing 'neg_' if present.
+        ev_name = cv_name[4:] if cv_name.startswith("neg_") else cv_name
+        ev_scoring.append(ev_name)
+
+    return ev_scoring

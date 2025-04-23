@@ -105,6 +105,9 @@ class MissingHandler(BaseEstimator, TransformerMixin):
         binary_imputer = None
         if binary_cols:
             binary_imputer = SimpleImputer(strategy="most_frequent").fit(data_binary)
+            logging.info(
+                "MissingHandler: Binary columns imputed using most frequent (mode) strategy."
+            )
 
         # Fit imputation transformer for non-binary columns
         imputer_dict = {
@@ -120,6 +123,9 @@ class MissingHandler(BaseEstimator, TransformerMixin):
             if imputation_strategy in imputer_dict:
                 non_binary_imputer = imputer_dict[imputation_strategy].fit(
                     data_non_binary
+                )
+                logging.info(
+                    f"MissingHandler: Non-binary columns imputed using '{imputation_strategy}' strategy."
                 )
             else:
                 raise ValueError(
@@ -204,6 +210,7 @@ class MissingHandler(BaseEstimator, TransformerMixin):
             If imputation models have not been fitted.
         """
         if self.deactivate:
+            self.transformed_data = data
             logging.info("MissingHandler is deactivated. Returning unmodified data.")
             return data
 
@@ -245,15 +252,9 @@ class MissingHandler(BaseEstimator, TransformerMixin):
                 else data_non_binary
             )
 
-            columns_to_include = []
-            if self.id_col is not None:
-                columns_to_include.append(self.id_col)
-            if self.activity_col is not None:
-                columns_to_include.append(self.activity_col)
-
             transformed_data = pd.concat(
                 [
-                    data[columns_to_include],
+                    data.filter(items=[self.id_col, self.activity_col]),
                     imputed_data_binary,
                     imputed_data_non_binary,
                 ],
@@ -279,8 +280,9 @@ class MissingHandler(BaseEstimator, TransformerMixin):
 
                 transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
                 logging.info(
-                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                    f"MissingHandler: Transformed data saved at: {self.save_dir}/{csv_name}.csv"
                 )
+            self.transformed_data = transformed_data
 
             return transformed_data
 

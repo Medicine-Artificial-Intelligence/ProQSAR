@@ -76,7 +76,7 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
         save_pred_result: bool = False,
         pred_result_name: str = "pred_result",
         save_dir: Optional[str] = "Project/ModelDeveloper",
-        n_jobs: int = -1,
+        n_jobs: int = 1,
         random_state: Optional[int] = 42,
         **kwargs,
     ):
@@ -109,7 +109,6 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
             The training dataset including features, activity, and ID columns.
         """
         try:
-            logging.info("Starting model fitting.")
             X_data = data.drop([self.activity_col, self.id_col], axis=1)
             y_data = data[self.activity_col]
 
@@ -139,6 +138,11 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
 
             if isinstance(self.select_model, list) or not self.select_model:
                 if self.compare:
+                    logging.info(
+                        "ModelDeveloper: Selecting the optimal model "
+                        f"among {self.select_model or list(model_map.keys())}, "
+                        f"scoring target: '{self.scoring_target}'."
+                    )
                     self.report = ModelValidation.cross_validation_report(
                         data=data,
                         activity_col=self.activity_col,
@@ -164,6 +168,8 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
                         .idxmax()
                     )
                     self.model = model_map[self.select_model].fit(X=X_data, y=y_data)
+                    logging.info(f"ModelDeveloper: Selected model: {self.select_model}")
+
                 else:
                     raise AttributeError(
                         "'select_model' is entered as a list."
@@ -173,8 +179,9 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
 
             elif isinstance(self.select_model, str):
                 if self.select_model not in model_map:
-                    raise ValueError(f"Model '{self.select_model}' is not recognized.")
+                    raise ValueError(f"ModelDeveloper: Model '{self.select_model}' is not recognized.")
                 else:
+                    logging.info(f"ModelDeveloper: Using model: {self.select_model}")
                     self.model = model_map[self.select_model].fit(X=X_data, y=y_data)
                     self.report = ModelValidation.cross_validation_report(
                         data=data,
@@ -209,7 +216,6 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
                     pickle.dump(self, file)
                 logging.info(f"Model saved at: {self.save_dir}/model.pkl")
 
-            logging.info("Model fitting completed successfully.")
 
             return self
 
@@ -237,7 +243,6 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
                     "ModelDeveloper is not fitted yet. Call 'fit' before using this model."
                 )
 
-            logging.info("Starting predictions.")
             X_data = data.drop(
                 [self.activity_col, self.id_col], axis=1, errors="ignore"
             )
@@ -267,7 +272,6 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
                     f"Prediction results saved to {self.save_dir}/{self.pred_result_name}.csv"
                 )
 
-            logging.info("Predictions completed successfully.")
             return pred_result
 
         except Exception as e:

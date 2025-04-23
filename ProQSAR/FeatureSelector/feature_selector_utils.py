@@ -37,7 +37,7 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
 def _get_method_map(
     task_type: str,
     add_method: dict = {},
-    n_jobs: int = -1,
+    n_jobs: int = 1,
     random_state: Optional[int] = 42,
 ) -> dict[str, object]:
     """
@@ -154,7 +154,7 @@ def evaluate_feature_selectors(
     fig_prefix: str = "fs_graph",
     csv_name: str = "fs_report",
     save_dir: str = "Project/FeatureSelector",
-    n_jobs: int = -1,
+    n_jobs: int = 1,
     random_state: Optional[int] = 42,
 ) -> pd.DataFrame:
     """
@@ -204,7 +204,6 @@ def evaluate_feature_selectors(
         If a selected method is not recognized in the method map.
     """
     try:
-        logging.info("Starting feature selection evaluation.")
 
         if isinstance(scoring_list, str):
             scoring_list = [scoring_list]
@@ -234,7 +233,9 @@ def evaluate_feature_selectors(
                 if name in method_map:
                     methods_to_compare.update({name: method_map[name]})
                 else:
-                    raise ValueError(f"Method '{name}' is not recognized.")
+                    raise ValueError(
+                        f"FeatureSelector: Method '{name}' is not recognized."
+                    )
 
         result = []
 
@@ -297,10 +298,9 @@ def evaluate_feature_selectors(
                 os.makedirs(save_dir, exist_ok=True)
             result_df.to_csv(f"{save_dir}/{csv_name}.csv", index=False)
             logging.info(
-                f"Feature selection evaluation data saved at: {save_dir}/{csv_name}.csv"
+                f"FeatureSelector evaluation data saved at: {save_dir}/{csv_name}.csv"
             )
 
-        logging.info("Feature selection evaluation completed successfully.")
         return result_df
 
     except Exception as e:

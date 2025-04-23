@@ -3,7 +3,8 @@ from ProQSAR.Splitter.stratified_random_splitter import StratifiedRandomSplitter
 from ProQSAR.Splitter.scaffold_splitter import ScaffoldSplitter
 from ProQSAR.Splitter.stratified_scaffold_splitter import StratifiedScaffoldSplitter
 from sklearn.base import BaseEstimator
-from typing import Tuple
+from typing import Tuple, Optional
+import os
 import pandas as pd
 import logging
 
@@ -21,6 +22,8 @@ class Splitter(BaseEstimator):
         test_size: float = 0.2,
         n_splits: int = 5,
         random_state: int = 42,
+        save_dir: Optional[str] = "Project/Splitter",
+        data_name: Optional[str] = None,
     ):
         """
         Constructs all the necessary attributes for the Splitter object.
@@ -46,6 +49,8 @@ class Splitter(BaseEstimator):
         self.activity_col = activity_col
         self.smiles_col = smiles_col
         self.n_splits = n_splits
+        self.save_dir = save_dir
+        self.data_name = data_name
 
     def fit(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -66,14 +71,12 @@ class Splitter(BaseEstimator):
             if self.option == "random":
                 splitter = RandomSplitter(
                     self.activity_col,
-                    self.smiles_col,
                     test_size=self.test_size,
                     random_state=self.random_state,
                 )
             elif self.option == "stratified_random":
                 splitter = StratifiedRandomSplitter(
                     self.activity_col,
-                    self.smiles_col,
                     test_size=self.test_size,
                     random_state=self.random_state,
                 )
@@ -98,12 +101,24 @@ class Splitter(BaseEstimator):
                 )
 
             data_train, data_test = splitter.fit(data)
-            data_train = data_train.reset_index(drop=True)
-            data_test = data_test.reset_index(drop=True)
+            data_train = data_train.reset_index(drop=True).drop(
+                columns=self.smiles_col, errors="ignore"
+            )
+            data_test = data_test.reset_index(drop=True).drop(
+                columns=self.smiles_col, errors="ignore"
+            )
 
             logging.info(
-                f"Data successfully partitioned using the '{self.option}' method."
+                f"Splitter: Data successfully partitioned using the '{self.option}' method."
             )
+
+            if self.save_dir:
+                os.makedirs(self.save_dir, exist_ok=True)
+                name_suffix = f"_{self.data_name}" if self.data_name else ""
+                data_train.to_csv(
+                    f"{self.save_dir}/train{name_suffix}.csv", index=False
+                )
+                data_test.to_csv(f"{self.save_dir}/test{name_suffix}.csv", index=False)
 
             return data_train, data_test
 

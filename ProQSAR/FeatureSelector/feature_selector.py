@@ -60,7 +60,7 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
         save_trans_data: bool = False,
         trans_data_name: str = "trans_data",
         save_dir: Optional[str] = "Project/FeatureSelector",
-        n_jobs: int = -1,
+        n_jobs: int = 1,
         random_state: Optional[int] = 42,
         deactivate: bool = False,
         **kwargs,
@@ -105,12 +105,11 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
             return self
 
         try:
-            logging.info("Starting feature selection fitting process.")
             X_data = data.drop([self.activity_col, self.id_col], axis=1)
             y_data = data[self.activity_col]
 
             self.task_type = _get_task_type(data, self.activity_col)
-            self.method_map = _get_method_map(
+            method_map = _get_method_map(
                 self.task_type,
                 self.add_method,
                 self.n_jobs,
@@ -137,6 +136,11 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
             self.report = None
             if isinstance(self.select_method, list) or not self.select_method:
                 if self.compare:
+                    logging.info(
+                        "FeatureSelector: Selecting the optimal feature selection method "
+                        f"among {self.select_method or list(method_map.keys())}, "
+                        f"scoring target: '{self.scoring_target}'."
+                    )
                     self.report = evaluate_feature_selectors(
                         data=data,
                         activity_col=self.activity_col,
@@ -164,11 +168,14 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
                     if self.select_method == "NoFS":
                         self.deactivate = True
                         logging.info(
-                            "Skipping feature selection is considered to be the optimal method."
+                            "FeatureSelector: Skipping feature selection is considered to be the optimal method."
                         )
                         return self
                     else:
-                        self.feature_selector = self.method_map[self.select_method].fit(
+                        logging.info(
+                            f"FeatureSelector: Using '{self.select_method}'."
+                        )
+                        self.feature_selector = method_map[self.select_method].fit(
                             X=X_data, y=y_data
                         )
                 else:
@@ -178,10 +185,14 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
                         "Otherwise, select_method must be a string as the name of the method."
                     )
             elif isinstance(self.select_method, str):
-                if self.select_method not in self.method_map:
-                    raise ValueError(f"Method '{self.select_method}' not recognized.")
+                if self.select_method not in method_map:
+                    raise ValueError(
+                        f"FeatureSelector: Method '{self.select_method}' not recognized."
+                    )
                 else:
-                    self.feature_selector = self.method_map[self.select_method].fit(
+                    logging.info(f"FeatureSelector: Using method: {self.select_method}")
+
+                    self.feature_selector = method_map[self.select_method].fit(
                         X=X_data, y=y_data
                     )
                     self.report = evaluate_feature_selectors(
@@ -208,15 +219,13 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
                     "Please input a string or a list or None."
                 )
 
-            logging.info(
-                f"Feature selection method '{self.select_method}' applied successfully."
-            )
-
             if self.save_method:
                 os.makedirs(self.save_dir, exist_ok=True)
                 with open(f"{self.save_dir}/feature_selector.pkl", "wb") as file:
                     pickle.dump(self, file)
-                logging.info("Feature selector model saved successfully.")
+                logging.info(
+                    f"FeatureSelector saved at: {self.save_dir}/feature_selector.pkl."
+                )
 
             return self
 
@@ -247,16 +256,16 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
                     "FeatureSelector is not fitted yet. Call 'fit' before using this method."
                 )
 
-            X_data = data.drop([self.activity_col, self.id_col], axis=1)
+            X_data = data.drop([self.activity_col, self.id_col], axis=1, errors="ignore")
             selected_features = self.feature_selector.transform(X_data)
 
             transformed_data = pd.DataFrame(
                 selected_features,
                 columns=X_data.columns[self.feature_selector.get_support()],
             )
-            transformed_data[[self.id_col, self.activity_col]] = data[
-                [self.id_col, self.activity_col]
-            ].values
+
+            cols = [col for col in [self.id_col, self.activity_col] if col in data.columns]
+            transformed_data[cols] = data[cols].values
 
             if self.save_trans_data:
                 if self.save_dir and not os.path.exists(self.save_dir):
@@ -276,7 +285,9 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
                     csv_name = self.trans_data_name
 
                 transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv", index=False)
-                logging.info(f"Transformed data saved at {self.save_dir}.")
+                logging.info(
+                    f"FeatureSelector: Transformed data saved at: {self.save_dir}/{csv_name}.csv."
+                )
 
             return transformed_data
 

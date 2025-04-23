@@ -31,7 +31,7 @@ def _iqr_threshold(data: pd.DataFrame) -> Dict[str, Dict[str, float]]:
             low = q1 - 1.5 * iqr
             high = q3 + 1.5 * iqr
             iqr_thresholds[col] = {"low": low, "high": high}
-        logging.info("Successfully computed IQR thresholds.")
+
         return iqr_thresholds
 
     except Exception as e:
@@ -60,7 +60,6 @@ def _impute_nan(
             nan_data[col] = np.where(
                 (nan_data[col] < low) | (nan_data[col] > high), np.nan, nan_data[col]
             )
-        logging.info("Successfully imputed NaN values.")
         return nan_data
     except Exception as e:
         logging.error(f"Error in imputing NaN values: {e}")
@@ -96,7 +95,7 @@ def _feature_quality(
         ]
 
         if not non_binary_cols:
-            logging.warning("No non-binary columns to handle outliers.")
+            logging.info("OutlierDetection: No non-binary columns to handle outliers.")
 
         iqr_thresholds = _iqr_threshold(temp_data[non_binary_cols])
         for col, thresh in iqr_thresholds.items():
@@ -109,7 +108,6 @@ def _feature_quality(
             else:
                 bad.append(col)
 
-        logging.info("Feature quality assessment completed.")
         return good, bad
     except Exception as e:
         logging.error(f"Error in feature quality assessment: {e}")
@@ -411,7 +409,9 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
                 data, id_col=self.id_col, activity_col=self.activity_col
             )
             if not self.bad:
-                logging.info("No bad features found. Skipping outlier handling.")
+                logging.info(
+                    "UnivariateOutlierHandler: No bad features found. Skipping outlier handling."
+                )
                 return self
 
             method_map = {
@@ -431,6 +431,9 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
                 self.uni_outlier_handler = method_map[self.select_method].fit(
                     data[self.bad]
                 )
+                logging.info(
+                    f"UnivariateOutliersHandler: Using '{self.select_method}' method."
+                )
             else:
                 raise ValueError(f"Unsupported method: {self.select_method}")
 
@@ -439,7 +442,7 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
                     os.makedirs(self.save_dir, exist_ok=True)
                 with open(f"{self.save_dir}/uni_outlier_handler.pkl", "wb") as file:
                     pickle.dump(self, file)
-                logging.info("Univariate outlier handler saved successfully.")
+                logging.info("UnivariateOutliersHandler saved successfully.")
 
         except Exception as e:
             logging.error(f"Error during fitting: {e}")
@@ -458,6 +461,7 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
         - Transformed DataFrame with outliers handled based on the selected method.
         """
         if self.deactivate:
+            self.transformed_data = data
             logging.info(
                 "UnivariateOutliersHandler is deactivated. Returning unmodified data."
             )
@@ -466,7 +470,10 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
         try:
             transformed_data = deepcopy(data)
             if not self.bad:
-                logging.info("No bad features to handle. Returning original data.")
+                self.transformed_data = transformed_data
+                logging.info(
+                    "UnivariateOutlierHandler: No bad features to handle. Returning original data."
+                )
                 return transformed_data
 
             if self.uni_outlier_handler is None:
@@ -495,7 +502,11 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
                     csv_name = self.trans_data_name
 
                 transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
-                logging.info(f"Files saved at: {self.save_dir}/{csv_name}.csv")
+                logging.info(
+                    f"UnivariateOutlierHandler: Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                )
+
+            self.transformed_data = transformed_data
 
             return transformed_data
 
@@ -521,17 +532,6 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
         self.fit(data)
         return self.transform(data)
-
-    def setting(self, **kwargs):
-        valid_keys = self.__dict__.keys()
-        for key in kwargs:
-            if key not in valid_keys:
-                raise KeyError(
-                    f"'{key}' is not a valid attribute of UnivariateOutliersHandler."
-                )
-        self.__dict__.update(**kwargs)
-
-        return self
 
     @staticmethod
     def compare_univariate_methods(
@@ -608,7 +608,7 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
                 os.makedirs(save_dir, exist_ok=True)
                 comparison_table.to_csv((f"{save_dir}/compare_univariate_methods.csv"))
                 logging.info(
-                    f"Transformed data saved at: {save_dir}/compare_univariate_methods.csv"
+                    f"Comparison table of univariate methods saved at: {save_dir}/compare_univariate_methods.csv"
                 )
 
             logging.info("Comparison of univariate methods completed.")

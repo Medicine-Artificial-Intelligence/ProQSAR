@@ -39,7 +39,7 @@ class SMILESStandardizer(BaseEstimator):
         handle_stereo: bool = True,
         remove_fragments: bool = False,
         largest_fragment_only: bool = False,
-        n_jobs: int = 4,
+        n_jobs: int = 1,
         deactivate: bool = False,
     ):
         self.smiles_col = smiles_col

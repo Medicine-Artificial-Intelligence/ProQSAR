@@ -1,14 +1,25 @@
+import os
 import logging
+from typing import Optional
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator
 from ProQSAR.Config.config import Config
 
 
 class DataPreprocessor(BaseEstimator):
-    def __init__(self, activity_col: str, id_col: str, config=None):
+    def __init__(
+        self,
+        activity_col: str,
+        id_col: str,
+        save_dir: Optional[str] = "Project/DataGenerator",
+        data_name: Optional[str] = None,
+        config=None,
+    ):
 
         self.activity_col = activity_col
         self.id_col = id_col
+        self.save_dir = save_dir
+        self.data_name = data_name
         self.config = config or Config()
 
         for attr in [
@@ -28,7 +39,7 @@ class DataPreprocessor(BaseEstimator):
                 ),
             )
 
-        self.datapreprocessor = Pipeline(
+        self.pipeline = Pipeline(
             [
                 ("duplicate", self.duplicate),
                 ("missing", self.missing),
@@ -43,39 +54,28 @@ class DataPreprocessor(BaseEstimator):
     def fit(self, data):
         """Fit all preprocessing steps on the training data."""
 
-        logging.info("Fitting data preprocessing pipeline.")
-        self.datapreprocessor.fit(data)
+        self.pipeline.fit(data)
         return self
 
     def transform(self, data):
         """Apply transformations to the dataset."""
 
-        logging.info("Transforming data using the preprocessing pipeline.")
-        transformed_data = self.datapreprocessor.transform(data)
+        transformed_data = self.pipeline.transform(data)
 
-        # Identify columns and IDs that were deleted during preprocessing
-        deleted_col = [
-            col for col in data.columns if col not in transformed_data.columns
-        ]
-        deleted_id = [
-            id
-            for id in data[self.id_col].values
-            if id not in transformed_data[self.id_col].values
-        ]
+        if self.save_dir:
+            os.makedirs(self.save_dir, exist_ok=True)
+            name_prefix = f"{self.data_name}_" if self.data_name else ""
+            transformed_data.to_csv(
+                f"{self.save_dir}/{name_prefix}preprocessed.csv", index=False
+            )
 
-        return transformed_data, deleted_col, deleted_id
-
-    def fit_transform(self, data):
-        """Fit and transform in one step."""
-
-        self.fit(data)
-        return self.transform(data)
+        return transformed_data
 
     def get_params(self, deep=True) -> dict:
         """Return all hyperparameters as a dictionary."""
         out = {}
         for key in self.__dict__:
-            if key == "datapreprocessor":
+            if key == "pipeline":
                 continue
             value = getattr(self, key)
             if deep and hasattr(value, "get_params"):

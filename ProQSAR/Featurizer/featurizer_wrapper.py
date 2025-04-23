@@ -6,6 +6,7 @@ from rdkit.Chem import AllChem, MACCSkeys, Descriptors
 from rdkit.ML.Descriptors import MoleculeDescriptors
 from rdkit.Avalon import pyAvalonTools as fpAvalon
 from rdkit.Chem.Pharm2D import Gobbi_Pharm2D, Generate
+from mordred import Calculator, descriptors
 
 
 def RDKFp(
@@ -197,5 +198,41 @@ def mol2pharm2dgbfp(mol: Chem.Mol) -> Optional[np.ndarray]:
     if mol is None:
         logging.error("Invalid molecule provided.")
         return None
+    
     fp = Generate.Gen2DFingerprint(mol, Gobbi_Pharm2D.factory)
     return np.frombuffer(fp.ToBitString().encode(), dtype=np.uint8) - ord("0")
+
+def MordredDes(mol: Chem.Mol) -> Optional[np.ndarray]:
+    """
+    Calculate 2D Mordred molecular descriptors for a given RDKit molecule.
+
+    Parameters:
+    - mol (Chem.Mol): RDKit molecule object.
+
+    Returns:
+    - Optional[np.ndarray]: A NumPy array of Mordred descriptors, or None if calculation fails.
+
+    Examples:
+    >>> from rdkit import Chem
+    >>> mol = Chem.MolFromSmiles('CCO')
+    >>> desc = MordredDes(mol)
+    >>> desc.shape  # Depends on Mordred version and settings
+    (1613,)  # Example output
+
+    Notes:
+    - Only 2D descriptors are calculated (ignore_3D=True).
+    - Requires Mordred to be installed: pip install mordred
+    """
+    if mol is None:
+        logging.error("Invalid molecule provided.")
+        return None
+
+    try:
+        calc = Calculator(descriptors, ignore_3D=True)
+        desc = calc(mol)
+        values = [float(val) if val is not None else np.nan for val in desc]
+        return np.array(values, dtype=np.float64)
+    
+    except Exception as e:
+        logging.error(f"Failed to compute Mordred descriptors: {e}")
+        return None

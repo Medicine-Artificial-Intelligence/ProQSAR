@@ -50,12 +50,13 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
             return self
 
         try:
-            logging.info("Fitting DuplicateHandler ...")
             temp_data = data.drop(
                 columns=[self.id_col, self.activity_col], errors="ignore"
             )
             self.dup_cols = temp_data.columns[temp_data.T.duplicated()].tolist()
-            logging.info(f"Identified duplicate columns: {self.dup_cols}")
+            logging.info(
+                f"DuplicateHandler: Identified duplicate columns: {self.dup_cols}"
+            )
 
             if self.save_method:
                 if self.save_dir and not os.path.exists(self.save_dir):
@@ -83,17 +84,21 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
         - pd.DataFrame: The transformed DataFrame with duplicates removed.
         """
         if self.deactivate:
+            self.transformed_data = data
             logging.info("DuplicateHandler is deactivated. Returning unmodified data.")
             return data
 
         try:
-            logging.info("Transforming data to remove duplicates...")
             temp_data = data.drop(
                 columns=[self.id_col, self.activity_col], errors="ignore"
             )
             dup_rows = temp_data.index[temp_data.duplicated()].tolist()
             transformed_data = data.drop(index=dup_rows, columns=self.dup_cols)
             transformed_data.reset_index(drop=True, inplace=True)
+
+            logging.info(
+                f"DuplicateHandler: Dropped duplicate row {dup_rows} &  columns {self.dup_cols}"
+            )
 
             if self.save_trans_data:
                 if self.save_dir and not os.path.exists(self.save_dir):
@@ -114,8 +119,10 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
 
                 transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
                 logging.info(
-                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                    f"DuplicateHandler: Transformed data saved at: {self.save_dir}/{csv_name}.csv"
                 )
+
+            self.transformed_data = transformed_data
 
         except KeyError as e:
             logging.error(f"Column missing in the dataframe: {e}")

@@ -80,7 +80,7 @@ class KBinHandler(BaseEstimator, TransformerMixin):
 
             if not self.bad:
                 logging.info(
-                    "No bad features (univariate outliers) found. Skipping KBin handling."
+                    "KBinHandler: No bad features (univariate outliers) found. Skipping KBin handling."
                 )
                 return self
 
@@ -94,9 +94,8 @@ class KBinHandler(BaseEstimator, TransformerMixin):
                     os.makedirs(self.save_dir, exist_ok=True)
                 with open(f"{self.save_dir}/kbin_handler.pkl", "wb") as file:
                     pickle.dump(self, file)
-                logging.info("KBin handler saved successfully.")
+                logging.info(f"KBin handler saved at: {self.save_dir}/kbin_handler.pkl")
 
-            logging.info("Model fitting complete.")
             return self
 
         except Exception as e:
@@ -114,14 +113,16 @@ class KBinHandler(BaseEstimator, TransformerMixin):
             pd.DataFrame: The transformed dataset with "bad" features discretized.
         """
         if self.deactivate:
+            self.transformed_data = data
             logging.info("KBinHandler is deactivated. Returning unmodified data.")
             return data
 
         try:
             transformed_data = deepcopy(data)
             if not self.bad or transformed_data[self.bad].empty:
+                self.transformed_data = transformed_data
                 logging.info(
-                    "No bad features (outliers) to handle. Returning original data."
+                    "KBinHandler: No bad features (outliers) to handle. Returning original data."
                 )
                 return transformed_data
 
@@ -151,8 +152,11 @@ class KBinHandler(BaseEstimator, TransformerMixin):
 
                 transformed_data.to_csv(f"{self.save_dir}/{csv_name}.csv")
                 logging.info(
-                    f"Transformed data saved at: {self.save_dir}/{csv_name}.csv"
+                    f"KBinHandler: Transformed data saved at: {self.save_dir}/{csv_name}.csv"
                 )
+
+            self.transformed_data = transformed_data
+
             return transformed_data
 
         except Exception as e:

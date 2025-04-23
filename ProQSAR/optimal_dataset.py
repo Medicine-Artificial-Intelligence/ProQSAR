@@ -1,6 +1,7 @@
 import os
 import logging
 import pandas as pd
+from typing import Optional, Union
 from sklearn.feature_selection import SelectFromModel
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from ProQSAR.data_generator import DataGenerator
@@ -23,9 +24,9 @@ class OptimalDataset(CrossValidationConfig):
         id_col: str,
         smiles_col: str,
         mol_col: str = "mol",
-        save_data: bool = False,
-        save_dir: str = "Project/OptimalDataset",
-        n_jobs: int = -1,
+        save_dir: Optional[str] = "Project/OptimalDataset",
+        n_jobs: int = 1,
+        random_state: int = 42,
         config=None,
         **kwargs,
     ):
@@ -33,9 +34,9 @@ class OptimalDataset(CrossValidationConfig):
         super().__init__(**kwargs)
         self.activity_col = activity_col
         self.id_col = id_col
-        self.save_data = save_data
         self.save_dir = save_dir
         self.n_jobs = n_jobs
+        self.random_state = random_state
         self.config = config or Config()
         self.smiles_col = (
             smiles_col
@@ -47,24 +48,38 @@ class OptimalDataset(CrossValidationConfig):
         self.train, self.test = {}, {}
         self.report = None
         self.optimal_set = None
+        self.shape_summary = {}
 
         self.datagenerator = DataGenerator(
-            activity_col, id_col, smiles_col, mol_col, n_jobs=n_jobs, config=config
+            activity_col,
+            id_col,
+            smiles_col,
+            mol_col,
+            n_jobs=n_jobs,
+            save_dir=save_dir,
+            config=config,
         )
         self.splitter = self.config.splitter.set_params(
-            activity_col=activity_col, smiles_col=self.smiles_col
+            activity_col=activity_col,
+            smiles_col=self.smiles_col,
+            save_dir=save_dir,
+            random_state=self.random_state,
         )
-        self.datapreprocessor = DataPreprocessor(activity_col, id_col, config=config)
+        self.datapreprocessor = DataPreprocessor(
+            activity_col, id_col, save_dir=save_dir, config=config
+        )
 
     def run(self, data):
-
         # Generate all features
         self.data_features = self.datagenerator.generate(data)
 
         # Set metrics to perform cross validation
         self.task_type = _get_task_type(data, self.activity_col)
         self.cv = _get_cv_strategy(
-            self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
+            self.task_type,
+            n_splits=self.n_splits,
+            n_repeats=self.n_repeats,
+            random_state=self.random_state,
         )
         self.scoring_list = self.scoring_list or _get_cv_scoring(self.task_type)
 
@@ -81,9 +96,13 @@ class OptimalDataset(CrossValidationConfig):
 
         # Set methods
         if self.task_type == "C":
-            method = RandomForestClassifier(random_state=42, n_jobs=self.n_jobs)
+            method = RandomForestClassifier(
+                random_state=self.random_state, n_jobs=self.n_jobs
+            )
         else:
-            method = RandomForestRegressor(random_state=42, n_jobs=self.n_jobs)
+            method = RandomForestRegressor(
+                random_state=self.random_state, n_jobs=self.n_jobs
+            )
 
         fs = SelectFromModel(method)
 
@@ -91,34 +110,54 @@ class OptimalDataset(CrossValidationConfig):
         self.dataprep_fitted = {}
 
         for i in self.data_features.keys():
+            logging.info(f"----------{i}----------")
             # Split each feature set into train set & test set
+            self.splitter.set_params(data_name=i)
             self.train[i], self.test[i] = self.splitter.fit(self.data_features[i])
-            self.train[i] = self.train[i].drop(columns=self.smiles_col)
-            self.test[i] = self.test[i].drop(columns=self.smiles_col)
+            self._record_shape("original", i, "train", self.train[i])
+            self._record_shape("original", i, "test", self.test[i])
 
-            # Apply DataPreprocessor pipeline to train & test set
+            # Apply DataPreprocessor pipeline to train set
             self.datapreprocessor.fit(self.train[i])
             self.dataprep_fitted[i] = deepcopy(self.datapreprocessor)
 
-            self.train[i + "_clean"], _, _ = self.datapreprocessor.transform(
+            self.datapreprocessor.set_params(data_name=f"train_{i}")
+            self.train[i + "_preprocessed"] = self.datapreprocessor.transform(
                 self.train[i]
             )
-            self.test[i + "_clean"], _, _ = self.datapreprocessor.transform(
+            for step, transformer in self.datapreprocessor.pipeline.steps:
+                self._record_shape(step, i, "train", transformer.transformed_data)
+
+            # Apply DataPreprocessor pipeline to train set
+            self.datapreprocessor.set_params(data_name=f"test_{i}")
+            self.test[i + "_preprocessed"] = self.datapreprocessor.transform(
                 self.test[i]
             )
+            for step, transformer in self.datapreprocessor.pipeline.steps:
+                self._record_shape(step, i, "test", transformer.transformed_data)
 
             # Apply feature selection & perform cross validation, both using RF algorithm
-            X_data = self.train[i + "_clean"].drop(
+            X_data = self.train[i + "_preprocessed"].drop(
                 [self.activity_col, self.id_col], axis=1
             )
-            y_data = self.train[i + "_clean"][self.activity_col]
+            y_data = self.train[i + "_preprocessed"][self.activity_col]
 
-            selected_X = fs.fit_transform(X_data, y_data)
+            if not self.config.feature_selector.deactivate:
+                X_data = fs.fit_transform(X_data, y_data)
+
+            # Record data shape transformation
+            self._record_shape(
+                "feature_selector (rf)",
+                i,
+                "train",
+                (X_data.shape[0], X_data.shape[1] + 2),
+            )
+            self._record_shape("feature_selector (rf)", i, "test")
 
             result.append(
                 ModelValidation._perform_cross_validation(
                     models={i: method},
-                    X_data=selected_X,
+                    X_data=X_data,
                     y_data=y_data,
                     cv=self.cv,
                     scoring_list=self.scoring_list,
@@ -148,7 +187,6 @@ class OptimalDataset(CrossValidationConfig):
             .loc[(f"{self.scoring_target}", "mean")]
             .idxmax()
         )
-
         # Visualization if requested
         if self.visualize is not None:
             if isinstance(self.visualize, str):
@@ -170,17 +208,41 @@ class OptimalDataset(CrossValidationConfig):
                 f"{self.save_dir}/{self.cv_report_name}.csv", index=False
             )
 
-        if self.save_data:
-            if self.save_dir and not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir, exist_ok=True)
-            for key, value in self.data_features.items():
-                value.to_csv(f"{self.save_dir}/{key}.csv", index=False)
-            for key, value in self.train.items():
-                value.to_csv(f"{self.save_dir}/train_{key}.csv", index=False)
-            for key, value in self.test.items():
-                value.to_csv(f"{self.save_dir}/test_{key}.csv", index=False)
-
         return self.optimal_set
+
+    def _record_shape(
+        self,
+        stage_name: str,
+        feature_set_name: str,
+        data_name: str,
+        data: Optional[Union[pd.DataFrame, tuple]] = None,
+    ):
+        """Helper method to record shapes at different pipeline stages in a dictionary format."""
+
+        if isinstance(data, tuple):
+            data_shape = data
+        elif isinstance(data, pd.DataFrame):
+            data_shape = data.shape
+        else:
+            data_shape = "N/A"
+
+        if feature_set_name not in self.shape_summary:
+            self.shape_summary[feature_set_name] = {"Data": {}}
+
+        if data_name not in self.shape_summary[feature_set_name]["Data"]:
+            self.shape_summary[feature_set_name]["Data"][data_name] = {}
+
+        self.shape_summary[feature_set_name]["Data"][data_name][stage_name] = data_shape
+
+    def get_shape_summary_df(self) -> pd.DataFrame:
+        """Converts the shape_summary dictionary into a structured pandas DataFrame."""
+        records = []
+        for feature_set, data_entries in self.shape_summary.items():
+            for data_name, stages in data_entries["Data"].items():
+                record = {"Feature Set": feature_set, "Data": data_name, **stages}
+                records.append(record)
+
+        return pd.DataFrame(records)
 
     def get_params(self, deep=True) -> dict:
         """Return all hyperparameters as a dictionary, filtering nested parameters for specific attributes."""

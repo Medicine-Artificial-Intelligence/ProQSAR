@@ -78,7 +78,6 @@ class StatisticalAnalysis:
                     var_name="method",
                     value_name="value",
                 )
-            logging.info("Successfully extracted scoring DataFrames.")
             return scoring_dfs, scoring_list, method_list
 
         except Exception as e:
@@ -91,7 +90,7 @@ class StatisticalAnalysis:
         scoring_list: Optional[Union[list, str]] = None,
         method_list: Optional[Union[list, str]] = None,
         levene_test: bool = True,
-        save_csv: bool = True,
+        save_csv: bool = False,
         save_dir: str = "Project/Analysis",
         csv_name: str = "check_variance_homogeneity",
     ) -> pd.DataFrame:
@@ -151,7 +150,6 @@ class StatisticalAnalysis:
                     os.makedirs(save_dir, exist_ok=True)
                 result_df.to_csv(f"{save_dir}/{csv_name}.csv", index=False)
 
-            logging.info("Successfully checked variance homogeneity.")
             return result_df
 
         except Exception as e:
@@ -205,7 +203,7 @@ class StatisticalAnalysis:
             for i, scoring in enumerate(scoring_list):
                 ax = axes[0, i]
                 scoring_data = df_norm[df_norm["scoring"] == scoring]["value"]
-                sns.histplot(scoring_data, kde=True, ax=ax)
+                sns.histplot(scoring_data, kde=True, ax=ax, bins=10)
                 ax.set_title(f"{scoring.upper()}", fontsize=16)
 
                 ax2 = axes[1, i]
@@ -221,7 +219,7 @@ class StatisticalAnalysis:
                     dpi=300,
                     bbox_inches="tight",
                 )
-            logging.info("Successfully checked normality.")
+
         except Exception as e:
             logging.error(f"Error in checking normality: {e}")
             raise
@@ -230,7 +228,7 @@ class StatisticalAnalysis:
     def test(
         report_df: pd.DataFrame,
         scoring_list: Optional[Union[list, str]] = None,
-        method_list: Optional[Union[list, str]] = None,
+        method_list: Optional[list] = None,
         select_test: str = "AnovaRM",
         showmeans: bool = True,
         save_fig: bool = True,
@@ -246,7 +244,7 @@ class StatisticalAnalysis:
             The input report dataframe.
         scoring_list : Optional[Union[list, str]], optional
             List or string of scoring metrics, by default None.
-        method_list : Optional[Union[list, str]], optional
+        method_list : Optional[list], optional
             List or string of methods, by default None.
         select_test : str, optional
             The statistical test to use ('AnovaRM' or 'friedman'), by default "AnovaRM".
@@ -272,6 +270,10 @@ class StatisticalAnalysis:
                     melt=True,
                 )
             )
+            # If only one method is provided, skip the test.
+            if not method_list or len(method_list) == 1:
+                logging.info("Only one method provided. Skipping statistical test.")
+                return
 
             if select_test not in ["AnovaRM", "friedman"]:
                 raise ValueError(
@@ -320,7 +322,7 @@ class StatisticalAnalysis:
                     legend=False,
                     width=0.5,
                 )
-                ax.set_title(f"p={p_value:.1e}")
+                ax.set_title(f"p={p_value:.1e}", fontsize=16)
                 ax.set_xlabel("")
                 ax.set_ylabel(scoring.upper())
 
@@ -337,6 +339,7 @@ class StatisticalAnalysis:
                     else:
                         new_label = label
                     new_labels.append(new_label)
+
                 ax.set_xticks(list(range(0, len(labels))))
                 ax.set_xticklabels(new_labels)
                 ax.tick_params(axis="both", labelsize=12)
@@ -357,7 +360,7 @@ class StatisticalAnalysis:
                     dpi=300,
                     bbox_inches="tight",
                 )
-            logging.info(f"Figure saved at {save_dir}/{fig_name}.pdf")
+            logging.info(f"StatisticalAnalysis: Figure saved at {save_dir}/{fig_name}.pdf")
 
         except Exception as e:
             logging.error(f"An error occurred during the test: {e}")
@@ -367,7 +370,7 @@ class StatisticalAnalysis:
     def posthoc_conover_friedman(
         report_df: pd.DataFrame,
         scoring_list: Optional[Union[list, str]] = None,
-        method_list: Optional[Union[list, str]] = None,
+        method_list: Optional[list] = None,
         plot: Optional[Union[list, str]] = None,
         axis_text_size: float = 12,
         title_size: float = 16,
@@ -384,7 +387,7 @@ class StatisticalAnalysis:
             The input report dataframe.
         scoring_list : Optional[Union[list, str]], optional
             List or string of scoring metrics, by default None.
-        method_list : Optional[Union[list, str]], optional
+        method_list : Optional[list], optional
             List or string of methods, by default None.
         plot : Optional[Union[list, str]], optional
             Type of plot to generate ('sign' or 'ccd'), by default None.
@@ -413,6 +416,10 @@ class StatisticalAnalysis:
                     melt=False,
                 )
             )
+            # If only one method is provided, skip the test.
+            if not method_list or len(method_list) == 1:
+                logging.info("StatisticalAnalysis: Only one method provided. Skipping statistical test.")
+                return
 
             # Precompute posthoc Conover-Friedman results for each metric
             pc_results = {}
@@ -438,35 +445,40 @@ class StatisticalAnalysis:
                         f"{save_dir}/cofried_pc_{scoring}.csv", index=False
                     )
                     logging.info(
-                        f"Posthoc Conover-Friedman results saved at {save_dir}/cofried_pc_{scoring}.csv"
+                        f"StatisticalAnalysis: Posthoc Conover-Friedman results saved at {save_dir}/cofried_pc_{scoring}.csv"
                     )
 
-            if plot not in ["sign", "ccd", None]:
-                raise ValueError(
-                    f"Invalid plot type: {plot}. Please choose 'sign' or 'ccd'."
-                )
-            if plot is None or plot == "sign":
-                StatisticalAnalysis._make_sign_plots(
-                    pc_results=pc_results,
-                    scoring_list=scoring_list,
-                    axis_text_size=axis_text_size,
-                    title_size=title_size,
-                    save_fig=save_fig,
-                    save_dir=save_dir,
-                )
+            if not plot:
+                plot = ["sign", "ccd"]
+            elif isinstance(plot, str):
+                plot = [plot]
 
-            if plot is None or plot == "ccd":
-                StatisticalAnalysis._make_critical_difference_diagrams(
-                    pc_results=pc_results,
-                    rank_results=rank_results,
-                    scoring_list=scoring_list,
-                    axis_text_size=axis_text_size,
-                    title_size=title_size,
-                    save_fig=save_fig,
-                    save_dir=save_dir,
-                )
+            for type in plot:
+                if type not in ["sign", "ccd"]:
+                    raise ValueError(
+                        f"Invalid plot type: {type}. Please choose 'sign' or 'ccd'."
+                    )
+                if type == "sign":
+                    StatisticalAnalysis._make_sign_plots(
+                        pc_results=pc_results,
+                        scoring_list=scoring_list,
+                        axis_text_size=axis_text_size,
+                        title_size=title_size,
+                        save_fig=save_fig,
+                        save_dir=save_dir,
+                    )
 
-            logging.info("Posthoc Conover-Friedman analysis completed successfully")
+                if type == "ccd":
+                    StatisticalAnalysis._make_critical_difference_diagrams(
+                        pc_results=pc_results,
+                        rank_results=rank_results,
+                        scoring_list=scoring_list,
+                        axis_text_size=axis_text_size,
+                        title_size=title_size,
+                        save_fig=save_fig,
+                        save_dir=save_dir,
+                    )
+
             return pc_results, rank_results
 
         except Exception as e:
@@ -542,7 +554,7 @@ class StatisticalAnalysis:
                 dpi=300,
                 bbox_inches="tight",
             )
-            logging.info(f"Sign plots saved at {save_dir}/cofried_sign_plot.pdf")
+            logging.info(f"StatisticalAnalysis: Sign plots saved at {save_dir}/cofried_sign_plot.pdf")
 
     def _make_critical_difference_diagrams(
         pc_results: dict,
@@ -608,14 +620,14 @@ class StatisticalAnalysis:
                 bbox_inches="tight",
             )
             logging.info(
-                f"Critical difference diagrams saved at {save_dir}/cofried_ccd.pdf"
+                f"StatisticalAnalysis: Critical difference diagrams saved at {save_dir}/cofried_ccd.pdf"
             )
 
     @staticmethod
     def posthoc_tukeyhsd(
         report_df: pd.DataFrame,
         scoring_list: Optional[Union[list, str]] = None,
-        method_list: Optional[Union[list, str]] = None,
+        method_list: Optional[list] = None,
         plot: Optional[Union[list, str]] = None,
         alpha: float = 0.05,
         direction_dict: dict = {},
@@ -638,7 +650,7 @@ class StatisticalAnalysis:
             The input report dataframe.
         scoring_list : Optional[Union[list, str]], optional
             List or string of scoring metrics, by default None.
-        method_list : Optional[Union[list, str]], optional
+        method_list : Optional[list], optional
             List or string of methods, by default None.
         plot : Optional[Union[list, str]], optional
             Type of plot to generate ('mcs_plot' or 'ci_plot'), by default None.
@@ -679,6 +691,10 @@ class StatisticalAnalysis:
                     melt=True,
                 )
             )
+            # If only one method is provided, skip the test.
+            if not method_list or len(method_list) == 1:
+                logging.info("StatisticalAnalysis: Only one method provided. Skipping statistical test.")
+                return
 
             # Set defaults
             for key in scoring_list:
@@ -695,16 +711,19 @@ class StatisticalAnalysis:
             tukey_results = {}
 
             for scoring in scoring_list:
+
+                scoring_data = report_new[report_new["scoring"] == scoring]
+
                 if direction_dict and scoring in direction_dict:
                     if direction_dict[scoring] == "maximize":
                         df_means = (
-                            report_new.groupby("method")
+                            scoring_data.groupby("method")
                             .mean(numeric_only=True)
                             .sort_values("value", ascending=False)
                         )
                     elif direction_dict[scoring] == "minimize":
                         df_means = (
-                            report_new.groupby("method")
+                            scoring_data.groupby("method")
                             .mean(numeric_only=True)
                             .sort_values("value", ascending=True)
                         )
@@ -713,7 +732,7 @@ class StatisticalAnalysis:
                             "Invalid direction. Expected 'maximize' or 'minimize'."
                         )
                 else:
-                    df_means = report_new.groupby("method").mean(numeric_only=True)
+                    df_means = scoring_data.groupby("method").mean(numeric_only=True)
 
                 with warnings.catch_warnings():
                     warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -721,7 +740,7 @@ class StatisticalAnalysis:
                         dv="value",
                         within="method",
                         subject="cv_cycle",
-                        data=report_new[report_new["scoring"] == scoring],
+                        data=scoring_data,
                         detailed=True,
                     )
 
@@ -730,7 +749,7 @@ class StatisticalAnalysis:
 
                 methods = df_means.index
                 n_groups = len(methods)
-                n_per_group = report_new["method"].value_counts().mean()
+                n_per_group = scoring_data["method"].value_counts().mean()
 
                 tukey_se = np.sqrt(2 * mse / n_per_group)
                 q = qsturng(1 - alpha, n_groups, df_resid)
@@ -748,10 +767,10 @@ class StatisticalAnalysis:
                 for i, method1 in enumerate(methods):
                     for j, method2 in enumerate(methods):
                         if i < j:
-                            group1 = report_new[report_new["method"] == method1][
+                            group1 = scoring_data[scoring_data["method"] == method1][
                                 "value"
                             ]
-                            group2 = report_new[report_new["method"] == method2][
+                            group2 = scoring_data[scoring_data["method"] == method2][
                                 "value"
                             ]
                             mean_diff = group1.mean() - group2.mean()
@@ -803,43 +822,48 @@ class StatisticalAnalysis:
                         f"{save_dir}/tukey_df_means_diff_{scoring}.csv", index=False
                     )
                     pc.to_csv(f"{save_dir}/tukey_pc_{scoring}.csv", index=False)
-                    logging.info(f"Tukey HSD results saved at {save_dir}")
+                    logging.info(f"StatisticalAnalysis: Tukey HSD results saved at {save_dir}")
 
-            if plot not in [None, "mcs", "ci"]:
-                raise ValueError(
-                    f"Unsupported plot: {plot}."
-                    "Please choose 'mcs' for MCS plots or 'ci' for CI plots."
-                )
+            if not plot:
+                plot = ["mcs", "ci"]
+            elif isinstance(plot, str):
+                plot = [plot]
 
-            if plot is None or plot == "mcs":
-                StatisticalAnalysis._make_mcs_plot_grid(
-                    tukey_results,
-                    scoring_list,
-                    method_list,
-                    direction_dict,
-                    effect_dict,
-                    show_diff=True,
-                    cell_text_size=cell_text_size,
-                    axis_text_size=axis_text_size,
-                    title_size=title_size,
-                    save_fig=save_fig,
-                    save_dir=save_dir,
-                )
+            for type in plot:
+                if type not in ["mcs", "ci"]:
+                    raise ValueError(
+                        f"Unsupported plot: {type}."
+                        "Please choose 'mcs' for MCS plots or 'ci' for CI plots."
+                    )
 
-            if plot is None or plot == "ci":
-                StatisticalAnalysis._make_ci_plot_grid(
-                    tukey_results,
-                    scoring_list,
-                    method_list,
-                    title_size=title_size,
-                    axis_text_size=axis_text_size,
-                    left_xlim=left_xlim,
-                    right_xlim=right_xlim,
-                    save_fig=save_fig,
-                    save_dir=save_dir,
-                )
+                if type == "mcs":
+                    StatisticalAnalysis._make_mcs_plot_grid(
+                        tukey_results,
+                        scoring_list,
+                        method_list,
+                        direction_dict,
+                        effect_dict,
+                        show_diff=True,
+                        cell_text_size=cell_text_size,
+                        axis_text_size=axis_text_size,
+                        title_size=title_size,
+                        save_fig=save_fig,
+                        save_dir=save_dir,
+                    )
 
-            logging.info("Posthoc Tukey HSD analysis completed successfully")
+                if type == "ci":
+                    StatisticalAnalysis._make_ci_plot_grid(
+                        tukey_results,
+                        scoring_list,
+                        method_list,
+                        title_size=title_size,
+                        axis_text_size=axis_text_size,
+                        left_xlim=left_xlim,
+                        right_xlim=right_xlim,
+                        save_fig=save_fig,
+                        save_dir=save_dir,
+                    )
+
             return tukey_results
 
         except Exception as e:
@@ -945,12 +969,23 @@ class StatisticalAnalysis:
 
             if labels:
                 label_list = list(means.index)
-                x_label_list = [
-                    x + f"\n{means.loc[x].values[0].round(2)}" for x in label_list
-                ]
-                y_label_list = [
-                    x + f"\n{means.loc[x].values[0].round(2)}\n" for x in label_list
-                ]
+
+                x_label_list = []
+
+                for label in label_list:
+                    if "Regression" in label:
+                        new_label = label.replace("Regression", "\nRegression")
+                    elif "Regressor" in label:
+                        new_label = label.replace("Regressor", "\nRegressor")
+                    elif "Classifier" in label:
+                        new_label = label.replace("Classifier", "\nClassifier")
+                    else:
+                        new_label = label
+                        
+                    new_label = new_label + f"\n{means.loc[label].values[0].round(3)}"
+
+                    x_label_list.append(new_label)
+
                 hax.set_xticklabels(
                     x_label_list,
                     size=axis_text_size,
@@ -960,10 +995,10 @@ class StatisticalAnalysis:
                     rotation_mode="anchor",
                 )
                 hax.set_yticklabels(
-                    y_label_list,
+                    x_label_list,
                     size=axis_text_size,
                     ha="center",
-                    va="center",
+                    va="bottom",
                     rotation=90,
                     rotation_mode="anchor",
                 )
@@ -1039,7 +1074,7 @@ class StatisticalAnalysis:
             nrow = math.ceil(len(scoring_list) / 3)
             nmethod = len(method_list)
             fig, ax = plt.subplots(
-                nrow, 3, figsize=(7.8 * nmethod, 2.3 * nmethod * nrow)
+                nrow, 3, figsize=(4.7 * nmethod, 1.4 * nmethod * nrow)
             )
 
             ax = ax.flatten()
@@ -1065,7 +1100,7 @@ class StatisticalAnalysis:
                 pc = tukey_results[scoring]["pc"]
 
                 hax = StatisticalAnalysis._mcs_plot(
-                    pc,
+                    pc=pc,
                     effect_size=df_means_diff,
                     means=df_means,
                     show_diff=show_diff,
@@ -1093,7 +1128,7 @@ class StatisticalAnalysis:
                     dpi=300,
                     bbox_inches="tight",
                 )
-                logging.info(f"MCS plot grid saved at {save_dir}/tukey_mcs.pdf")
+                logging.info(f"StatisticalAnalysis: MCS plot grid saved at {save_dir}/tukey_mcs.pdf")
 
         except Exception as e:
             logging.error(f"An error occurred in _make_mcs_plot_grid: {e}")
@@ -1196,7 +1231,145 @@ class StatisticalAnalysis:
                     dpi=300,
                     bbox_inches="tight",
                 )
-                logging.info(f"CI plot grid saved at {save_dir}/tukey_ci.pdf")
+                logging.info(f"StatisticalAnalysis: CI plot grid saved at {save_dir}/tukey_ci.pdf")
 
         except Exception as e:
             logging.error(f"An error occurred in _make_ci_plot_grid: {e}")
+
+    @staticmethod
+    def analysis(
+        report_df,
+        scoring_list=None,
+        method_list=None,
+        check_assumptions=True,
+        method: str = "all",  # Options: None, 'parametric', 'non-parametric', 'all'
+        save_dir="Project/Analysis",
+    ):
+        """
+        Run statistical analyses based on provided parameters.
+
+        Parameters:
+            report_df (pd.DataFrame): The input report DataFrame.
+            scoring_list (list or str, optional): List of scoring metrics.
+            method_list (list or str, optional): List of methods.
+            check_assumptions (bool): If True, perform variance homogeneity and normality checks.
+            method (str, optional): Which tests to perform. Options:
+                - None: Do not perform any further tests.
+                - "parametric": Run parametric test (AnovaRM) and posthoc Tukey HSD.
+                - "non-parametric": Run non-parametric test (Friedman) and posthoc Conover-Friedman.
+                - "all": Run both parametric and non-parametric tests.
+            save_dir (str): Directory to save outputs.
+
+        Returns:
+            dict: A dictionary containing the outputs of the analyses.
+        """
+        results = {}
+
+        try:
+            # 1. Check Assumptions (Variance Homogeneity & Normality)
+            if check_assumptions:
+                # Variance Homogeneity Check
+                variance_df = StatisticalAnalysis.check_variance_homogeneity(
+                    report_df=report_df,
+                    scoring_list=scoring_list,
+                    method_list=method_list,
+                    levene_test=True,
+                    save_csv=True,
+                    save_dir=save_dir,
+                    csv_name="variance_homogeneity",
+                )
+                results["variance"] = variance_df
+
+                # Normality Check
+                StatisticalAnalysis.check_normality(
+                    report_df=report_df,
+                    scoring_list=scoring_list,
+                    method_list=method_list,
+                    save_fig=True,
+                    save_dir=save_dir,
+                    fig_name="normality",
+                )
+                results["normality"] = f"Normality plots saved at {save_dir}."
+
+            # 2. Tests based on method parameter
+            if method:
+                if method in ["parametric", "all"]:
+                    # Run parametric test: AnovaRM and posthoc Tukey HSD
+                    StatisticalAnalysis.test(
+                        report_df=report_df,
+                        scoring_list=scoring_list,
+                        method_list=method_list,
+                        select_test="AnovaRM",
+                        showmeans=True,
+                        save_fig=True,
+                        save_dir=save_dir,
+                        fig_name="anova_test",
+                    )
+                    results["anova_test"] = (
+                        f"AnovaRM test completed and figure saved at {save_dir}."
+                    )
+
+                    tukey_results = StatisticalAnalysis.posthoc_tukeyhsd(
+                        report_df=report_df,
+                        scoring_list=scoring_list,
+                        method_list=method_list,
+                        plot=[
+                            "mcs",
+                            "ci",
+                        ],  # Use "mcs" for multiple comparisons plot (or "ci" for CI plot)
+                        alpha=0.05,
+                        direction_dict={},
+                        effect_dict={},
+                        title_size=16,
+                        cell_text_size=12,
+                        axis_text_size=12,
+                        left_xlim=-0.5,
+                        right_xlim=0.5,
+                        save_fig=True,
+                        save_result=True,
+                        save_dir=save_dir,
+                    )
+                    results["posthoc_tukey"] = tukey_results
+
+                if method in ["non-parametric", "all"]:
+                    # Run non-parametric test: Friedman and posthoc Conover-Friedman
+                    StatisticalAnalysis.test(
+                        report_df=report_df,
+                        scoring_list=scoring_list,
+                        method_list=method_list,
+                        select_test="friedman",
+                        showmeans=True,
+                        save_fig=True,
+                        save_dir=save_dir,
+                        fig_name="friedman_test",
+                    )
+                    results["friedman_test"] = (
+                        f"Friedman test completed and figure saved at {save_dir}."
+                    )
+
+                    pc_results, rank_results = (
+                        StatisticalAnalysis.posthoc_conover_friedman(
+                            report_df=report_df,
+                            scoring_list=scoring_list,
+                            method_list=method_list,
+                            plot=[
+                                "sign",
+                                "ccd",
+                            ],  # Choose "sign" or "ccd" for plot type
+                            axis_text_size=12,
+                            title_size=16,
+                            save_fig=True,
+                            save_result=True,
+                            save_dir=save_dir,
+                        )
+                    )
+                    results["posthoc_conover"] = {
+                        "pc_results": pc_results,
+                        "rank_results": rank_results,
+                    }
+
+            return results
+
+        except Exception as e:
+            print(f"An error occurred during analysis: {e}")
+            raise

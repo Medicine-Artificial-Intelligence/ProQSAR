@@ -32,7 +32,7 @@ class ApplicabilityDomain(BaseEstimator):
         n_neighbors=10,
         metric="minkowski",
         p=2,
-        save_dir: Optional[str] = "Project/ApplicabilityDomain",
+        save_dir: Optional[str] = None,
         deactivate: bool = False,
     ):
         """
@@ -135,12 +135,13 @@ class ApplicabilityDomain(BaseEstimator):
 
             self.offset = np.percentile(ad_values, 100 * self.rate_of_outliers)
 
+            logging.info(f"ApplicabilityDomain: Using '{self.method}' method.")
+            
             if self.save_dir:
                 os.makedirs(self.save_dir, exist_ok=True)
                 with open(f"{self.save_dir}/applicability_domain.pkl", "wb") as file:
                     pickle.dump(self, file)
 
-            logging.info("ApplicabilityDomain model fitted successfully.")
             return self
 
         except Exception as e:
@@ -187,7 +188,6 @@ class ApplicabilityDomain(BaseEstimator):
                 os.makedirs(self.save_dir, exist_ok=True)
                 result_df.to_csv(f"{self.save_dir}/ad_pred_result.csv", index=False)
 
-            logging.info("Prediction completed successfully.")
             return result_df
 
         except Exception as e:
