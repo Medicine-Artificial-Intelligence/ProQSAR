@@ -1,6 +1,9 @@
 import os
 import pickle
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
+
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_model_map,
     _match_cv_ev_metrics,
@@ -165,7 +168,7 @@ class AutoQSAR:
             self.optimaldata.datagenerator.set_params(data_name="data_dev")
             self.selected_feature = self.optimaldata.run(data_dev)
             self.logger.info(
-                f"Optimal dataset: {self.selected_feature}"
+                f"----------Optimal dataset: {self.selected_feature}----------"
             )
 
             self.datagenerator.featurizer.set_params(

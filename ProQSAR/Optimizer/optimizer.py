@@ -128,7 +128,7 @@ class Optimizer(BaseEstimator):
 
             self.task_type = _get_task_type(data, self.activity_col)
             self.cv = _get_cv_strategy(
-                self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats
+                self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats, random_state=self.random_state
             )
             self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
 
@@ -150,6 +150,8 @@ class Optimizer(BaseEstimator):
                         trial, model_name, self.param_ranges, self.add_model
                     )
                     model.set_params(**params)
+                    model.set_params(random_state=self.random_state) if 'random_state' in model.get_params() else model
+
                     score = cross_val_score(
                         model,
                         X,
@@ -158,11 +160,14 @@ class Optimizer(BaseEstimator):
                         cv=self.cv,
                         n_jobs=1,
                     ).mean()
+                    
                     return score
 
                 except Exception as e:
                     logging.error(f"Error in objective function: {e}")
                     raise
+            # Setting the logging level WARNING, the INFO logs are suppressed.
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
 
             study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=self.random_state))
             study.optimize(objective, n_trials=self.n_trials, n_jobs=self.n_jobs, gc_after_trial=True)

@@ -25,6 +25,7 @@ class FeatureGenerator(BaseEstimator):
         mol_col: str = "mol",
         activity_col: str = "activity",
         id_col: str = "id",
+        smiles_col: str = "SMILES",
         feature_types: Union[list, str] = ["ECFP4", "RDK5", "FCFP4"],
         save_dir: Optional[str] = None,
         data_name: Optional[str] = None,
@@ -36,12 +37,13 @@ class FeatureGenerator(BaseEstimator):
         self.mol_col = mol_col
         self.activity_col = activity_col
         self.id_col = id_col
-        self.feature_types = feature_types
+        self.smiles_col = smiles_col
         self.save_dir = save_dir
         self.data_name = data_name
         self.n_jobs = n_jobs
         self.verbose = verbose
         self.deactivate = deactivate
+        self.feature_types = feature_types
 
     @staticmethod
     def _mol_process(
@@ -114,6 +116,7 @@ class FeatureGenerator(BaseEstimator):
         mol_col: str,
         activity_col: str,
         id_col: str,
+        smiles_col: str = "SMILES",
         feature_types: List[str] = ["RDK5"],
     ) -> Dict[str, Any]:
         """
@@ -136,6 +139,8 @@ class FeatureGenerator(BaseEstimator):
             result[id_col] = id
             if activity_col in record.keys():
                 result[activity_col] = record[activity_col]
+            if smiles_col in record.keys():
+                result[smiles_col] = record[smiles_col]
             return result
         except KeyError as e:
             logging.error(f"Missing key in record: {e}")
@@ -158,7 +163,7 @@ class FeatureGenerator(BaseEstimator):
             "rdkdes",
             "pubchem",
             "mordred",
-            "pharm2dgbfp",
+            #"pharm2dgbfp",
         ]
 
     def generate_features(
@@ -194,16 +199,13 @@ class FeatureGenerator(BaseEstimator):
             logging.error("Invalid input data type", exc_info=True)
             return None
 
-        if self.feature_types == "all":
-            self.feature_types = FeatureGenerator.get_all_types()
-
-        elif isinstance(self.feature_types, str):
+        if isinstance(self.feature_types, str):
             self.feature_types = [self.feature_types]
 
         # Parallel processing of records using joblib
         results = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
             delayed(self._single_process)(
-                record, self.mol_col, self.activity_col, self.id_col, self.feature_types
+                record, self.mol_col, self.activity_col, self.id_col, self.smiles_col, self.feature_types
             )
             for record in data
         )
@@ -220,7 +222,7 @@ class FeatureGenerator(BaseEstimator):
 
             # Concat with ID & Activity columns
             feature_df = pd.concat([
-                results.filter(items=[self.id_col, self.activity_col]),
+                results.filter(items=[self.id_col, self.activity_col, self.smiles_col]),
                 fp_df
             ], axis=1)
 

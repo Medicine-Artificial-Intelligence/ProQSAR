@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from typing import Optional
 from rdkit import Chem, DataStructs
-from rdkit.Chem import AllChem, MACCSkeys, Descriptors
+from rdkit.Chem import MACCSkeys, Descriptors, rdFingerprintGenerator
 from rdkit.ML.Descriptors import MoleculeDescriptors
 from rdkit.Avalon import pyAvalonTools as fpAvalon
 from rdkit.Chem.Pharm2D import Gobbi_Pharm2D, Generate
@@ -65,9 +65,18 @@ def ECFPs(
     if mol is None:
         logging.error("Invalid molecule provided.")
         return None
-    fp = AllChem.GetMorganFingerprintAsBitVect(
-        mol, radius=radius, nBits=nBits, useFeatures=useFeatures
-    )
+    
+    atomInvariantsGenerator = None
+    if useFeatures:
+        atomInvariantsGenerator = rdFingerprintGenerator.GetMorganFeatureAtomInvGen()
+
+    mfpgen = rdFingerprintGenerator.GetMorganGenerator(
+        radius=radius,
+        fpSize=nBits, 
+        atomInvariantsGenerator=atomInvariantsGenerator)
+    
+    fp = mfpgen.GetFingerprint(mol)
+
     ar = np.zeros((nBits,), dtype=np.uint8)
     DataStructs.ConvertToNumpyArray(fp, ar)
     return ar

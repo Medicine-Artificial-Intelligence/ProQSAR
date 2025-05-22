@@ -27,12 +27,13 @@ class DataGenerator(BaseEstimator):
         self.config = config or Config()
 
         self.standardizer = self.config.standardizer.set_params(
-            smiles_col=smiles_col, n_jobs=self.n_jobs
+            smiles_col=self.smiles_col, n_jobs=self.n_jobs
         )
         self.featurizer = self.config.featurizer.set_params(
-            mol_col=mol_col if self.standardizer.deactivate else "standardized_mol",
-            activity_col=activity_col,
-            id_col=id_col,
+            mol_col=self.mol_col if self.standardizer.deactivate else "standardized_mol",
+            activity_col=self.activity_col,
+            id_col=self.id_col,
+            smiles_col=self.smiles_col if self.standardizer.deactivate else ("standardized_" + self.smiles_col),
             n_jobs=self.n_jobs,
             save_dir=self.save_dir,
         )
@@ -44,12 +45,6 @@ class DataGenerator(BaseEstimator):
         data_features = self.featurizer.set_params(
             data_name=self.data_name
         ).generate_features(standardized_data)
-
-        if not self.standardizer.deactivate:
-            for df in data_features.values():
-                df["standardized_" + self.smiles_col] = standardized_data[
-                    "standardized_" + self.smiles_col
-                ]
 
         if len(data_features.keys()) == 1:
             return list(data_features.values())[0]
