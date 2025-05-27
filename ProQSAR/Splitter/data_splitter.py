@@ -18,6 +18,7 @@ class Splitter(BaseEstimator):
         self,
         activity_col: str = "activity",
         smiles_col: str = "SMILES",
+        mol_col: str = "mol",
         option: str = "random",
         test_size: float = 0.2,
         n_splits: int = 5,
@@ -48,6 +49,7 @@ class Splitter(BaseEstimator):
         self.random_state = random_state
         self.activity_col = activity_col
         self.smiles_col = smiles_col
+        self.mol_col = mol_col
         self.n_splits = n_splits
         self.save_dir = save_dir
         self.data_name = data_name
@@ -84,6 +86,7 @@ class Splitter(BaseEstimator):
                 splitter = ScaffoldSplitter(
                     self.activity_col,
                     self.smiles_col,
+                    self.mol_col,
                     test_size=self.test_size,
                     random_state=self.random_state,
                 )
@@ -91,6 +94,7 @@ class Splitter(BaseEstimator):
                 splitter = StratifiedScaffoldSplitter(
                     self.activity_col,
                     self.smiles_col,
+                    self.mol_col,
                     n_splits=self.n_splits,
                     random_state=self.random_state,
                 )
@@ -102,10 +106,10 @@ class Splitter(BaseEstimator):
 
             data_train, data_test = splitter.fit(data)
             data_train = data_train.reset_index(drop=True).drop(
-                columns=self.smiles_col, errors="ignore"
+                columns=[self.smiles_col, self.mol_col], errors="ignore"
             )
             data_test = data_test.reset_index(drop=True).drop(
-                columns=self.smiles_col, errors="ignore"
+                columns=[self.smiles_col, self.mol_col], errors="ignore"
             )
 
             logging.info(

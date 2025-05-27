@@ -76,6 +76,7 @@ class Optimizer(BaseEstimator):
         n_repeats: int = 2,
         n_jobs: int = 1,
         random_state: int = 42,
+        study_name: str = "my_study",
         deactivate: bool = False,
     ) -> None:
         """
@@ -92,6 +93,7 @@ class Optimizer(BaseEstimator):
         self.n_repeats = n_repeats
         self.n_jobs = n_jobs
         self.random_state = random_state
+        self.study_name = study_name
         self.deactivate = deactivate
         self.best_model = None
         self.best_params = None
@@ -171,7 +173,7 @@ class Optimizer(BaseEstimator):
 
             storage = "sqlite:///example.db"
             study = optuna.create_study(
-                study_name="my_study",
+                study_name=self.study_name,
                 direction="maximize", 
                 sampler=optuna.samplers.TPESampler(seed=self.random_state),
                 storage=storage,

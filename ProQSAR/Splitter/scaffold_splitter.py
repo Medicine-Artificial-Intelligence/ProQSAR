@@ -4,7 +4,7 @@ from rdkit.Chem.Scaffolds import MurckoScaffold
 import logging
 import pandas as pd
 import numpy as np
-
+from typing import Optional
 
 class ScaffoldSplitter:
     """
@@ -15,6 +15,7 @@ class ScaffoldSplitter:
         self,
         activity_col: str,
         smiles_col: str,
+        mol_col: str = 'mol',
         test_size: float = 0.2,
         random_state: int = 42,
     ):
@@ -36,9 +37,10 @@ class ScaffoldSplitter:
         self.random_state = random_state
         self.activity_col = activity_col
         self.smiles_col = smiles_col
+        self.mol_col = mol_col
 
     @staticmethod
-    def scaffold(data: pd.DataFrame, smiles_col: str) -> List[List[int]]:
+    def scaffold(data: pd.DataFrame, smiles_col: str, mol_col: Optional[str] = None) -> List[List[int]]:
         """
         Generates scaffold groups from the SMILES strings and returns a list of scaffold indices.
 
@@ -56,9 +58,13 @@ class ScaffoldSplitter:
         """
         scaffolds = {}
         for idx, row in data.iterrows():
-            smiles = row[smiles_col]
             try:
-                mol = Chem.rdmolfiles.MolFromSmiles(smiles)
+                if mol_col:
+                    mol = row[mol_col]
+                else:
+                    smiles = row[smiles_col]
+                    mol = Chem.rdmolfiles.MolFromSmiles(smiles)
+
                 scaffold = MurckoScaffold.MurckoScaffoldSmiles(
                     mol=mol, includeChirality=False
                 )
@@ -87,7 +93,7 @@ class ScaffoldSplitter:
         Tuple[pd.DataFrame, pd.DataFrame]:
             The training and testing sets as pandas DataFrames.
         """
-        scaffold_lists = ScaffoldSplitter.scaffold(data, self.smiles_col)
+        scaffold_lists = ScaffoldSplitter.scaffold(data, self.smiles_col, self.mol_col)
         count_list = [len(i) for i in scaffold_lists]
         if np.array(count_list).sum() != len(data):
             raise ValueError("Failed to generate scaffold groups")

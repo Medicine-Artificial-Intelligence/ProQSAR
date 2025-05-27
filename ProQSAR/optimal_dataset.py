@@ -43,6 +43,11 @@ class OptimalDataset(CrossValidationConfig):
             if self.config.standardizer.deactivate
             else f"standardized_{smiles_col}"
         )
+        self.mol_col = (
+            mol_col
+            if self.config.standardizer.deactivate
+            else f"standardized_mol"
+        )
 
         self.data_features = None
         self.train, self.test = {}, {}
@@ -55,13 +60,14 @@ class OptimalDataset(CrossValidationConfig):
             id_col,
             smiles_col,
             mol_col,
-            n_jobs=n_jobs,
+            n_jobs=1,
             save_dir=save_dir,
             config=config,
         )
         self.splitter = self.config.splitter.set_params(
             activity_col=activity_col,
             smiles_col=self.smiles_col,
+            mol_col=self.mol_col,
             save_dir=save_dir,
             random_state=self.random_state,
         )

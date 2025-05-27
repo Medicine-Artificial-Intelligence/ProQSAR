@@ -39,12 +39,12 @@ class DataGenerator(BaseEstimator):
         )
 
     def generate(self, data):
-        standardized_data = pd.DataFrame(
+        self.standardized_data = pd.DataFrame(
             self.standardizer.standardize_dict_smiles(data)
         )
         data_features = self.featurizer.set_params(
             data_name=self.data_name
-        ).generate_features(standardized_data)
+        ).generate_features(self.standardized_data)
 
         if len(data_features.keys()) == 1:
             return list(data_features.values())[0]

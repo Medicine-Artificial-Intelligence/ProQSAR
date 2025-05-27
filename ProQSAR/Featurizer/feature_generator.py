@@ -26,7 +26,7 @@ class FeatureGenerator(BaseEstimator):
         activity_col: str = "activity",
         id_col: str = "id",
         smiles_col: str = "SMILES",
-        feature_types: Union[list, str] = ["ECFP4", "RDK5", "FCFP4"],
+        feature_types: Union[list, str] = ['ECFP2','ECFP4','ECFP6','FCFP2','FCFP4','FCFP6','RDK5','RDK6','RDK7','MACCS','avalon','rdkdes','pubchem','mordred'],
         save_dir: Optional[str] = None,
         data_name: Optional[str] = None,
         n_jobs=1,
@@ -72,7 +72,6 @@ class FeatureGenerator(BaseEstimator):
             try:
                 if fp.startswith("RDK"):
                     maxpath = int(fp[-1:])
-                    logging.info("bug", maxpath)
                     fp_size = 2048 if maxpath <= 6 else 4096
                     result[fp] = RDKFp(mol, maxPath=maxpath, fpSize=fp_size)
                 elif "ECFP" in fp:
@@ -137,6 +136,7 @@ class FeatureGenerator(BaseEstimator):
             id = record[id_col]
             result = FeatureGenerator._mol_process(mol, feature_types=feature_types)
             result[id_col] = id
+            result[mol_col] = record[mol_col]
             if activity_col in record.keys():
                 result[activity_col] = record[activity_col]
             if smiles_col in record.keys():
@@ -222,7 +222,7 @@ class FeatureGenerator(BaseEstimator):
 
             # Concat with ID & Activity columns
             feature_df = pd.concat([
-                results.filter(items=[self.id_col, self.activity_col, self.smiles_col]),
+                results.filter(items=[self.id_col, self.activity_col, self.smiles_col, self.mol_col]),
                 fp_df
             ], axis=1)
 

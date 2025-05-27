@@ -145,7 +145,7 @@ class SMILESStandardizer(BaseEstimator):
 
         try:
             standardized_mol = self.standardize_mol(original_mol)
-            standardized_smiles = Chem.MolToSmiles(standardized_mol)
+            standardized_smiles = Chem.rdmolfiles.MolToSmiles(standardized_mol)
             return standardized_smiles, standardized_mol
         except Exception as e:
             logging.error(f"Failed to standardize {smiles}: {e}")

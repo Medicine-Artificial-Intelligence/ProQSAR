@@ -18,6 +18,7 @@ from ProQSAR.Analysis.statistical_analysis import StatisticalAnalysis
 from copy import deepcopy
 from typing import Optional, Iterable, Union
 
+
 logger = setup_logging()
 
 
@@ -42,6 +43,7 @@ class ProQSAR:
         self.activity_col = activity_col
         self.id_col = id_col
         self.smiles_col = smiles_col
+        self.mol_col = mol_col
         self.project_name = project_name
         self.n_jobs = n_jobs
         self.random_state = random_state
@@ -77,7 +79,7 @@ class ProQSAR:
             id_col,
             smiles_col,
             mol_col,
-            n_jobs=self.n_jobs,
+            n_jobs=1,
             save_dir=self.project_name,
             config=self.config,
         )
@@ -91,6 +93,11 @@ class ProQSAR:
                 self.smiles_col
                 if self.config.standardizer.deactivate
                 else f"standardized_{self.smiles_col}"
+            ),
+            mol_col=(
+                self.mol_col
+                if self.config.standardizer.deactivate
+                else f"standardized_mol"
             ),
             save_dir=self.project_name,
             random_state=self.random_state,
@@ -132,6 +139,7 @@ class ProQSAR:
                 n_repeats=self.n_repeats,
                 scoring=self.scoring_target,
                 random_state=self.random_state,
+                study_name=self.project_name,
             )
             if not self.config.optimizer.deactivate
             else None

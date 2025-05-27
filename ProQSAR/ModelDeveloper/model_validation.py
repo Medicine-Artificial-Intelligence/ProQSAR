@@ -500,7 +500,7 @@ class ModelValidation:
             if save_csv:
                 if save_dir and not os.path.exists(save_dir):
                     os.makedirs(save_dir, exist_ok=True)
-                ev_df.to_csv(f"{save_dir}/{csv_name}.csv", index=False)
+                ev_df.to_csv(f"{save_dir}/{csv_name}.csv")
                 logging.info(
                     f"External validation report saved at: {save_dir}/{csv_name}.csv"
                 )
