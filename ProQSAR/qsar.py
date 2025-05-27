@@ -325,7 +325,7 @@ class ProQSAR:
             self.ad.fit(self.train)
 
         # Save pipeline
-        save_path = f"{self.project_name}/autoqsar.pkl"
+        save_path = f"{self.project_name}/proqsar.pkl"
         with open(save_path, "wb") as file:
             pickle.dump(self, file)
         self.logger.info(
