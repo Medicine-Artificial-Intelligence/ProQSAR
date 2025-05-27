@@ -36,7 +36,21 @@ def canonicalize_tautomer(mol: Chem.Mol) -> Chem.Mol:
     >>> mol = Chem.MolFromSmiles("O=C1NC=CC1=O")
     >>> canonicalized = canonicalize_tautomer(mol)
     """
-    return rdMolStandardize.CanonicalTautomer(mol)
+    # 1) Manually clear aromatic flags on atoms and bonds
+    for atom in mol.GetAtoms():
+        atom.SetIsAromatic(False)
+    for bond in mol.GetBonds():
+        bond.SetIsAromatic(False)
+
+    # 2) Try to get canonical tautomer directly
+    enum = rdMolStandardize.TautomerEnumerator()
+    try:
+        return enum.Canonicalize(mol)  # single best tautomer
+    except Exception as e:
+        logging.warning(f"[WARN] Canonicalize failed: {e}")
+        # 3) Fallback: enumerate all and pick first
+        tas = enum.Enumerate(mol)
+        return tas[0] if tas else mol
 
 
 def salts_remover(mol: Chem.Mol) -> Chem.Mol:
@@ -106,7 +120,7 @@ def assign_stereochemistry(
     Returns:
     - None
     """
-    Chem.AssignStereochemistry(mol, cleanIt=cleanIt, force=force)
+    Chem.rdmolops.AssignStereochemistry(mol, cleanIt=cleanIt, force=force)
 
 
 def fragments_remover(mol: Chem.Mol) -> Optional[Chem.Mol]:
@@ -125,7 +139,7 @@ def fragments_remover(mol: Chem.Mol) -> Optional[Chem.Mol]:
     """
     try:
         largest_fragment = max(
-            Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=True),
+            Chem.rdmolops.GetMolFrags(mol, asMols=True, sanitizeFrags=True),
             key=lambda m: m.GetNumAtoms(),
         )
         return largest_fragment
@@ -150,8 +164,8 @@ def remove_hydrogens_and_sanitize(mol: Chem.Mol) -> Optional[Chem.Mol]:
     >>> clean_mol = remove_hydrogens_and_sanitize(mol)
     """
     try:
-        mol = Chem.RemoveHs(mol)
-        Chem.SanitizeMol(mol)
+        mol = Chem.rdmolops.RemoveHs(mol)
+        Chem.rdmolops.SanitizeMol(mol)
         return mol
     except Exception as e:
         logging.error(f"Failed to sanitize molecule: {e}")

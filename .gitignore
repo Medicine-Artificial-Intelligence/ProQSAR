@@ -3,3 +3,4 @@
 *htmlcov
 *.json
 *.tsv
+*.pkl

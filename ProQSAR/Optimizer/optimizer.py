@@ -169,9 +169,15 @@ class Optimizer(BaseEstimator):
             # Setting the logging level WARNING, the INFO logs are suppressed.
             optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-            study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=self.random_state))
-            study.optimize(objective, n_trials=self.n_trials, n_jobs=self.n_jobs, gc_after_trial=True)
-
+            storage = "sqlite:///example.db"
+            study = optuna.create_study(
+                study_name="my_study",
+                direction="maximize", 
+                sampler=optuna.samplers.TPESampler(seed=self.random_state),
+                storage=storage,
+                load_if_exists=True
+                )
+            study.optimize(objective, n_trials=self.n_trials, n_jobs=self.n_jobs)
             self.best_params = study.best_trial.params
             self.best_score = study.best_value
 

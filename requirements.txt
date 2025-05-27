@@ -1,4 +1,4 @@
-rdkit==2024.3.3
+rdkit==2025.03.1
 seaborn==0.13.2
 pandas==2.2.2
 joblib==1.4.2

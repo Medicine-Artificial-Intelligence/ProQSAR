@@ -58,7 +58,7 @@ class ScaffoldSplitter:
         for idx, row in data.iterrows():
             smiles = row[smiles_col]
             try:
-                mol = Chem.MolFromSmiles(smiles)
+                mol = Chem.rdmolfiles.MolFromSmiles(smiles)
                 scaffold = MurckoScaffold.MurckoScaffoldSmiles(
                     mol=mol, includeChirality=False
                 )

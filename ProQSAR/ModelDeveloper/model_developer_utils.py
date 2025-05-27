@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from typing import Union, Optional, List
+from sklearn.utils.validation import check_is_fitted
+from sklearn.exceptions import NotFittedError
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import (
     RepeatedStratifiedKFold,
@@ -93,12 +95,12 @@ def _get_model_map(
     """
 
     model_map_c = {
-        "DummyClassifier": DummyClassifier(),
+        "DummyClassifier": DummyClassifier(random_state=random_state),
         "LogisticRegression": LogisticRegression(
             max_iter=10000, solver="liblinear", random_state=random_state, n_jobs=n_jobs
         ),
         "KNeighborsClassifier": KNeighborsClassifier(n_neighbors=20, n_jobs=n_jobs),
-        "SVC": SVC(probability=True, max_iter=10000),
+        "SVC": SVC(probability=True, max_iter=10000, random_state=random_state),
         "RandomForestClassifier": RandomForestClassifier(
             random_state=random_state, n_jobs=n_jobs
         ),
@@ -150,9 +152,10 @@ def _get_model_map(
             hidden_layer_sizes=(150,),
             random_state=random_state,
         ),
-        "Ridge": Ridge(),
-        "ElasticNetCV": ElasticNetCV(cv=5, n_jobs=n_jobs),
+        "Ridge": Ridge(random_state=random_state),
+        "ElasticNetCV": ElasticNetCV(cv=5, n_jobs=n_jobs, random_state=random_state),
     }
+    
     if task_type == "C":
         model_map = model_map_c
     elif task_type == "R":
@@ -167,9 +170,18 @@ def _get_model_map(
     if add_model:
         for name, val in add_model.items():
             if isinstance(val, tuple) and isinstance(val[0], BaseEstimator):
-                model_map[name] = val[0]  # Use only the estimator part
+                model = val[0]
             else:
-                model_map[name] = val
+                model = val
+
+            # Check if the model has not been fitted yet.
+            try:
+                check_is_fitted(model)
+            except NotFittedError:
+                if 'random_state' in model.get_params():
+                    model.set_params(random_state=random_state)
+
+            model_map[name] = model
 
     return model_map
 

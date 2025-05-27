@@ -65,7 +65,7 @@ class StratifiedScaffoldSplitter:
         scaffolds = {}
         for idx, smiles in enumerate(smiles_list):
             try:
-                mol = Chem.MolFromSmiles(smiles)
+                mol = Chem.rdmolfiles.MolFromSmiles(smiles)
                 scaffold = MurckoScaffold.MurckoScaffoldSmiles(
                     mol=mol, includeChirality=False
                 )

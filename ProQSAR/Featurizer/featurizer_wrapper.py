@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from typing import Optional
 from rdkit import Chem, DataStructs
-from rdkit.Chem import MACCSkeys, Descriptors, rdFingerprintGenerator
+from rdkit.Chem import Descriptors, rdFingerprintGenerator, rdMolDescriptors
 from rdkit.ML.Descriptors import MoleculeDescriptors
 from rdkit.Avalon import pyAvalonTools as fpAvalon
 from rdkit.Chem.Pharm2D import Gobbi_Pharm2D, Generate
@@ -10,7 +10,7 @@ from mordred import Calculator, descriptors
 
 
 def RDKFp(
-    mol: Chem.Mol, maxPath: int = 6, fpSize: int = 2048, nBitsPerHash: int = 2
+    mol: Chem.Mol, maxPath: int = 6, fpSize: int = 2048, numBitsPerFeature: int = 2
 ) -> Optional[np.ndarray]:
     """
     Calculate RDKit fingerprint of a molecule.
@@ -33,9 +33,12 @@ def RDKFp(
     if mol is None:
         logging.error("Invalid molecule provided.")
         return None
-    fp = Chem.RDKFingerprint(
-        mol, maxPath=maxPath, fpSize=fpSize, nBitsPerHash=nBitsPerHash
-    )
+
+    mfpgen = rdFingerprintGenerator.GetRDKitFPGenerator(
+        maxPath=maxPath, fpSize=fpSize, numBitsPerFeature=numBitsPerFeature)
+    
+    fp = mfpgen.GetFingerprint(mol)
+    
     ar = np.zeros((fpSize,), dtype=np.uint8)
     DataStructs.ConvertToNumpyArray(fp, ar)
     return ar
@@ -104,7 +107,7 @@ def MACCs(mol: Chem.Mol) -> Optional[np.ndarray]:
     if mol is None:
         logging.error("Invalid molecule provided.")
         return None
-    fp = MACCSkeys.GenMACCSKeys(mol)
+    fp = rdMolDescriptors.GetMACCSKeysFingerprint(mol)
     ar = np.zeros((167,), dtype=np.uint8)
     DataStructs.ConvertToNumpyArray(fp, ar)
     return ar

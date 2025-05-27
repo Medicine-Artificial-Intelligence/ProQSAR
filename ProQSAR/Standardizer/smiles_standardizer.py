@@ -70,7 +70,7 @@ class SMILESStandardizer(BaseEstimator):
             RDKit Mol object.
         """
         try:
-            mol = Chem.MolFromSmiles(smiles)
+            mol = Chem.rdmolfiles.MolFromSmiles(smiles)
             return mol
         except Exception as e:
             logging.error(f"Failed to convert SMILES to Mol: {e}")
@@ -149,7 +149,7 @@ class SMILESStandardizer(BaseEstimator):
             return standardized_smiles, standardized_mol
         except Exception as e:
             logging.error(f"Failed to standardize {smiles}: {e}")
-            return None, None
+            return smiles, original_mol
 
     def standardize_dict_smiles(
         self,

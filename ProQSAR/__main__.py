@@ -5,7 +5,7 @@ import os
 import pickle
 import matplotlib
 import pandas as pd
-from ProQSAR.auto_qsar import AutoQSAR
+from ProQSAR.qsar import ProQSAR
 from ProQSAR.Config.config import Config
 
 
@@ -34,14 +34,14 @@ def parse_kv_pairs(arg_list):
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Run AutoQSAR: full pipeline (train & predict), train-only, or predict-only."
+        description="Run ProQSAR: full pipeline (train & predict), train-only, or predict-only."
     )
     # Mutually exclusive: train vs predict-only
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "--model_path",
         type=str,
-        help="Path to existing AutoQSAR pickle file (for predict-only mode).",
+        help="Path to existing ProQSAR pickle file (for predict-only mode).",
     )
     group.add_argument(
         "--data_dev",
@@ -207,13 +207,13 @@ def main():
     if args.model_path:
         logging.info("Loading model from %s", args.model_path)
         with open(args.model_path, "rb") as f:
-            autoqsar: AutoQSAR = pickle.load(f)
+            proqsar: ProQSAR = pickle.load(f)
 
         logging.info("Loading prediction data from %s", args.data_pred)
         data_pred = read_data(args.data_pred)
 
         logging.info("Running predict()")
-        autoqsar.predict(data_pred, alpha=args.alpha)
+        proqsar.predict(data_pred, alpha=args.alpha)
         
         return
     
@@ -228,7 +228,7 @@ def main():
         data_pred = read_data(args.data_pred)
 
     try:
-        autoqsar = AutoQSAR(
+        proqsar = ProQSAR(
             activity_col=args.activity_col,
             id_col=args.id_col,
             smiles_col=args.smiles_col,
@@ -245,15 +245,15 @@ def main():
             config=config,
         )
 
-        logging.info("Starting AutoQSAR run_all()")
+        logging.info("Starting ProQSAR run_all()")
         # run_all will fit, test-predict, validate, analysis, summary, and
         # only predict(data_pred) if data_pred is not None
-        autoqsar.run_all(data_dev, data_pred, alpha=args.alpha)
+        proqsar.run_all(data_dev, data_pred, alpha=args.alpha)
 
-        logging.info("AutoQSAR pipeline completed successfully.")
+        logging.info("ProQSAR pipeline completed successfully.")
 
     except Exception as e:
-        logging.error("An error occurred during the AutoQSAR run: %s", e, exc_info=True)
+        logging.error("An error occurred during the ProQSAR run: %s", e, exc_info=True)
         exit(1)
 
 
