@@ -22,7 +22,6 @@ from copy import deepcopy
 from typing import Optional, Iterable, Union, Any
 
 
-
 class ProQSAR:
     def __init__(
         self,
@@ -283,73 +282,22 @@ class ProQSAR:
         #    self.test,
         # )
 
-        # Model development & optimization
-        add_model = deepcopy(self.model_dev.add_model)
-        model_map = _get_model_map(
-            task_type=None, add_model=add_model, n_jobs=self.n_jobs
-        )
+        # Model Development & Optimization
+        self.model_dev.fit(self.train)
+        self.select_model = deepcopy(self.model_dev.select_model)
+
+        # Save the model development
+        self.save_pipeline(save_path)
 
         # If select_model in model_dev is a list or None, perform cross validation to choose best
-        # Then optimize hyperparams of the best algorithm
-        if (
-            isinstance(self.model_dev.select_model, list)
-            or not self.model_dev.select_model
-        ):
-            # Get best model by cross validation
-            self.model_dev.fit(self.train)
+        # If select_model in model_dev is a str, directly use this algorithm to build model
+        # If optimizer: optimize hyperparams of the best/selected algorithm & compare to base model
+        # Which better will be used
 
-            # Save the model development
+        if self.optimizer:
+            self._optimize_model(select_model=self.select_model)
             self.save_pipeline(save_path)
 
-            if self.optimizer:
-                report = deepcopy(self.model_dev.report)
-
-                # Optimize hyperparams of the best model
-                self.optimizer.set_params(select_model=self.model_dev.select_model)
-                best_params, best_score = self.optimizer.optimize(self.train)
-
-
-                # Update the best model & params & get the cross validation report
-                new_model = model_map[self.model_dev.select_model].set_params(
-                    **best_params
-                )
-                add_model.update({f"{self.model_dev.select_model}_opt": new_model})
-                self.model_dev.set_params(
-                    add_model=add_model,
-                    select_model=f"{self.model_dev.select_model}_opt",
-                    cross_validate=True,
-                )
-                self.model_dev.fit(self.train)
-
-                self.model_dev.report = (
-                    pd.merge(
-                        report,
-                        self.model_dev.report,
-                        on=["scoring", "cv_cycle"],
-                        suffixes=("_1", "_2"),
-                    )
-                    .set_index(["scoring", "cv_cycle"])
-                    .sort_index(axis=1)
-                    .reset_index()
-                )
-
-        # If select_model in model_dev is a str, directly optimize hyperparams of the chosen algorithm
-        elif isinstance(self.model_dev.select_model, str):
-            if self.optimizer:
-                self.optimizer.set_params(select_model=self.model_dev.select_model)
-                best_params, _ = self.optimizer.optimize(self.train)
-
-                if self.model_dev.select_model not in model_map:
-                    raise ValueError(
-                        f"Selected model '{self.model_dev.select_model}' is not available."
-                    )
-                new_model = model_map[self.model_dev.select_model].set_params(
-                    **best_params
-                )
-                add_model.update({self.model_dev.select_model: new_model})
-                self.model_dev.set_params(add_model=add_model)
-
-            self.model_dev.fit(self.train)
 
         # Conformal predictor
         if self.conf_pred:
@@ -369,76 +317,107 @@ class ProQSAR:
         self.logger.info(f"----- FIT COMPLETE in {elapsed} -----")
 
         return self
-    
-    def optimize(self):
-        """ Optimize the hyperparameters of the model using the development dataset.
-        Parameters:
 
-        -----------
-
-        data_dev : pd.DataFrame
-            The development dataset for fitting the model.
+    def _optimize_model(self, select_model: str) -> None:
         """
-        self.logger.info("----------OPTIMIZING HYPERPARAMETERS----------")
-        
-        # Set the optimizer parameters
-        self.optimizer = (
-            self.config.optimizer.set_params(
-                activity_col=self.activity_col,
-                id_col=self.id_col,
-                n_jobs=self.n_jobs,
-                n_splits=self.n_splits,
-                n_repeats=self.n_repeats,
-                scoring=self.scoring_target,
-                random_state=self.random_state,
-                study_name=self.project_name,
-                deactivate=False,
-            )
-        )
+        Selects the current model, runs hyperparameter optimization,
+        and updates the model if the optimized version improves CV score.
+        """
         # Get the current report and add_model from model_dev
-        report = deepcopy(self.model_dev.report)
         add_model = deepcopy(self.model_dev.add_model)
         model_map = _get_model_map(
             task_type=None, add_model=add_model, n_jobs=self.n_jobs
         )
-        # Optimize hyperparams of the best model
-        self.optimizer.set_params(select_model=self.model_dev.select_model)
-        best_params, _ = self.optimizer.optimize(self.train)
+        # Capture baseline report and score
+        base_report = deepcopy(self.model_dev.report)
 
-        # Update the best model & params & get the cross validation report
-        new_model = model_map[self.model_dev.select_model].set_params(
-            **best_params
-        )
-        add_model.update({f"{self.model_dev.select_model}_opt": new_model})
-        self.model_dev.set_params(
-            add_model=add_model,
-            select_model=f"{self.model_dev.select_model}_opt",
-            cross_validate=True,
-        )
-        self.model_dev.fit(self.train)
+        # Optimize hyperparams of the best/selected algorithm & compare to base model
+        #  Whichever performs better (higher mean CV score) will be used.
 
-        self.model_dev.report = (
-            pd.merge(
-                report,
-                self.model_dev.report,
-                on=["scoring", "cv_cycle"],
-                suffixes=("_1", "_2"),
+        # Hyperparameter optimization on current best model
+        self.optimizer.set_params(select_model=select_model)
+        opt_best_params, opt_best_score = self.optimizer.optimize(self.train)
+
+        # Compare optimized score to baseline
+        if base_report is not None:
+            base_best_score = (
+                base_report
+                .query(f"scoring == @self.model_dev.scoring_target")
+                .set_index("cv_cycle")
+                .at["mean", select_model]
+                )
+
+            if opt_best_score > base_best_score:
+                self.logger.info(
+                    f"Optimized params improved mean CV score "
+                    f"({opt_best_score:.4f} > {base_best_score:.4f}); using optimized model."
+                )
+                # Build optimized model and refit
+                optimized = model_map[select_model].set_params(**opt_best_params)
+                add_model[f"{select_model}_opt"] = optimized
+                self.model_dev.set_params(
+                    add_model=add_model,
+                    select_model=f"{select_model}_opt",
+                    cross_validate=True,
+                )
+                self.model_dev.fit(self.train)
+
+                # Merge baseline and optimized reports for comparison
+                self.model_dev.report = (
+                    pd.merge(
+                        base_report,
+                        self.model_dev.report,
+                        on=["scoring", "cv_cycle"],
+                        suffixes=("_1", "_2"),
+                    )
+                    .set_index(["scoring", "cv_cycle"])
+                    .sort_index(axis=1)
+                    .reset_index()
+                )
+
+            else:
+                # Revert to base if optimization didn’t help
+                self.logger.info(
+                    f"Optimized params did not improve ({opt_best_score:.4f} ≤ {base_best_score:.4f}); "
+                    f"keeping base model."
+                )
+        else:
+            optimized = model_map[select_model].set_params(**opt_best_params)
+            add_model[f"{select_model}_opt"] = optimized
+            self.model_dev.set_params(
+                add_model=add_model,
+                select_model=f"{select_model}_opt",
+                #cross_validate=True,
             )
-            .set_index(["scoring", "cv_cycle"])
-            .sort_index(axis=1)
-            .reset_index()
-        )
+            self.model_dev.fit(self.train)
 
-        # Conformal predictor
+
+    def optimize(self):
+        """
+        Standalone hyperparameter optimization on the existing trained model.
+        """
+        self.logger.info("----------OPTIMIZING HYPERPARAMETERS----------")
+        start_time = time.perf_counter()
+
+        # Ensure optimizer is active
+        self.optimizer = self.config.optimizer.set_params(deactivate=False)
+
+        # Get the current report and add_model from model_dev
+        self._optimize_model(select_model=self.select_model)
+
+        # Refit conformal & AD
         if self.conf_pred:
             self.conf_pred.set_params(model=self.model_dev)
             self.conf_pred.fit(self.train)
 
-        # Applicability domain
         if self.ad:
             self.ad.fit(self.train)
-            
+
+        elapsed = datetime.timedelta(seconds=time.perf_counter() - start_time)
+        self.logger.info(f"----- OPTIMIZATION COMPLETE in {elapsed} -----")
+
         return self
+
 
     def save_pipeline(self, path: str):
         """
@@ -451,6 +430,7 @@ class ProQSAR:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as file:
             pickle.dump(self, file)
+
 
     def load_pipeline(self, path: str):
         """
@@ -604,7 +584,21 @@ class ProQSAR:
         self.logger.info("----------VALIDATING----------")
 
         # Cross validation report
-        self.cv_report = self.model_dev.report
+        if self.model_dev.report is not None:
+            self.cv_report = self.model_dev.report
+        else:
+            self.cv_report = ModelValidation.cross_validation_report(
+                data=self.train,
+                activity_col=self.activity_col,
+                id_col=self.id_col,
+                add_model=self.model_dev.add_model,
+                select_model=self.select_model,
+                scoring_list=self.scoring_list,
+                n_splits=self.n_splits,
+                n_repeats=self.n_repeats,
+                n_jobs=self.n_jobs,
+                random_state=self.random_state,
+            )
         self.cv_report.to_csv(f"{self.save_dir}/cv_report_model.csv", index=False)
 
         # External validation report

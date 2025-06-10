@@ -187,9 +187,6 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
                     self.model = model_map[self.select_model].fit(X=X_data, y=y_data)
                     
                     if self.cross_validate:
-                        logging.info(
-                            "ModelDeveloper: Cross-validation is enabled, generating report."
-                        )
                         self.report = ModelValidation.cross_validation_report(
                             data=data,
                             activity_col=self.activity_col,
