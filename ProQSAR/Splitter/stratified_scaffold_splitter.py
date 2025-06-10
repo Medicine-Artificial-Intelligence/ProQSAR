@@ -5,6 +5,7 @@ import numpy as np
 import logging
 from typing import List, Tuple, Literal, Optional
 from ProQSAR.Splitter.stratified_scaffold_kfold import StratifiedScaffoldKFold
+from ProQSAR.Splitter.scaffold_utils import get_scaffold_groups
 
 
 class StratifiedScaffoldSplitter:
@@ -17,7 +18,7 @@ class StratifiedScaffoldSplitter:
         self,
         activity_col: str,
         smiles_col: str,
-        mol_col: str = 'mol',
+        mol_col: str = "mol",
         random_state: int = 42,
         n_splits: int = 5,
         scaff_based: Literal["median", "mean"] = "median",
@@ -49,56 +50,6 @@ class StratifiedScaffoldSplitter:
         self.scaff_based = scaff_based
         self.shuffle = shuffle
 
-
-    @staticmethod
-    def get_scaffold_groups(
-        data: pd.DataFrame, 
-        smiles_col: str, 
-        mol_col: Optional[str] = None) -> np.ndarray:
-        """
-        Generates scaffold groups from the SMILES strings and returns an array of group indices.
-
-        Parameters:
-        -----------
-        smiles_list : List[str]
-            A list of SMILES strings.
-
-        Returns:
-        --------
-        np.ndarray:
-            An array of integers representing scaffold group indices.
-        """
-        scaffolds = {}
-        for idx, row in data.iterrows():
-            try:
-                if mol_col:
-                    mol = row[mol_col]
-                else:
-                    smiles = row[smiles_col]
-                    mol = Chem.rdmolfiles.MolFromSmiles(smiles)
-
-                scaffold = MurckoScaffold.MurckoScaffoldSmiles(
-                    mol=mol, includeChirality=False
-                )
-            except Exception:
-                logging.error(f"Failed to convert SMILES to Mol: {smiles}")
-                continue
-
-            if scaffold not in scaffolds:
-                scaffolds[scaffold] = [idx]
-            else:
-                scaffolds[scaffold].append(idx)
-
-        scaffold_lists = list(scaffolds.values())
-        groups = np.full(len(data[smiles_col].to_list()), -1, dtype="i")
-        for i, scaff in enumerate(scaffold_lists):
-            groups[scaff] = i
-
-        if -1 in groups:
-            raise AssertionError("Some molecules are not assigned to a group.")
-        
-        return groups
-
     def fit(
         self,
         data: pd.DataFrame,
@@ -122,10 +73,14 @@ class StratifiedScaffoldSplitter:
             shuffle=self.shuffle,
             scaff_based=self.scaff_based,
         )
-        groups = StratifiedScaffoldSplitter.get_scaffold_groups(data, self.smiles_col, self.mol_col)
-        
+        groups = get_scaffold_groups(data, self.smiles_col, self.mol_col)
+
         y = data[self.activity_col].to_numpy(dtype=float)
-        X = data.drop([self.activity_col, self.smiles_col, self.smiles_col], axis=1, errors='ignore').to_numpy()
+        X = data.drop(
+            [self.activity_col, self.smiles_col, self.smiles_col],
+            axis=1,
+            errors="ignore",
+        ).to_numpy()
         train_idx, test_idx = next(cv.split(X, y, groups))
         data_train = data.iloc[train_idx]
         data_test = data.iloc[test_idx]

@@ -26,7 +26,7 @@ class FeatureGenerator(BaseEstimator):
         activity_col: str = "activity",
         id_col: str = "id",
         smiles_col: str = "SMILES",
-        feature_types: Union[list, str] = ['ECFP2','ECFP4','ECFP6','FCFP2','FCFP4','FCFP6','RDK5','RDK6','RDK7','MACCS','avalon','rdkdes','pubchem','mordred'],
+        feature_types: Union[list, str] = ['ECFP4','FCFP4','RDK5','MACCS','avalon','rdkdes','pubchem','mordred'],
         save_dir: Optional[str] = None,
         data_name: Optional[str] = None,
         n_jobs=1,

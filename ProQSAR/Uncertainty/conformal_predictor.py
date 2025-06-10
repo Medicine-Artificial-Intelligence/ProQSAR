@@ -83,7 +83,9 @@ class ConformalPredictor(BaseEstimator):
             self.cp.fit(X=X_data, y=y_data)
             self.cp.conformity_scores_ = self.cp.conformity_scores_.astype(np.float64)
 
-            logging.info(f"ConformalPredictor: Fitted a MAPIE {'Classifier' if self.task_type == 'C' else 'Regressor'}.")
+            logging.info(
+                f"ConformalPredictor: Fitted a MAPIE {'Classifier' if self.task_type == 'C' else 'Regressor'}."
+            )
 
             if self.save_dir:
                 os.makedirs(self.save_dir, exist_ok=True)

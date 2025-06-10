@@ -99,7 +99,7 @@ def _get_model_map(
         "LogisticRegression": LogisticRegression(
             max_iter=10000, solver="liblinear", random_state=random_state, n_jobs=n_jobs
         ),
-        "KNeighborsClassifier": KNeighborsClassifier(n_neighbors=20, n_jobs=n_jobs),
+        "KNeighborsClassifier": KNeighborsClassifier(n_jobs=n_jobs),
         "SVC": SVC(probability=True, max_iter=10000, random_state=random_state),
         "RandomForestClassifier": RandomForestClassifier(
             random_state=random_state, n_jobs=n_jobs
@@ -114,9 +114,9 @@ def _get_model_map(
             random_state=random_state
         ),
         "XGBClassifier": XGBClassifier(
-            random_state=random_state, verbosity=0, eval_metric="logloss"
+            random_state=random_state, verbosity=0, eval_metric="logloss", n_jobs=n_jobs
         ),
-        "CatBoostClassifier": CatBoostClassifier(random_state=random_state, verbose=0),
+        "CatBoostClassifier": CatBoostClassifier(random_state=random_state, verbose=0, thread_count=n_jobs),
         "MLPClassifier": MLPClassifier(
             alpha=0.01,
             max_iter=10000,
@@ -144,8 +144,9 @@ def _get_model_map(
             random_state=random_state,
             verbosity=0,
             objective="reg:squarederror",
+            n_jobs=n_jobs,
         ),
-        "CatBoostRegressor": CatBoostRegressor(random_state=random_state, verbose=0),
+        "CatBoostRegressor": CatBoostRegressor(random_state=random_state, verbose=0, thread_count=n_jobs),
         "MLPRegressor": MLPRegressor(
             alpha=0.01,
             max_iter=10000,
@@ -155,7 +156,7 @@ def _get_model_map(
         "Ridge": Ridge(random_state=random_state),
         "ElasticNetCV": ElasticNetCV(cv=5, n_jobs=n_jobs, random_state=random_state),
     }
-    
+
     if task_type == "C":
         model_map = model_map_c
     elif task_type == "R":
@@ -178,7 +179,7 @@ def _get_model_map(
             try:
                 check_is_fitted(model)
             except NotFittedError:
-                if 'random_state' in model.get_params():
+                if "random_state" in model.get_params():
                     model.set_params(random_state=random_state)
 
             model_map[name] = model

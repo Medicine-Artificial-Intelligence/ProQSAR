@@ -52,6 +52,7 @@ class StratifiedScaffoldKFold(GroupsConsumerMixin, _BaseKFold):
         super().__init__(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
 
         self.scaff_based = scaff_based
+
         if scaff_based not in ["median", "mean"]:
             raise ValueError(
                 'scaff_based is expected to be "median" or "mean". The assigned value was {val}'.format(

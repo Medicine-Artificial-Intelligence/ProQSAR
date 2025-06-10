@@ -136,7 +136,7 @@ class ApplicabilityDomain(BaseEstimator):
             self.offset = np.percentile(ad_values, 100 * self.rate_of_outliers)
 
             logging.info(f"ApplicabilityDomain: Using '{self.method}' method.")
-            
+
             if self.save_dir:
                 os.makedirs(self.save_dir, exist_ok=True)
                 with open(f"{self.save_dir}/applicability_domain.pkl", "wb") as file:

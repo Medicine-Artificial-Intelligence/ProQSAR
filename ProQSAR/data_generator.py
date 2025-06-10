@@ -30,21 +30,28 @@ class DataGenerator(BaseEstimator):
             smiles_col=self.smiles_col, n_jobs=self.n_jobs
         )
         self.featurizer = self.config.featurizer.set_params(
-            mol_col=self.mol_col if self.standardizer.deactivate else "standardized_mol",
+            mol_col=(
+                self.mol_col if self.standardizer.deactivate else "standardized_mol"
+            ),
             activity_col=self.activity_col,
             id_col=self.id_col,
-            smiles_col=self.smiles_col if self.standardizer.deactivate else ("standardized_" + self.smiles_col),
+            smiles_col=(
+                self.smiles_col
+                if self.standardizer.deactivate
+                else ("standardized_" + self.smiles_col)
+            ),
             n_jobs=self.n_jobs,
             save_dir=self.save_dir,
         )
 
     def generate(self, data):
-        self.standardized_data = pd.DataFrame(
+        standardized_data = pd.DataFrame(
             self.standardizer.standardize_dict_smiles(data)
         )
+
         data_features = self.featurizer.set_params(
             data_name=self.data_name
-        ).generate_features(self.standardized_data)
+        ).generate_features(standardized_data)
 
         if len(data_features.keys()) == 1:
             return list(data_features.values())[0]

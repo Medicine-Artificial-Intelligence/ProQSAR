@@ -1,23 +1,23 @@
-from typing import List, Tuple
-from rdkit import Chem
-from rdkit.Chem.Scaffolds import MurckoScaffold
-import logging
-import pandas as pd
 import numpy as np
-from typing import Optional
+import pandas as pd
+from typing import Tuple
+from ProQSAR.Splitter.scaffold_utils import generate_scaffold_dict, check_scaffold_dict
+
 
 class ScaffoldSplitter:
     """
-    A class used to split data into training and testing sets based on molecular scaffolds.
+    Adapted from  https://github.com/deepchem/deepchem/blob/master/deepchem/splits/splitters.py
+    Splits a dataset into training and test sets based on Bemis-Murcko scaffolds.
+    This deterministic splitting method ensures that molecules with the same scaffold are
+    grouped together.
     """
 
     def __init__(
         self,
         activity_col: str,
         smiles_col: str,
-        mol_col: str = 'mol',
+        mol_col: str = "mol",
         test_size: float = 0.2,
-        random_state: int = 42,
     ):
         """
         Constructs all the necessary attributes for the ScaffoldSplitter object.
@@ -33,82 +33,44 @@ class ScaffoldSplitter:
         random_state : int, optional
             The random seed used by the random number generator (default is 42).
         """
-        self.test_size = test_size
-        self.random_state = random_state
         self.activity_col = activity_col
         self.smiles_col = smiles_col
         self.mol_col = mol_col
-
-    @staticmethod
-    def scaffold(data: pd.DataFrame, smiles_col: str, mol_col: Optional[str] = None) -> List[List[int]]:
-        """
-        Generates scaffold groups from the SMILES strings and returns a list of scaffold indices.
-
-        Parameters:
-        -----------
-        data : pd.DataFrame
-            The dataset containing the features and labels.
-        smiles_col : str
-            The name of the column containing SMILES strings.
-
-        Returns:
-        --------
-        List[List[int]]:
-            A list of lists, where each inner list contains the indices of molecules that share the same scaffold.
-        """
-        scaffolds = {}
-        for idx, row in data.iterrows():
-            try:
-                if mol_col:
-                    mol = row[mol_col]
-                else:
-                    smiles = row[smiles_col]
-                    mol = Chem.rdmolfiles.MolFromSmiles(smiles)
-
-                scaffold = MurckoScaffold.MurckoScaffoldSmiles(
-                    mol=mol, includeChirality=False
-                )
-            except Exception:
-                logging.error(f"Failed to convert SMILES to Mol: {smiles}")
-                continue
-            if scaffold not in scaffolds:
-                scaffolds[scaffold] = [idx]
-            else:
-                scaffolds[scaffold].append(idx)
-
-        scaffold_lists = list(scaffolds.values())
-        return scaffold_lists
+        self.test_size = test_size
 
     def fit(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Splits the data into training and testing sets based on molecular scaffolds.
 
-        Parameters:
-        -----------
-        data : pd.DataFrame
-            The dataset containing the features and labels.
+        # generate scaffolds
+        all_scaffolds = generate_scaffold_dict(data, self.smiles_col, self.mol_col)
+        check_scaffold_dict(data, all_scaffolds)
 
-        Returns:
-        --------
-        Tuple[pd.DataFrame, pd.DataFrame]:
-            The training and testing sets as pandas DataFrames.
-        """
-        scaffold_lists = ScaffoldSplitter.scaffold(data, self.smiles_col, self.mol_col)
-        count_list = [len(i) for i in scaffold_lists]
-        if np.array(count_list).sum() != len(data):
-            raise ValueError("Failed to generate scaffold groups")
-        np.random.seed(self.random_state)
-        np.random.shuffle(scaffold_lists)
+        # sort scaffolds by length and then by first index
+        # This ensures that larger scaffolds are prioritized in the training set
+        # and smaller scaffolds are used for testing.
+        all_scaffolds = {key: sorted(value) for key, value in all_scaffolds.items()}
+        all_scaffold_sets = [
+            scaffold_set
+            for (scaffold, scaffold_set) in sorted(
+                all_scaffolds.items(), key=lambda x: (len(x[1]), x[1][0]), reverse=True
+            )
+        ]
 
-        num_molecules = len(data)
-        num_test = int(np.floor(self.test_size * num_molecules))
+        # get train, valid test indices
+        frac_train = 1 - self.test_size
+        train_cutoff = frac_train * len(data)
+
         train_idx, test_idx = [], []
-        for scaffold_list in scaffold_lists:
-            if len(test_idx) + len(scaffold_list) <= num_test:
-                test_idx.extend(scaffold_list)
+        for scaffold_set in all_scaffold_sets:
+            if len(train_idx) + len(scaffold_set) > train_cutoff:
+                test_idx.extend(scaffold_set)
             else:
-                train_idx.extend(scaffold_list)
+                train_idx.extend(scaffold_set)
 
-        data_train = data.iloc[train_idx]
-        data_test = data.iloc[test_idx]
+        assert (
+            len(set(train_idx).intersection(set(test_idx))) == 0
+        ), "Train and test indices overlap."
+
+        data_train = data.loc[train_idx].copy()
+        data_test = data.loc[test_idx].copy()
+
         return data_train, data_test

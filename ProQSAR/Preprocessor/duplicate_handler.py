@@ -11,6 +11,8 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
         self,
         activity_col: Optional[str] = None,
         id_col: Optional[str] = None,
+        cols: bool = True,
+        rows: bool = True,
         save_method: bool = False,
         save_dir: str = "Project/DuplicateHandler",
         save_trans_data: bool = False,
@@ -31,6 +33,8 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
         """
         self.id_col = id_col
         self.activity_col = activity_col
+        self.cols = cols
+        self.rows = rows
         self.save_method = save_method
         self.save_dir = save_dir
         self.save_trans_data = save_trans_data
@@ -92,7 +96,14 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
             temp_data = data.drop(
                 columns=[self.id_col, self.activity_col], errors="ignore"
             )
-            dup_rows = temp_data.index[temp_data.duplicated()].tolist()
+            if not self.cols:
+                self.dup_cols = []
+
+            if not self.rows:
+                dup_rows = []
+            else:
+                dup_rows = temp_data.index[temp_data.duplicated()].tolist()
+
             transformed_data = data.drop(index=dup_rows, columns=self.dup_cols)
             transformed_data.reset_index(drop=True, inplace=True)
 

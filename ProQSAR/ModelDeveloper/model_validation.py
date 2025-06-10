@@ -1,4 +1,5 @@
 import os
+import gc
 import math
 import logging
 import numpy as np
@@ -198,6 +199,8 @@ class ModelValidation:
         result = []
 
         for name, model in models.items():
+            logging.info(f"Cross-validating model: {name}")
+            # Perform cross-validation
             scores = cross_validate(
                 model,
                 X_data,
@@ -247,6 +250,8 @@ class ModelValidation:
                             "value": np.median(metric_scores),
                         }
                     )
+            del scores
+            gc.collect()
 
         return pd.DataFrame(result)
 

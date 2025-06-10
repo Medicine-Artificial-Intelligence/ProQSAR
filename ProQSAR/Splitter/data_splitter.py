@@ -1,5 +1,6 @@
 from ProQSAR.Splitter.random_splitter import RandomSplitter
 from ProQSAR.Splitter.stratified_random_splitter import StratifiedRandomSplitter
+from ProQSAR.Splitter.random_scaffold_splitter import RandomScaffoldSplitter
 from ProQSAR.Splitter.scaffold_splitter import ScaffoldSplitter
 from ProQSAR.Splitter.stratified_scaffold_splitter import StratifiedScaffoldSplitter
 from sklearn.base import BaseEstimator
@@ -25,6 +26,7 @@ class Splitter(BaseEstimator):
         random_state: int = 42,
         save_dir: Optional[str] = "Project/Splitter",
         data_name: Optional[str] = None,
+        deactivate: bool = False,
     ):
         """
         Constructs all the necessary attributes for the Splitter object.
@@ -36,7 +38,7 @@ class Splitter(BaseEstimator):
         smiles_col : str
             The name of the column containing SMILES strings for molecular data.
         option : str
-            The splitting method, either "random", "stratified_random", "scaffold", or "stratified_scaffold".
+            The splitting method, either "random", "stratified_random", "scaffold", "random_scaffold"or "stratified_scaffold".
         test_size : float, optional
             The proportion of the dataset to include in the test split (default is 0.2).
         n_splits : int, optional
@@ -53,6 +55,7 @@ class Splitter(BaseEstimator):
         self.n_splits = n_splits
         self.save_dir = save_dir
         self.data_name = data_name
+        self.deactivate = deactivate
 
     def fit(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -69,6 +72,12 @@ class Splitter(BaseEstimator):
         Tuple[pd.DataFrame, pd.DataFrame]
             The training and testing sets as pandas DataFrames.
         """
+        if self.deactivate:
+            logging.info(
+                "Splitter is deactivated. Skipping fit and returning original data as train set."
+            )
+            return data, None
+
         try:
             if self.option == "random":
                 splitter = RandomSplitter(
@@ -84,6 +93,13 @@ class Splitter(BaseEstimator):
                 )
             elif self.option == "scaffold":
                 splitter = ScaffoldSplitter(
+                    self.activity_col,
+                    self.smiles_col,
+                    self.mol_col,
+                    test_size=self.test_size,
+                )
+            elif self.option == "random_scaffold":
+                splitter = RandomScaffoldSplitter(
                     self.activity_col,
                     self.smiles_col,
                     self.mol_col,

@@ -36,18 +36,18 @@ def RDKFp(
 
     try:
         mfpgen = rdFingerprintGenerator.GetRDKitFPGenerator(
-            maxPath=maxPath, fpSize=fpSize, numBitsPerFeature=numBitsPerFeature)
-        
+            maxPath=maxPath, fpSize=fpSize, numBitsPerFeature=numBitsPerFeature
+        )
+
         fp = mfpgen.GetFingerprint(mol)
-        
+
         ar = np.zeros((fpSize,), dtype=np.uint8)
         DataStructs.cDataStructs.ConvertToNumpyArray(fp, ar)
         return ar
-    
+
     except Exception as e:
         logging.error(f"Failed to calculate RDKFp: {e}")
         return None
-
 
 
 def ECFPs(
@@ -74,17 +74,18 @@ def ECFPs(
     if mol is None:
         logging.error("Invalid molecule provided.")
         return None
-    
+
     try:
         atomInvariantsGenerator = None
         if useFeatures:
-            atomInvariantsGenerator = rdFingerprintGenerator.GetMorganFeatureAtomInvGen()
+            atomInvariantsGenerator = (
+                rdFingerprintGenerator.GetMorganFeatureAtomInvGen()
+            )
 
         mfpgen = rdFingerprintGenerator.GetMorganGenerator(
-            radius=radius,
-            fpSize=nBits, 
-            atomInvariantsGenerator=atomInvariantsGenerator)
-        
+            radius=radius, fpSize=nBits, atomInvariantsGenerator=atomInvariantsGenerator
+        )
+
         fp = mfpgen.GetFingerprint(mol)
 
         ar = np.zeros((nBits,), dtype=np.uint8)
@@ -94,6 +95,7 @@ def ECFPs(
     except Exception as e:
         logging.error(f"Failed to calculate ECFPs/FCFPs: {e}")
         return None
+
 
 def MACCs(mol: Chem.Mol) -> Optional[np.ndarray]:
     """
@@ -117,7 +119,7 @@ def MACCs(mol: Chem.Mol) -> Optional[np.ndarray]:
     if mol is None:
         logging.error("Invalid molecule provided.")
         return None
-    
+
     try:
         fp = rdMolDescriptors.GetMACCSKeysFingerprint(mol)
         ar = np.zeros((167,), dtype=np.uint8)
@@ -127,6 +129,7 @@ def MACCs(mol: Chem.Mol) -> Optional[np.ndarray]:
     except Exception as e:
         logging.error(f"Failed to calculate MACCS keys fingerprint: {e}")
         return None
+
 
 def Avalon(mol: Chem.Mol) -> Optional[np.ndarray]:
     """
@@ -162,7 +165,7 @@ def Avalon(mol: Chem.Mol) -> Optional[np.ndarray]:
         ar = np.zeros((1024,), dtype=np.int8)
         DataStructs.cDataStructs.ConvertToNumpyArray(fp, ar)
         return ar
-    
+
     except Exception as e:
         logging.error(f"Failed to calculate Avalon fingerprint: {e}")
         return None
@@ -194,13 +197,13 @@ def RDKDes(mol: Chem.Mol) -> Optional[np.ndarray]:
     if mol is None:
         logging.error("Invalid molecule provided.")
         return None
-    
+
     try:
         des_list = [x[0] for x in Descriptors._descList]
         calculator = MoleculeDescriptors.MolecularDescriptorCalculator(des_list)
         descriptors = calculator.CalcDescriptors(mol)
         return np.array(descriptors, dtype=np.float64)
-    
+
     except Exception as e:
         logging.error(f"Failed to compute RDKit descriptors: {e}")
         return None
@@ -232,7 +235,7 @@ def mol2pharm2dgbfp(mol: Chem.Mol) -> Optional[np.ndarray]:
     if mol is None:
         logging.error("Invalid molecule provided.")
         return None
-    
+
     try:
         fp = Generate.Gen2DFingerprint(mol, Gobbi_Pharm2D.factory)
         return np.frombuffer(fp.ToBitString().encode(), dtype=np.uint8) - ord("0")
@@ -240,6 +243,7 @@ def mol2pharm2dgbfp(mol: Chem.Mol) -> Optional[np.ndarray]:
     except Exception as e:
         logging.error(f"Failed to compute RDKit descriptors: {e}")
         return None
+
 
 def MordredDes(mol: Chem.Mol) -> Optional[np.ndarray]:
     """
@@ -271,7 +275,7 @@ def MordredDes(mol: Chem.Mol) -> Optional[np.ndarray]:
         desc = calc(mol)
         values = [float(val) if val is not None else np.nan for val in desc]
         return np.array(values, dtype=np.float64)
-    
+
     except Exception as e:
         logging.error(f"Failed to compute Mordred descriptors: {e}")
         return None

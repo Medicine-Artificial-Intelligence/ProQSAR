@@ -1,4 +1,4 @@
-from ProQSAR.Splitter.scaffold_splitter import ScaffoldSplitter
+from ProQSAR.Splitter.random_scaffold_splitter import ScaffoldSplitter
 from rdkit import Chem
 from rdkit.Chem.Scaffolds import MurckoScaffold
 import pandas as pd

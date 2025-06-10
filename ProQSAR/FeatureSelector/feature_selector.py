@@ -55,7 +55,7 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
         id_col: str = "id",
         select_method: Optional[Union[str, List[str]]] = None,
         add_method: Optional[dict] = None,
-        compare: bool = True,
+        cross_validate: bool = True,
         save_method: bool = False,
         save_trans_data: bool = False,
         trans_data_name: str = "trans_data",
@@ -75,7 +75,7 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
         self.id_col = id_col
         self.select_method = select_method
         self.add_method = add_method
-        self.compare = compare
+        self.cross_validate = cross_validate
         self.save_method = save_method
         self.save_trans_data = save_trans_data
         self.trans_data_name = trans_data_name
@@ -135,7 +135,7 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
             self.feature_selector = None
             self.report = None
             if isinstance(self.select_method, list) or not self.select_method:
-                if self.compare:
+                if self.cross_validate:
                     logging.info(
                         "FeatureSelector: Selecting the optimal feature selection method "
                         f"among {self.select_method or list(method_map.keys())}, "
@@ -172,9 +172,7 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
                         )
                         return self
                     else:
-                        logging.info(
-                            f"FeatureSelector: Using '{self.select_method}'."
-                        )
+                        logging.info(f"FeatureSelector: Using '{self.select_method}'.")
                         self.feature_selector = method_map[self.select_method].fit(
                             X=X_data, y=y_data
                         )
@@ -195,24 +193,29 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
                     self.feature_selector = method_map[self.select_method].fit(
                         X=X_data, y=y_data
                     )
-                    self.report = evaluate_feature_selectors(
-                        data=data,
-                        activity_col=self.activity_col,
-                        id_col=self.id_col,
-                        select_method=None if self.compare else self.select_method,
-                        add_method=self.add_method,
-                        scoring_list=self.scoring_list,
-                        n_splits=self.n_splits,
-                        n_repeats=self.n_repeats,
-                        visualize=self.visualize,
-                        save_fig=self.save_fig,
-                        fig_prefix=self.fig_prefix,
-                        save_csv=self.save_cv_report,
-                        csv_name=self.cv_report_name,
-                        save_dir=self.save_dir,
-                        n_jobs=self.n_jobs,
-                        random_state=self.random_state,
-                    )
+
+                    if self.cross_validate:
+                        logging.info(
+                            "FeatureSelector: Cross-validation is enabled, generating report."
+                        )
+                        self.report = evaluate_feature_selectors(
+                            data=data,
+                            activity_col=self.activity_col,
+                            id_col=self.id_col,
+                            select_method=self.select_method,
+                            add_method=self.add_method,
+                            scoring_list=self.scoring_list,
+                            n_splits=self.n_splits,
+                            n_repeats=self.n_repeats,
+                            visualize=self.visualize,
+                            save_fig=self.save_fig,
+                            fig_prefix=self.fig_prefix,
+                            save_csv=self.save_cv_report,
+                            csv_name=self.cv_report_name,
+                            save_dir=self.save_dir,
+                            n_jobs=self.n_jobs,
+                            random_state=self.random_state,
+                        )
             else:
                 raise AttributeError(
                     f"'select_method' is entered as a {type(self.select_method)}"
@@ -256,7 +259,9 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
                     "FeatureSelector is not fitted yet. Call 'fit' before using this method."
                 )
 
-            X_data = data.drop([self.activity_col, self.id_col], axis=1, errors="ignore")
+            X_data = data.drop(
+                [self.activity_col, self.id_col], axis=1, errors="ignore"
+            )
             selected_features = self.feature_selector.transform(X_data)
 
             transformed_data = pd.DataFrame(
@@ -264,8 +269,17 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
                 columns=X_data.columns[self.feature_selector.get_support()],
             )
 
-            cols = [col for col in [self.id_col, self.activity_col] if col in data.columns]
+            cols = [
+                col for col in [self.id_col, self.activity_col] if col in data.columns
+            ]
             transformed_data[cols] = data[cols].values
+
+            if self.activity_col in transformed_data.columns:
+                transformed_data[self.activity_col] = (
+                    transformed_data[self.activity_col].astype(int)
+                    if self.task_type == "C"
+                    else transformed_data[self.activity_col].astype(float)
+                )
 
             if self.save_trans_data:
                 if self.save_dir and not os.path.exists(self.save_dir):

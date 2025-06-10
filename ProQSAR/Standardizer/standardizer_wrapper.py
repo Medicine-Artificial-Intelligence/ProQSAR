@@ -36,21 +36,7 @@ def canonicalize_tautomer(mol: Chem.Mol) -> Chem.Mol:
     >>> mol = Chem.MolFromSmiles("O=C1NC=CC1=O")
     >>> canonicalized = canonicalize_tautomer(mol)
     """
-    # 1) Manually clear aromatic flags on atoms and bonds
-    for atom in mol.GetAtoms():
-        atom.SetIsAromatic(False)
-    for bond in mol.GetBonds():
-        bond.SetIsAromatic(False)
-
-    # 2) Try to get canonical tautomer directly
-    enum = rdMolStandardize.TautomerEnumerator()
-    try:
-        return enum.Canonicalize(mol)  # single best tautomer
-    except Exception as e:
-        logging.warning(f"[WARN] Canonicalize failed: {e}")
-        # 3) Fallback: enumerate all and pick first
-        tas = enum.Enumerate(mol)
-        return tas[0] if tas else mol
+    return rdMolStandardize.CanonicalTautomer(mol)
 
 
 def salts_remover(mol: Chem.Mol) -> Chem.Mol:

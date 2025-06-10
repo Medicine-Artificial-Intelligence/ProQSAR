@@ -1,7 +1,10 @@
 import os
 import pickle
+import time
+import datetime
 import pandas as pd
 import matplotlib
+
 matplotlib.use("Agg")
 
 from ProQSAR.ModelDeveloper.model_developer_utils import (
@@ -16,17 +19,15 @@ from ProQSAR.Config.debug import setup_logging
 from ProQSAR.ModelDeveloper.model_validation import ModelValidation
 from ProQSAR.Analysis.statistical_analysis import StatisticalAnalysis
 from copy import deepcopy
-from typing import Optional, Iterable, Union
+from typing import Optional, Iterable, Union, Any
 
-
-logger = setup_logging()
 
 
 class ProQSAR:
     def __init__(
         self,
-        activity_col: str,
-        id_col: str,
+        activity_col: str = "pChEMBL",
+        id_col: str = "ID",
         smiles_col: str = "SMILES",
         mol_col: str = "mol",
         project_name: str = "Project",
@@ -36,10 +37,14 @@ class ProQSAR:
         scoring_list: Optional[Union[list, str]] = None,
         n_splits: int = 5,
         n_repeats: int = 5,
+        keep_all_train: bool = False,
+        keep_all_test: bool = False,
+        keep_all_pred: bool = False,
         config=None,
         log_file: Optional[str] = "logging.log",
         log_level: str = "INFO",
     ):
+        # Basic settings
         self.activity_col = activity_col
         self.id_col = id_col
         self.smiles_col = smiles_col
@@ -51,18 +56,24 @@ class ProQSAR:
         self.scoring_list = scoring_list
         self.n_splits = n_splits
         self.n_repeats = n_repeats
+        self.keep_all_test = keep_all_test
+        self.keep_all_pred = keep_all_pred
+
+        # Configuration and directories
         self.config = config or Config()
+        self.save_dir = f"Project/{self.project_name}"
+        os.makedirs(self.save_dir, exist_ok=True)
 
-        self.logger = setup_logging(log_level, f"{project_name}/{log_file}")
-
-        self.shape_summary = {}
+        # Logging setup
+        self.logger = setup_logging(log_level, f"{self.save_dir}/{log_file}")
+        self.shape_summary: dict[str, Any] = {}
 
         self.optimaldata = OptimalDataset(
             activity_col,
             id_col,
             self.smiles_col,
             mol_col,
-            save_dir=self.project_name,
+            save_dir=self.save_dir,
             n_jobs=self.n_jobs,
             random_state=self.random_state,
             config=self.config,
@@ -79,13 +90,17 @@ class ProQSAR:
             id_col,
             smiles_col,
             mol_col,
-            n_jobs=1,
-            save_dir=self.project_name,
+            n_jobs=self.n_jobs,
+            save_dir=self.save_dir,
             config=self.config,
         )
+
         self.datapreprocessor = DataPreprocessor(
-            activity_col, id_col, save_dir=self.project_name, config=self.config
+            activity_col, id_col, save_dir=self.save_dir, config=self.config
         )
+        if keep_all_train:
+            self.datapreprocessor.duplicate.set_params(rows=False)
+            self.datapreprocessor.multiv_outlier.set_params(deactivate=True)
 
         self.splitter = self.config.splitter.set_params(
             activity_col=activity_col,
@@ -99,7 +114,7 @@ class ProQSAR:
                 if self.config.standardizer.deactivate
                 else f"standardized_mol"
             ),
-            save_dir=self.project_name,
+            save_dir=self.save_dir,
             random_state=self.random_state,
         )
 
@@ -107,7 +122,7 @@ class ProQSAR:
             activity_col=activity_col,
             id_col=id_col,
             save_trans_data=True,
-            save_dir=self.project_name,
+            save_dir=self.save_dir,
             n_jobs=self.n_jobs,
             random_state=self.random_state,
             scoring_target=self.scoring_target,
@@ -162,7 +177,12 @@ class ProQSAR:
             else None
         )
 
-    def fit(self, data_dev):
+    def fit(self, data_dev: pd.DataFrame):
+        """
+        Fit the complete QSAR pipeline on the development dataset.
+        """
+
+        start_time = time.perf_counter()
         self.logger.info("----------FITTING----------")
 
         # Generating features, splitting & preprocessing
@@ -188,7 +208,8 @@ class ProQSAR:
 
             self.data_dev = self.optimaldata.data_features[self.selected_feature]
             self.train = self.optimaldata.train[self.selected_feature + "_preprocessed"]
-            self.test = self.optimaldata.test[self.selected_feature + "_preprocessed"]
+            self.test = self.optimaldata.test[self.selected_feature]
+            # self.test = self.optimaldata.test[self.selected_feature + "_preprocessed"]
             self.shape_summary = self.optimaldata.shape_summary
 
         elif (
@@ -196,10 +217,9 @@ class ProQSAR:
             or self.config.featurizer.deactivate
         ):
 
-            if self.config.featurizer.deactivate:
-                self.selected_feature = "original"
-            else:
-                self.selected_feature = self.config.featurizer.feature_types
+            self.selected_feature = (
+                "original" if self.config.featurizer.deactivate else self.config.featurizer.feature_types
+            )
 
             # Generate features
             self.data_dev = self.datagenerator.set_params(
@@ -212,11 +232,12 @@ class ProQSAR:
 
             ## Record data shape transformation
             self._record_shape("original", self.selected_feature, "train", self.train)
-            self._record_shape("original", self.selected_feature, "test", self.train)
+            # self._record_shape("original", self.selected_feature, "test", self.test)
 
             # Train data preprocessing
             self.datapreprocessor.set_params(data_name=f"train_{self.selected_feature}")
-            self.train = self.datapreprocessor.fit_transform(self.train)
+            self.datapreprocessor.fit(self.train)
+            self.train = self.datapreprocessor.transform(self.train)
 
             ## Record data shape transformation
             for step, transformer in self.datapreprocessor.pipeline.steps:
@@ -225,25 +246,28 @@ class ProQSAR:
                 )
 
             # Test data preprocessing
-            self.datapreprocessor.set_params(data_name=f"test_{self.selected_feature}")
-            self.test = self.datapreprocessor.transform(self.test)
+            # self.datapreprocessor.set_params(data_name=f"test_{self.selected_feature}")
+            # self.test = self.datapreprocessor.transform(self.test)
 
             ## Record data shape transformation
-            for step, transformer in self.datapreprocessor.pipeline.steps:
-                self._record_shape(
-                    step, self.selected_feature, "test", transformer.transformed_data
-                )
+            # for step, transformer in self.datapreprocessor.pipeline.steps:
+            #    self._record_shape(
+            #        step, self.selected_feature, "test", transformer.transformed_data
+            #    )
+
+        # Save the fitted data preprocessor
+        save_path = f"{self.save_dir}/proqsar.pkl"
+        self.save_pipeline(save_path)
+    
 
         # Feature selection - train
         self.feature_selector.set_params(
-            trans_data_name=f"train_{self.selected_feature}_fs"
+            trans_data_name=f"train_{self.selected_feature}_feature_selector",
         )
         self.train = self.feature_selector.fit_transform(self.train)
 
-        self.feature_selector.set_params(
-            trans_data_name=f"test_{self.selected_feature}_fs"
-        )
-        self.test = self.feature_selector.transform(self.test)
+        # Save the fitted feature selector
+        self.save_pipeline(save_path)
 
         ## Record data shape transformation after feature selection
         self._record_shape(
@@ -252,12 +276,12 @@ class ProQSAR:
             "train",
             self.train,
         )
-        self._record_shape(
-            f"feature_selector ({self.feature_selector.select_method})",
-            self.selected_feature,
-            "test",
-            self.test,
-        )
+        # self._record_shape(
+        #    f"feature_selector ({self.feature_selector.select_method})",
+        #    self.selected_feature,
+        #    "test",
+        #    self.test,
+        # )
 
         # Model development & optimization
         add_model = deepcopy(self.model_dev.add_model)
@@ -274,12 +298,16 @@ class ProQSAR:
             # Get best model by cross validation
             self.model_dev.fit(self.train)
 
+            # Save the model development
+            self.save_pipeline(save_path)
+
             if self.optimizer:
                 report = deepcopy(self.model_dev.report)
 
                 # Optimize hyperparams of the best model
                 self.optimizer.set_params(select_model=self.model_dev.select_model)
-                best_params, _ = self.optimizer.optimize(self.train)
+                best_params, best_score = self.optimizer.optimize(self.train)
+
 
                 # Update the best model & params & get the cross validation report
                 new_model = model_map[self.model_dev.select_model].set_params(
@@ -289,7 +317,7 @@ class ProQSAR:
                 self.model_dev.set_params(
                     add_model=add_model,
                     select_model=f"{self.model_dev.select_model}_opt",
-                    compare=False,
+                    cross_validate=True,
                 )
                 self.model_dev.fit(self.train)
 
@@ -333,14 +361,187 @@ class ProQSAR:
             self.ad.fit(self.train)
 
         # Save pipeline
-        save_path = f"{self.project_name}/proqsar.pkl"
-        with open(save_path, "wb") as file:
-            pickle.dump(self, file)
-        self.logger.info(
-            f"ProQSAR: Automated QSAR pipeline saved at: {save_path}."
-        )
+        self.save_pipeline(save_path)
+        self.logger.info(f"ProQSAR: Pipeline saved at {save_path}.")
+
+        # End the timer
+        elapsed = datetime.timedelta(seconds=time.perf_counter() - start_time)
+        self.logger.info(f"----- FIT COMPLETE in {elapsed} -----")
 
         return self
+    
+    def optimize(self):
+        """ Optimize the hyperparameters of the model using the development dataset.
+        Parameters:
+
+        -----------
+
+        data_dev : pd.DataFrame
+            The development dataset for fitting the model.
+        """
+        self.logger.info("----------OPTIMIZING HYPERPARAMETERS----------")
+        
+        # Set the optimizer parameters
+        self.optimizer = (
+            self.config.optimizer.set_params(
+                activity_col=self.activity_col,
+                id_col=self.id_col,
+                n_jobs=self.n_jobs,
+                n_splits=self.n_splits,
+                n_repeats=self.n_repeats,
+                scoring=self.scoring_target,
+                random_state=self.random_state,
+                study_name=self.project_name,
+                deactivate=False,
+            )
+        )
+        # Get the current report and add_model from model_dev
+        report = deepcopy(self.model_dev.report)
+        add_model = deepcopy(self.model_dev.add_model)
+        model_map = _get_model_map(
+            task_type=None, add_model=add_model, n_jobs=self.n_jobs
+        )
+        # Optimize hyperparams of the best model
+        self.optimizer.set_params(select_model=self.model_dev.select_model)
+        best_params, _ = self.optimizer.optimize(self.train)
+
+        # Update the best model & params & get the cross validation report
+        new_model = model_map[self.model_dev.select_model].set_params(
+            **best_params
+        )
+        add_model.update({f"{self.model_dev.select_model}_opt": new_model})
+        self.model_dev.set_params(
+            add_model=add_model,
+            select_model=f"{self.model_dev.select_model}_opt",
+            cross_validate=True,
+        )
+        self.model_dev.fit(self.train)
+
+        self.model_dev.report = (
+            pd.merge(
+                report,
+                self.model_dev.report,
+                on=["scoring", "cv_cycle"],
+                suffixes=("_1", "_2"),
+            )
+            .set_index(["scoring", "cv_cycle"])
+            .sort_index(axis=1)
+            .reset_index()
+        )
+
+        # Conformal predictor
+        if self.conf_pred:
+            self.conf_pred.set_params(model=self.model_dev)
+            self.conf_pred.fit(self.train)
+
+        # Applicability domain
+        if self.ad:
+            self.ad.fit(self.train)
+            
+        return self
+
+    def save_pipeline(self, path: str):
+        """
+        Save the ProQSAR pipeline to a pickle file.
+        Parameters:
+        -----------
+        path : str
+            The path where the ProQSAR pipeline will be saved.
+        """
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as file:
+            pickle.dump(self, file)
+
+    def load_pipeline(self, path: str):
+        """
+        Load a ProQSAR pipeline from a pickle file.
+        Parameters:
+        -----------
+        path : str
+            The path to the pickle file containing the ProQSAR pipeline.
+        """
+        with open(path, "rb") as file:
+            loaded_pipeline = pickle.load(file)
+
+        # Update the current instance with the loaded pipeline's attributes
+        self.__dict__.update(loaded_pipeline.__dict__)
+        self.logger.info(f"ProQSAR: Pipeline loaded from {path}.")
+        return self
+    
+    
+    def _apply_generator(
+        self,
+        data: pd.DataFrame,
+        data_name: str = "test",
+        record_shape=True
+    ) -> pd.DataFrame:
+        """
+        Take the raw data and run it through the DataGenerator pipeline.
+        Returns the generated features DataFrame.
+        """
+        # Copy the data to avoid modifying the original DataFrame
+        df = deepcopy(data)
+        self.datagenerator.set_params(data_name=data_name, save_dir=self.save_dir)
+        df = self.datagenerator.generate(df)
+
+        # Drop SMILES and mol columns if they exist
+        df = df.drop(
+            columns=[self.splitter.smiles_col, self.splitter.mol_col], errors="ignore"
+        )
+        # Record the shape of the original data
+        if record_shape:
+            self._record_shape("original", self.selected_feature, data_name, df)
+
+        return df
+
+    def _apply_prep(
+        self,
+        data: pd.DataFrame,
+        data_name: str = "test",
+        keep_all_records: bool = False,
+        record_shape: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Take the raw data and run it through the already‐fitted
+        DataPreprocessor and FeatureSelector pipelines. Returns the fully transformed data DataFrame.
+        """
+        if keep_all_records:
+            self.datapreprocessor.duplicate.set_params(rows=False)
+            self.datapreprocessor.multiv_outlier.set_params(deactivate=True)
+
+        # Copy the data to avoid modifying the original DataFrame
+        df = deepcopy(data)
+        (
+            self._record_shape("original", self.selected_feature, data_name, df)
+            if record_shape
+            else None
+        )
+
+        # Data preprocessing
+        self.datapreprocessor.set_params(
+            data_name=f"{data_name}_{self.selected_feature}", save_dir=self.save_dir
+        )
+        df = self.datapreprocessor.transform(df)
+
+        if record_shape:
+            for step, transformer in self.datapreprocessor.pipeline.steps:
+                self._record_shape(
+                    step, self.selected_feature, data_name, transformer.transformed_data
+                )
+        # Feature selection
+        self.feature_selector.set_params(
+            trans_data_name=f"{data_name}_{self.selected_feature}_feature_selector",
+            save_dir=self.save_dir,
+        )
+        df = self.feature_selector.transform(df)
+        if record_shape:
+            self._record_shape(
+                f"feature_selector ({self.feature_selector.select_method})",
+                self.selected_feature,
+                data_name,
+                df,
+            )
+        return df
 
     def _predict_wo_prep(
         self,
@@ -361,7 +562,7 @@ class ProQSAR:
             pred_result = pd.merge(pred_result, ad_result, on=self.id_col)
 
         # Save pred_result
-        save_path = f"{self.project_name}/PredResult"
+        save_path = f"{self.save_dir}/PredResult"
         os.makedirs(save_path, exist_ok=True)
         pred_result.to_csv(f"{save_path}/{save_name}.csv", index=False)
 
@@ -380,43 +581,63 @@ class ProQSAR:
         self.logger.info("----------PREDICTING----------")
 
         # Generate feature, preprocess data & apply feature selection
-        self.data_pred = self.datagenerator.set_params(data_name="data_pred").generate(
-            data_pred
-        )
-        self.data_pred = self.data_pred.drop(
-            columns=self.splitter.smiles_col, errors="ignore"
-        )
+        data_pred = self._apply_generator(
+            data_pred,
+            data_name="data_pred",
+            record_shape=True,
+        ) 
 
-        self.datapreprocessor.set_params(data_name=f"data_pred_{self.selected_feature}")
-        self.data_pred = self.datapreprocessor.transform(self.data_pred)
-
-        self.feature_selector.set_params(
-            trans_data_name=f"data_pred_{self.selected_feature}_fs"
+        # Preprocess data_pred
+        data_pred = self._apply_prep(
+            data_pred,
+            data_name="data_pred",
+            keep_all_records=self.keep_all_pred,
+            record_shape=True,
         )
-        self.data_pred = self.feature_selector.transform(self.data_pred)
 
         # Predict data_pred
-        pred_result = self._predict_wo_prep(
-            self.data_pred, alpha, save_name="data_pred"
-        )
+        pred_result = self._predict_wo_prep(data_pred, alpha, save_name="data_pred")
 
         return pred_result
 
-    def validate(self):
+    def validate(self, external_test_data: Optional[pd.DataFrame] = None):
         self.logger.info("----------VALIDATING----------")
 
         # Cross validation report
         self.cv_report = self.model_dev.report
-        self.cv_report.to_csv(f"{self.project_name}/cv_report_model.csv", index=False)
+        self.cv_report.to_csv(f"{self.save_dir}/cv_report_model.csv", index=False)
 
         # External validation report
+        # Select models for external validation report
         select_model = self.cv_report.columns[
             ~self.cv_report.columns.isin(["scoring", "cv_cycle"])
         ]
+        # Prepare test data for external validation
+        if external_test_data is not None:
+            self.logger.info(
+                "External test data provided. Using it for external validation."
+            )
+            test_data = external_test_data
+        elif hasattr(self, "test") and self.test is not None:
+            self.logger.info(
+                "External validation will be performed on the test set from the train-test split."
+            )
+            test_data = self.test
+        else:
+            raise ValueError(
+                "No external test data provided and no test set available from the train-test split."
+            )
+
+        self.test_prep = self._apply_prep(
+            test_data,
+            data_name="test",
+            keep_all_records=self.keep_all_test,
+            record_shape=True,
+        )
 
         self.ev_report = ModelValidation.external_validation_report(
             data_train=self.train,
-            data_test=self.test,
+            data_test=self.test_prep,
             activity_col=self.activity_col,
             id_col=self.id_col,
             select_model=select_model,
@@ -425,30 +646,30 @@ class ProQSAR:
             n_jobs=self.n_jobs,
             save_csv=True,
             csv_name="ev_report_model",
-            save_dir=self.project_name,
+            save_dir=self.save_dir,
         )
         # Generate ROC-AUC / PR curve (for classification) or scatter plot (for regresssion)
         if self.model_dev.task_type == "C":
             ModelValidation.make_curve(
                 data_train=self.train,
-                data_test=self.test,
+                data_test=self.test_prep,
                 activity_col=self.activity_col,
                 id_col=self.id_col,
                 select_model=select_model,
                 add_model=self.model_dev.add_model,
-                save_dir=self.project_name,
+                save_dir=self.save_dir,
                 n_jobs=self.n_jobs,
             )
         else:
             ModelValidation.make_scatter_plot(
                 data_train=self.train,
-                data_test=self.test,
+                data_test=self.test_prep,
                 activity_col=self.activity_col,
                 id_col=self.id_col,
                 select_model=select_model,
                 add_model=self.model_dev.add_model,
                 scoring_df=self.ev_report,
-                save_dir=self.project_name,
+                save_dir=self.save_dir,
                 n_jobs=self.n_jobs,
             )
 
@@ -458,34 +679,34 @@ class ProQSAR:
         self.logger.info("----------ANALYSING----------")
 
         if self.optimaldata.report is not None:
-            self.logger.info(f"----------Dataset----------")
+            self.logger.info("----------OptimalData----------")
             StatisticalAnalysis.analysis(
                 report_df=self.optimaldata.report,
                 scoring_list=None,
                 method_list=None,
                 check_assumptions=True,
                 method="all",
-                save_dir=f"{self.project_name}/OptimalDataStat",
+                save_dir=f"{self.save_dir}/OptimalDataStat",
             )
         if self.feature_selector.report is not None:
-            self.logger.info(f"----------FeatureSelector----------")
+            self.logger.info("----------FeatureSelector----------")
             StatisticalAnalysis.analysis(
                 report_df=self.feature_selector.report,
                 scoring_list=None,
                 method_list=None,
                 check_assumptions=True,
                 method="all",
-                save_dir=f"{self.project_name}/FeatureSelectorStat",
+                save_dir=f"{self.save_dir}/FeatureSelectorStat",
             )
         if self.model_dev.report is not None:
-            self.logger.info(f"----------ModelDev----------")
+            self.logger.info("----------ModelDev----------")
             StatisticalAnalysis.analysis(
                 report_df=self.model_dev.report,
                 scoring_list=None,
                 method_list=None,
                 check_assumptions=True,
                 method="all",
-                save_dir=f"{self.project_name}/ModelDevStat",
+                save_dir=f"{self.save_dir}/ModelDevStat",
             )
 
     def _record_shape(
@@ -521,21 +742,50 @@ class ProQSAR:
                 records.append(record)
 
         shape_summary_df = pd.DataFrame(records)
-        shape_summary_df.to_csv(f"{self.project_name}/shape_summary.csv", index=False)
+        shape_summary_df.to_csv(f"{self.save_dir}/shape_summary.csv", index=False)
 
         return shape_summary_df
 
     def run_all(
-        self, 
-        data_dev: pd.DataFrame, 
-        data_pred: Optional[pd.DataFrame] = None, 
-        alpha: Optional[Union[float, Iterable[float]]] = None
+        self,
+        data_dev: pd.DataFrame,
+        data_pred: Optional[pd.DataFrame] = None,
+        data_test: Optional[pd.DataFrame] = None,
+        alpha: Optional[Union[float, Iterable[float]]] = None,
     ):
+        """Run the entire ProQSAR pipeline from fitting to prediction.
+        Parameters:
+        -----------
+        data_dev : pd.DataFrame
+            The development dataset for fitting the model.
+        data_pred : Optional[pd.DataFrame]
+            The prediction dataset. If provided, predictions will be made on this data.
+        alpha : Optional[Union[float, Iterable[float]]]
+            Significance level for the conformal predictor. If None, predictions will be made without confidence intervals.
+        """
+        # Start the timer
+        start = time.perf_counter()
+
+        self.logger.info(
+            f"----------STARTING PROQSAR PIPELINE AT {datetime.datetime.now()}----------"
+        )
+
+        # Fit the model with the development data
         self.fit(data_dev)
-        self._predict_wo_prep(self.test, alpha, save_name="test_pred")
-        self.validate()
+        self.validate(external_test_data=data_test)
         self.analysis()
-        self.get_shape_summary_df()
+        self._predict_wo_prep(self.test_prep, alpha, save_name="test_pred")
 
         if data_pred is not None:
             self.predict(data_pred, alpha)
+
+        self.get_shape_summary_df()
+        
+        self.logger.info(
+            f"----------PROQSAR PIPELINE COMPLETED AT {datetime.datetime.now()}----------"
+        )
+
+        # End the timer
+        end = time.perf_counter()
+        # Calculate elapsed time
+        self.logger.info(f"Elapsed time: {datetime.timedelta(seconds=(end-start))}")

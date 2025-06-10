@@ -360,7 +360,9 @@ class StatisticalAnalysis:
                     dpi=300,
                     bbox_inches="tight",
                 )
-            logging.info(f"StatisticalAnalysis: Figure saved at {save_dir}/{fig_name}.pdf")
+            logging.info(
+                f"StatisticalAnalysis: Figure saved at {save_dir}/{fig_name}.pdf"
+            )
 
         except Exception as e:
             logging.error(f"An error occurred during the test: {e}")
@@ -418,7 +420,9 @@ class StatisticalAnalysis:
             )
             # If only one method is provided, skip the test.
             if not method_list or len(method_list) == 1:
-                logging.info("StatisticalAnalysis: Only one method provided. Skipping statistical test.")
+                logging.info(
+                    "StatisticalAnalysis: Only one method provided. Skipping statistical test."
+                )
                 return
 
             # Precompute posthoc Conover-Friedman results for each metric
@@ -554,7 +558,9 @@ class StatisticalAnalysis:
                 dpi=300,
                 bbox_inches="tight",
             )
-            logging.info(f"StatisticalAnalysis: Sign plots saved at {save_dir}/cofried_sign_plot.pdf")
+            logging.info(
+                f"StatisticalAnalysis: Sign plots saved at {save_dir}/cofried_sign_plot.pdf"
+            )
 
     def _make_critical_difference_diagrams(
         pc_results: dict,
@@ -693,7 +699,9 @@ class StatisticalAnalysis:
             )
             # If only one method is provided, skip the test.
             if not method_list or len(method_list) == 1:
-                logging.info("StatisticalAnalysis: Only one method provided. Skipping statistical test.")
+                logging.info(
+                    "StatisticalAnalysis: Only one method provided. Skipping statistical test."
+                )
                 return
 
             # Set defaults
@@ -822,7 +830,9 @@ class StatisticalAnalysis:
                         f"{save_dir}/tukey_df_means_diff_{scoring}.csv", index=False
                     )
                     pc.to_csv(f"{save_dir}/tukey_pc_{scoring}.csv", index=False)
-                    logging.info(f"StatisticalAnalysis: Tukey HSD results saved at {save_dir}")
+                    logging.info(
+                        f"StatisticalAnalysis: Tukey HSD results saved at {save_dir}"
+                    )
 
             if not plot:
                 plot = ["mcs", "ci"]
@@ -981,7 +991,7 @@ class StatisticalAnalysis:
                         new_label = label.replace("Classifier", "\nClassifier")
                     else:
                         new_label = label
-                        
+
                     new_label = new_label + f"\n{means.loc[label].values[0].round(3)}"
 
                     x_label_list.append(new_label)
@@ -1128,7 +1138,9 @@ class StatisticalAnalysis:
                     dpi=300,
                     bbox_inches="tight",
                 )
-                logging.info(f"StatisticalAnalysis: MCS plot grid saved at {save_dir}/tukey_mcs.pdf")
+                logging.info(
+                    f"StatisticalAnalysis: MCS plot grid saved at {save_dir}/tukey_mcs.pdf"
+                )
 
         except Exception as e:
             logging.error(f"An error occurred in _make_mcs_plot_grid: {e}")
@@ -1231,7 +1243,9 @@ class StatisticalAnalysis:
                     dpi=300,
                     bbox_inches="tight",
                 )
-                logging.info(f"StatisticalAnalysis: CI plot grid saved at {save_dir}/tukey_ci.pdf")
+                logging.info(
+                    f"StatisticalAnalysis: CI plot grid saved at {save_dir}/tukey_ci.pdf"
+                )
 
         except Exception as e:
             logging.error(f"An error occurred in _make_ci_plot_grid: {e}")

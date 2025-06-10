@@ -71,7 +71,7 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
         id_col: str = "id",
         select_model: Optional[Union[str, List[str]]] = None,
         add_model: dict = {},
-        compare: bool = True,
+        cross_validate: bool = True,
         save_model: bool = False,
         save_pred_result: bool = False,
         pred_result_name: str = "pred_result",
@@ -86,7 +86,7 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
         self.id_col = id_col
         self.select_model = select_model
         self.add_model = add_model
-        self.compare = compare
+        self.cross_validate = cross_validate
         self.save_model = save_model
         self.save_pred_result = save_pred_result
         self.pred_result_name = pred_result_name
@@ -137,7 +137,7 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
                     self.scoring_list.append(self.scoring_target)
 
             if isinstance(self.select_model, list) or not self.select_model:
-                if self.compare:
+                if self.cross_validate:
                     logging.info(
                         "ModelDeveloper: Selecting the optimal model "
                         f"among {self.select_model or list(model_map.keys())}, "
@@ -173,34 +173,41 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
                 else:
                     raise AttributeError(
                         "'select_model' is entered as a list."
-                        "To evaluate and use the best method among the entered methods, turn 'compare = True'."
+                        "To evaluate and use the best method among the entered methods, turn 'cross_validate = True'."
                         "Otherwise, select_model must be a string as the name of the method."
                     )
 
             elif isinstance(self.select_model, str):
                 if self.select_model not in model_map:
-                    raise ValueError(f"ModelDeveloper: Model '{self.select_model}' is not recognized.")
+                    raise ValueError(
+                        f"ModelDeveloper: Model '{self.select_model}' is not recognized."
+                    )
                 else:
                     logging.info(f"ModelDeveloper: Using model: {self.select_model}")
                     self.model = model_map[self.select_model].fit(X=X_data, y=y_data)
-                    self.report = ModelValidation.cross_validation_report(
-                        data=data,
-                        activity_col=self.activity_col,
-                        id_col=self.id_col,
-                        add_model=self.add_model,
-                        select_model=None if self.compare else self.select_model,
-                        scoring_list=self.scoring_list,
-                        n_splits=self.n_splits,
-                        n_repeats=self.n_repeats,
-                        visualize=self.visualize,
-                        save_fig=self.save_fig,
-                        fig_prefix=self.fig_prefix,
-                        save_csv=self.save_cv_report,
-                        csv_name=self.cv_report_name,
-                        save_dir=self.save_dir,
-                        n_jobs=self.n_jobs,
-                        random_state=self.random_state,
-                    )
+                    
+                    if self.cross_validate:
+                        logging.info(
+                            "ModelDeveloper: Cross-validation is enabled, generating report."
+                        )
+                        self.report = ModelValidation.cross_validation_report(
+                            data=data,
+                            activity_col=self.activity_col,
+                            id_col=self.id_col,
+                            add_model=self.add_model,
+                            select_model=self.select_model,
+                            scoring_list=self.scoring_list,
+                            n_splits=self.n_splits,
+                            n_repeats=self.n_repeats,
+                            visualize=self.visualize,
+                            save_fig=self.save_fig,
+                            fig_prefix=self.fig_prefix,
+                            save_csv=self.save_cv_report,
+                            csv_name=self.cv_report_name,
+                            save_dir=self.save_dir,
+                            n_jobs=self.n_jobs,
+                            random_state=self.random_state,
+                        )
             else:
                 raise AttributeError(
                     f"'select_model' is entered as a {type(self.select_model)}"
@@ -215,7 +222,6 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
                 with open(f"{self.save_dir}/model.pkl", "wb") as file:
                     pickle.dump(self, file)
                 logging.info(f"Model saved at: {self.save_dir}/model.pkl")
-
 
             return self
 

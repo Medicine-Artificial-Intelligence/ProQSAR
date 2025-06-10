@@ -130,7 +130,10 @@ class Optimizer(BaseEstimator):
 
             self.task_type = _get_task_type(data, self.activity_col)
             self.cv = _get_cv_strategy(
-                self.task_type, n_splits=self.n_splits, n_repeats=self.n_repeats, random_state=self.random_state
+                self.task_type,
+                n_splits=self.n_splits,
+                n_repeats=self.n_repeats,
+                random_state=self.random_state,
             )
             self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
 
@@ -152,7 +155,18 @@ class Optimizer(BaseEstimator):
                         trial, model_name, self.param_ranges, self.add_model
                     )
                     model.set_params(**params)
-                    model.set_params(random_state=self.random_state) if 'random_state' in model.get_params() else model
+
+                    # Ensure the model is set with a random state if applicable
+                    if "random_state" in model.get_params():
+                        model.set_params(random_state=self.random_state)
+
+                    # Set thread count or n_jobs if applicable
+                    if "thread_count" in model.get_params():
+                        model.set_params(thread_count=self.n_jobs)
+                    if "n_jobs" in model.get_params():
+                        model.set_params(n_jobs=self.n_jobs)
+
+                    logging.info(f"Starting trial with parameters: {trial.params}")
 
                     score = cross_val_score(
                         model,
@@ -160,30 +174,33 @@ class Optimizer(BaseEstimator):
                         y,
                         scoring=self.scoring,
                         cv=self.cv,
-                        n_jobs=1,
+                        n_jobs=self.n_jobs,
                     ).mean()
-                    
+
                     return score
 
                 except Exception as e:
                     logging.error(f"Error in objective function: {e}")
                     raise
+
             # Setting the logging level WARNING, the INFO logs are suppressed.
             optuna.logging.set_verbosity(optuna.logging.WARNING)
 
             storage = "sqlite:///example.db"
             study = optuna.create_study(
                 study_name=self.study_name,
-                direction="maximize", 
+                direction="maximize",
                 sampler=optuna.samplers.TPESampler(seed=self.random_state),
                 storage=storage,
-                load_if_exists=True
-                )
-            study.optimize(objective, n_trials=self.n_trials, n_jobs=self.n_jobs)
+                load_if_exists=True,
+            )
+            study.optimize(objective, n_trials=self.n_trials, n_jobs=2)
             self.best_params = study.best_trial.params
             self.best_score = study.best_value
 
-            logging.info(f"Optimizer: best_params are {self.best_params}, best_score is {self.best_score}.")
+            logging.info(
+                f"Optimizer: best_params are {self.best_params}, best_score is {self.best_score}."
+            )
 
             return self.best_params, self.best_score
 

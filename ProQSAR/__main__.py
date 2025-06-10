@@ -31,6 +31,7 @@ def parse_kv_pairs(arg_list):
         result[key] = parsed
     return result
 
+
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -147,9 +148,21 @@ def parse_arguments():
 
     # Config shortcuts & params
     for component in (
-        "standardizer","featurizer","splitter","duplicate","missing",
-        "lowvar","univ_outlier","kbin","multiv_outlier","rescaler",
-        "feature_selector","model_dev","optimizer","ad","conf_pred"
+        "standardizer",
+        "featurizer",
+        "splitter",
+        "duplicate",
+        "missing",
+        "lowvar",
+        "univ_outlier",
+        "kbin",
+        "multiv_outlier",
+        "rescaler",
+        "feature_selector",
+        "model_dev",
+        "optimizer",
+        "ad",
+        "conf_pred",
     ):
         parser.add_argument(
             f"--{component}",
@@ -195,9 +208,21 @@ def main():
     # build the Config(...) kwargs by parsing each component
     config_kwargs = {}
     for comp in (
-        "standardizer","featurizer","splitter","duplicate","missing",
-        "lowvar","univ_outlier","kbin","multiv_outlier","rescaler",
-        "feature_selector","model_dev","optimizer","ad","conf_pred"
+        "standardizer",
+        "featurizer",
+        "splitter",
+        "duplicate",
+        "missing",
+        "lowvar",
+        "univ_outlier",
+        "kbin",
+        "multiv_outlier",
+        "rescaler",
+        "feature_selector",
+        "model_dev",
+        "optimizer",
+        "ad",
+        "conf_pred",
     ):
         config_kwargs[comp] = parse_kv_pairs(getattr(args, comp))
 
@@ -214,9 +239,9 @@ def main():
 
         logging.info("Running predict()")
         proqsar.predict(data_pred, alpha=args.alpha)
-        
+
         return
-    
+
     # Full-run mode
     logging.info("Loading development data from %s", args.data_dev)
     data_dev = read_data(args.data_dev)

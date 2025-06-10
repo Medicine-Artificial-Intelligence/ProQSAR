@@ -24,6 +24,7 @@ class OptimalDataset(CrossValidationConfig):
         id_col: str,
         smiles_col: str,
         mol_col: str = "mol",
+        keep_all_train: bool = False,
         save_dir: Optional[str] = "Project/OptimalDataset",
         n_jobs: int = 1,
         random_state: int = 42,
@@ -44,11 +45,8 @@ class OptimalDataset(CrossValidationConfig):
             else f"standardized_{smiles_col}"
         )
         self.mol_col = (
-            mol_col
-            if self.config.standardizer.deactivate
-            else f"standardized_mol"
+            mol_col if self.config.standardizer.deactivate else f"standardized_mol"
         )
-
         self.data_features = None
         self.train, self.test = {}, {}
         self.report = None
@@ -60,7 +58,7 @@ class OptimalDataset(CrossValidationConfig):
             id_col,
             smiles_col,
             mol_col,
-            n_jobs=1,
+            n_jobs=self.n_jobs,
             save_dir=save_dir,
             config=config,
         )
@@ -74,6 +72,9 @@ class OptimalDataset(CrossValidationConfig):
         self.datapreprocessor = DataPreprocessor(
             activity_col, id_col, save_dir=save_dir, config=config
         )
+        if keep_all_train:
+            self.datapreprocessor.duplicate.set_params(rows=False)
+            self.datapreprocessor.multiv_outlier.set_params(deactivate=True)
 
     def run(self, data):
         # Generate all features
@@ -121,7 +122,7 @@ class OptimalDataset(CrossValidationConfig):
             self.splitter.set_params(data_name=i)
             self.train[i], self.test[i] = self.splitter.fit(self.data_features[i])
             self._record_shape("original", i, "train", self.train[i])
-            self._record_shape("original", i, "test", self.test[i])
+            # self._record_shape("original", i, "test", self.test[i])
 
             # Apply DataPreprocessor pipeline to train set
             self.datapreprocessor.fit(self.train[i])
@@ -134,13 +135,13 @@ class OptimalDataset(CrossValidationConfig):
             for step, transformer in self.datapreprocessor.pipeline.steps:
                 self._record_shape(step, i, "train", transformer.transformed_data)
 
-            # Apply DataPreprocessor pipeline to train set
-            self.datapreprocessor.set_params(data_name=f"test_{i}")
-            self.test[i + "_preprocessed"] = self.datapreprocessor.transform(
-                self.test[i]
-            )
-            for step, transformer in self.datapreprocessor.pipeline.steps:
-                self._record_shape(step, i, "test", transformer.transformed_data)
+            # Apply DataPreprocessor pipeline to test set
+            # self.datapreprocessor.set_params(data_name=f"test_{i}")
+            # self.test[i + "_preprocessed"] = self.datapreprocessor.transform(
+            #    self.test[i]
+            # )
+            # for step, transformer in self.datapreprocessor.pipeline.steps:
+            #    self._record_shape(step, i, "test", transformer.transformed_data)
 
             # Apply feature selection & perform cross validation, both using RF algorithm
             X_data = self.train[i + "_preprocessed"].drop(
@@ -158,7 +159,7 @@ class OptimalDataset(CrossValidationConfig):
                 "train",
                 (X_data.shape[0], X_data.shape[1] + 2),
             )
-            self._record_shape("feature_selector (rf)", i, "test")
+            # self._record_shape("feature_selector (rf)", i, "test")
 
             result.append(
                 ModelValidation._perform_cross_validation(

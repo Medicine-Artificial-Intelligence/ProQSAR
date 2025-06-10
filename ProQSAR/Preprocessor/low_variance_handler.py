@@ -282,9 +282,10 @@ class LowVarianceHandler(BaseEstimator, TransformerMixin):
                 raise NotFittedError(
                     "LowVarianceHandler is not fitted yet. call 'fit' before using this method."
                 )
-            transformed_data = pd.concat([
-                data.filter(items=[self.id_col, self.activity_col]),
-                data[self.selected_columns],
+            transformed_data = pd.concat(
+                [
+                    data.filter(items=[self.id_col, self.activity_col]),
+                    data[self.selected_columns],
                 ],
                 axis=1,
             )

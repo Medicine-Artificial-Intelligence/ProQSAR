@@ -94,7 +94,8 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
             method_map = {
                 "LocalOutlierFactor": LocalOutlierFactor(
-                    n_neighbors=20, n_jobs=self.n_jobs,
+                    n_neighbors=20,
+                    n_jobs=self.n_jobs,
                 ),
                 "IsolationForest": IsolationForest(
                     n_estimators=100,
@@ -117,7 +118,9 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
                     f"MultivariateOutliersHandler: Unsupported method: {self.select_method}"
                 )
 
-            self.multi_outlier_handler = method_map[self.select_method].fit(self.data_fit.values)
+            self.multi_outlier_handler = method_map[self.select_method].fit(
+                self.data_fit.values
+            )
 
             logging.info(
                 f"MultivariateOutliersHandler: Using '{self.select_method}' method."
@@ -163,7 +166,6 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
                 raise NotFittedError(
                     "MultivariateOutlierHandler is not fitted yet. Call 'fit' before using this method."
                 )
-            
 
             if self.select_method == "LocalOutlierFactor":
                 novelty = not data[self.features].equals(self.data_fit)
@@ -171,12 +173,22 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
                 if novelty:
                     self.multi_outlier_handler.fit(self.data_fit.values)
-                    outliers = self.multi_outlier_handler.predict(data[self.features].values) == -1
+                    outliers = (
+                        self.multi_outlier_handler.predict(data[self.features].values)
+                        == -1
+                    )
                 else:
-                    outliers = self.multi_outlier_handler.fit_predict(data[self.features].values) == -1
+                    outliers = (
+                        self.multi_outlier_handler.fit_predict(
+                            data[self.features].values
+                        )
+                        == -1
+                    )
 
             else:
-                outliers = self.multi_outlier_handler.predict(data[self.features].values) == -1
+                outliers = (
+                    self.multi_outlier_handler.predict(data[self.features].values) == -1
+                )
 
             transformed_data = data[~outliers]
 

@@ -162,9 +162,7 @@ class Rescaler(BaseEstimator, TransformerMixin):
             ]
 
             if self.non_binary_cols:
-                logging.info(
-                    f"Rescaler: Using '{self.select_method}' method."
-                )
+                logging.info(f"Rescaler: Using '{self.select_method}' method.")
                 self.rescaler = self._get_scaler(self.select_method).fit(
                     data[self.non_binary_cols]
                 )
