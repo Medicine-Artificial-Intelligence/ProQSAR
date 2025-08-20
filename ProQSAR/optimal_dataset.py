@@ -1,4 +1,5 @@
 import os
+import gc
 import logging
 import pandas as pd
 from typing import Optional, Union
@@ -174,6 +175,12 @@ class OptimalDataset(CrossValidationConfig):
                     n_jobs=self.n_jobs,
                 )
             )
+            del X_data, y_data
+            del self.train[i]
+            del self.data_features[i]
+            gc.collect()
+
+
 
         # Pivot the DataFrame so that each model becomes a separate column
         self.report = pd.concat(result).pivot_table(
