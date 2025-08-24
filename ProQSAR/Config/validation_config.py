@@ -5,7 +5,7 @@ class CrossValidationConfig:
 
     def __init__(
         self,
-        scoring_target: str = None,
+        scoring_target: Optional[str] = None,
         scoring_list: Optional[Union[list, str]] = None,
         n_splits: int = 5,
         n_repeats: int = 5,

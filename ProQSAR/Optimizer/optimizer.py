@@ -135,7 +135,8 @@ class Optimizer(BaseEstimator):
                 n_repeats=self.n_repeats,
                 random_state=self.random_state,
             )
-            self.scoring = self.scoring or "f1" if self.task_type == "C" else "r2"
+            if self.scoring is None:
+                self.scoring = "f1" if self.task_type == "C" else "r2"
 
             model_list = self.select_model or _get_model_list(
                 self.task_type, self.add_model

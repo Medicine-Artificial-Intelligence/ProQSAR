@@ -32,7 +32,7 @@ class ProQSAR:
         project_name: str = "Project",
         n_jobs: int = 1,
         random_state: int = 42,
-        scoring_target: str = None,
+        scoring_target: Optional[str] = None,
         scoring_list: Optional[Union[list, str]] = None,
         n_splits: int = 5,
         n_repeats: int = 5,
@@ -261,7 +261,7 @@ class ProQSAR:
 
         # Feature selection - train
         self.feature_selector.set_params(
-            trans_data_name=f"train_{self.selected_feature}_feature_selector",
+            trans_data_name=f"train_{self.selected_feature}_feature_selector", 
         )
         self.train = self.feature_selector.fit_transform(self.train)
 

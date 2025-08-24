@@ -14,7 +14,7 @@ from ProQSAR.ModelDeveloper.model_validation import ModelValidation
 from ProQSAR.Config.validation_config import CrossValidationConfig
 
 
-class ModelDeveloper(BaseEstimator, CrossValidationConfig):
+class ModelDeveloper(CrossValidationConfig, BaseEstimator):
     """
     Class to handle model development for machine learning tasks.
 
@@ -81,7 +81,7 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
         **kwargs,
     ):
         """Initializes the ModelDeveloper with necessary attributes."""
-        super().__init__(**kwargs)
+        CrossValidationConfig.__init__(self, **kwargs)
         self.activity_col = activity_col
         self.id_col = id_col
         self.select_model = select_model
@@ -126,9 +126,9 @@ class ModelDeveloper(BaseEstimator, CrossValidationConfig):
                 random_state=self.random_state,
             )
             # Set scorings
-            self.scoring_target = (
-                self.scoring_target or "f1" if self.task_type == "C" else "r2"
-            )
+            if self.scoring_target is None:
+                self.scoring_target = "f1" if self.task_type == "C" else "r2"
+                
             if self.scoring_list:
                 if isinstance(self.scoring_list, str):
                     self.scoring_list = [self.scoring_list]

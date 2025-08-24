@@ -13,3 +13,4 @@ pingouin==0.5.5
 scipy==1.14.1
 statsmodels==0.14.4
 mapie==0.9.2
+mordred==1.2.0

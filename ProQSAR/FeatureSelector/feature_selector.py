@@ -16,7 +16,7 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
 from ProQSAR.Config.validation_config import CrossValidationConfig
 
 
-class FeatureSelector(BaseEstimator, CrossValidationConfig):
+class FeatureSelector(CrossValidationConfig, BaseEstimator):
     """
     A class for selecting features from a dataset based on specified criteria.
 
@@ -70,7 +70,7 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
 
         Parameters are set based on selection and cross-validation criteria.
         """
-        super().__init__(**kwargs)
+        CrossValidationConfig.__init__(self, **kwargs)
         self.activity_col = activity_col
         self.id_col = id_col
         self.select_method = select_method
@@ -122,9 +122,9 @@ class FeatureSelector(BaseEstimator, CrossValidationConfig):
                 random_state=self.random_state,
             )
             # Set scorings
-            self.scoring_target = (
-                self.scoring_target or "f1" if self.task_type == "C" else "r2"
-            )
+            if self.scoring_target is None:
+                self.scoring_target = "f1" if self.task_type == "C" else "r2"
+                
             if self.scoring_list:
                 if isinstance(self.scoring_list, str):
                     self.scoring_list = [self.scoring_list]

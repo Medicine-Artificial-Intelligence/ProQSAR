@@ -33,7 +33,7 @@ class OptimalDataset(CrossValidationConfig):
         **kwargs,
     ):
 
-        super().__init__(**kwargs)
+        CrossValidationConfig.__init__(self, **kwargs)
         self.activity_col = activity_col
         self.id_col = id_col
         self.save_dir = save_dir
@@ -92,9 +92,9 @@ class OptimalDataset(CrossValidationConfig):
         self.scoring_list = self.scoring_list or _get_cv_scoring(self.task_type)
 
         # Set scorings
-        self.scoring_target = (
-            self.scoring_target or "f1" if self.task_type == "C" else "r2"
-        )
+        if self.scoring_target is None:
+            self.scoring_target = "f1" if self.task_type == "C" else "r2"
+
         if self.scoring_list:
             if isinstance(self.scoring_list, str):
                 self.scoring_list = [self.scoring_list]
@@ -177,7 +177,7 @@ class OptimalDataset(CrossValidationConfig):
             )
             del X_data, y_data
             del self.train[i]
-            del self.data_features[i]
+            #del self.data_features[i]
             gc.collect()
 
 
