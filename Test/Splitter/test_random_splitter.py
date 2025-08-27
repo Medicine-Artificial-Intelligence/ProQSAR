@@ -41,7 +41,7 @@ class TestRandomSplitter(unittest.TestCase):
         self.data["feature2"] = np.random.rand(self.data.shape[0])
 
         self.randomsplitter = RandomSplitter(
-            activity_col="pIC50", smiles_col="smiles", test_size=0.2, random_state=42
+            activity_col="pIC50", test_size=0.2, random_state=42
         )
 
     def test_randomsplitter_size(self):

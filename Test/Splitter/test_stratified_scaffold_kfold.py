@@ -3,6 +3,7 @@ from ProQSAR.Splitter.stratified_scaffold_kfold import StratifiedScaffoldKFold
 import pandas as pd
 import numpy as np
 import unittest
+from ProQSAR.Splitter.scaffold_utils import get_scaffold_groups
 
 
 class TestStratifiedScaffoldSplitter(unittest.TestCase):
@@ -55,7 +56,7 @@ class TestStratifiedScaffoldSplitter(unittest.TestCase):
         smiles_list = data["smiles"].to_list()
         X = data.drop(["pIC50", "smiles"], axis=1)
         y = data["pIC50"]
-        groups = StratifiedScaffoldSplitter.get_scaffold_groups(smiles_list)
+        groups = get_scaffold_groups(data, "smiles", None)
         # Test if _iter_test_indices generates correct test indices
         test_indices = list(stratifiedscaffoldkfold._iter_test_indices(X, y, groups))
 
@@ -79,7 +80,7 @@ class TestStratifiedScaffoldSplitter(unittest.TestCase):
         smiles_list = data["smiles"].to_list()
         X = data.drop(["pIC50", "smiles"], axis=1)
         y = data["pIC50"]
-        groups = StratifiedScaffoldSplitter.get_scaffold_groups(smiles_list)
+        groups = get_scaffold_groups(data, "smiles", None)
         # Test if _iter_test_indices generates correct test indices
         test_indices = list(stratifiedscaffoldkfold._iter_test_indices(X, y, groups))
 
@@ -100,7 +101,7 @@ class TestStratifiedScaffoldSplitter(unittest.TestCase):
         smiles_list = data["smiles"].to_list()
         X = data.drop(["pIC50", "smiles"], axis=1)
         y = data["pIC50"]
-        groups = StratifiedScaffoldSplitter.get_scaffold_groups(smiles_list)
+        groups = get_scaffold_groups(data, "smiles", None)
 
         with self.assertRaises(ValueError):
             list(stratifiedscaffoldkfold._iter_test_indices(X, y, groups))
