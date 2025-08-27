@@ -68,6 +68,12 @@ class TestSMILESStandardizer(unittest.TestCase):
         with self.assertRaises(TypeError):
             self.standardizer.standardize_dict_smiles("not a dataframe or list")
 
+    def test_deactivate(self):
+        self.standardizer.deactivate = True
+        standardized_data = self.standardizer.standardize_dict_smiles(
+            self.example_smiles_list_dict
+        )
+        self.assertEqual(standardized_data, self.example_smiles_list_dict)
 
 if __name__ == "__main__":
     unittest.main()

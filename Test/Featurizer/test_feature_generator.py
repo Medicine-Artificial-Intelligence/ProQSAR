@@ -36,6 +36,7 @@ class TestFeatureGenerator(unittest.TestCase):
             "rdkdes",
             "pubchem",
             "pharm2dgbfp",
+            "mordred",
         ]
         results = FeatureGenerator._mol_process(self.mol, feature_types)
 
@@ -48,6 +49,7 @@ class TestFeatureGenerator(unittest.TestCase):
         self.assertEqual(len(results["avalon"]), 1024)
         self.assertEqual(len(results["pubchem"]), 881)
         self.assertEqual(len(results["pharm2dgbfp"]), 39972)
+        self.assertEqual(len(results["mordred"]), 1613)
 
     def test_mol_process_with_none(self):
         results = FeatureGenerator._mol_process(None)
@@ -61,7 +63,7 @@ class TestFeatureGenerator(unittest.TestCase):
             self.feature_gen.mol_col,
             self.feature_gen.activity_col,
             self.feature_gen.id_col,
-            ["RDK7"],
+            feature_types=["RDK7"],
         )
 
         # Check if the result includes expected keys

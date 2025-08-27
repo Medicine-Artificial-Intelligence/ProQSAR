@@ -57,7 +57,7 @@ class TestChemicalFingerprints(unittest.TestCase):
         result = RDKDes(self.benzene)
         self.assertIsInstance(result, np.ndarray)
         self.assertEqual(result.dtype, np.float64)
-        self.assertEqual(result.size, 210)
+        self.assertEqual(result.size, 217)
 
     def test_RDKDes_invalid_input(self):
         result = RDKDes(self.invalid_mol)
