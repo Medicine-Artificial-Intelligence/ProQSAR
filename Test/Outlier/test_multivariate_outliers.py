@@ -116,12 +116,11 @@ class TestMultivariateOutliersHandler(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.handler.fit(self.data)
 
-    def test_novelty_setting_local_outlier_factor(self):
+    def test_local_outlier_factor(self):
         """
-        Test novelty setting for LocalOutlierFactor.
+        Test LocalOutlierFactor.
         """
         self.handler.select_method = "LocalOutlierFactor"
-        self.handler.novelty = True
         self.handler.fit(self.data)
         transformed_data = self.handler.transform(self.data)
         self.assertIsNotNone(transformed_data)

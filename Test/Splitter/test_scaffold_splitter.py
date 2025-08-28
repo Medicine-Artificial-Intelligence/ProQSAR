@@ -1,7 +1,6 @@
 import unittest
 import pandas as pd
 import numpy as np
-from unittest.mock import patch
 from ProQSAR.Splitter.scaffold_splitter import ScaffoldSplitter
 
 
@@ -54,4 +53,4 @@ class TestScaffoldSplitter(unittest.TestCase):
 
 
 if __name__ == "__main__":
-	unittest.main() 
+	unittest.main()

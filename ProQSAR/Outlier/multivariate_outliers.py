@@ -21,7 +21,6 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         id_col (Optional[str]): Column name for the unique identifier.
         activity_col (Optional[str]): Column name for activity or target variable.
         select_method (str): Method to use for outlier detection.
-        novelty (bool): If True, enables novelty detection for certain methods.
         n_jobs (int): Number of parallel jobs to run (-1 uses all processors).
         save_method (bool): If True, saves the fitted model to disk.
         save_dir (Optional[str]): Directory path to save model and transformed data.
@@ -248,7 +247,6 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         data2_name: str = "data2",
         activity_col: Optional[str] = None,
         id_col: Optional[str] = None,
-        novelty: bool = False,
         methods_to_compare: Optional[List[str]] = None,
         save_dir: Optional[str] = "Project/OutlierHandler",
     ) -> pd.DataFrame:
@@ -262,7 +260,6 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
             data2_name (str): Name for the secondary dataset in output.
             activity_col (Optional[str]): Column name for activity or target variable.
             id_col (Optional[str]): Column name for unique identifier.
-            novelty (bool): If True, enables novelty detection for methods that support it.
             methods_to_compare (List[str]): List of methods to include in comparison.
 
         Returns:
@@ -284,7 +281,6 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
                     id_col=id_col,
                     activity_col=activity_col,
                     select_method=method,
-                    novelty=novelty,
                 )
                 multi_outlier_handler.fit(data1)
 
