@@ -75,5 +75,6 @@ class TestSMILESStandardizer(unittest.TestCase):
         )
         self.assertEqual(standardized_data, self.example_smiles_list_dict)
 
+
 if __name__ == "__main__":
     unittest.main()

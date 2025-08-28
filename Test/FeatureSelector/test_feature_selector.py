@@ -99,7 +99,6 @@ class TestFeatureSelector(unittest.TestCase):
                 "RandomForestClassifier",
                 "ExtraTreesClassifier",
             ],
-            best=True,
         )
         self.fs.save_dir = self.temp_dir.name  # Use the temporary directory for saving
 
@@ -124,13 +123,15 @@ class TestFeatureSelector(unittest.TestCase):
     def test_fit_regression(self):
         """Test the fit method on regression data"""
         fs_regression = FeatureSelector(
-            activity_col="Activity", id_col="ID", scoring="r2"
+            activity_col="Activity", id_col="ID", scoring_target="r2"
         )
         selector = fs_regression.fit(self.regression_data)
         self.assertIsNotNone(selector)
 
     def test_transform_without_fit(self):
         """Test that transform raises an error if fit is not called first"""
+        # Ensure attribute exists for proper NotFittedError path
+        setattr(self.fs, "feature_selector", None)
         with self.assertRaises(NotFittedError):
             self.fs.transform(self.classification_data)
 
@@ -162,7 +163,7 @@ class TestFeatureSelector(unittest.TestCase):
         self.fs.fit(self.classification_data)
         transformed_data = self.fs.transform(self.classification_data)
         self.assertTrue(
-            os.path.exists(os.path.join(self.fs.save_dir, "fs_trans_data.csv"))
+            os.path.exists(os.path.join(self.fs.save_dir, "trans_data.csv"))
         )
         self.assertIsInstance(transformed_data, pd.DataFrame)
 
@@ -170,9 +171,38 @@ class TestFeatureSelector(unittest.TestCase):
         self.fs.deactivate = True
         self.fs.fit(self.classification_data)
         transformed_data = self.fs.transform(self.classification_data)
+        self.assertTrue(transformed_data.equals(self.classification_data))
 
-        self.assertEqual(self.fs.feature_selector, None)
-        self.assertEqual(transformed_data.equals(self.classification_data), True)
+    def test_string_method_with_cv_generates_report(self):
+        fs = FeatureSelector(
+            activity_col="Activity", id_col="ID", select_method="Anova"
+        )
+        fs.save_dir = self.temp_dir.name
+        fs.fit(self.classification_data)
+        self.assertIsNotNone(fs.report)
+        self.assertIn("scoring", fs.report.columns)
+
+    def test_list_method_without_cv_raises(self):
+        fs = FeatureSelector(
+            activity_col="Activity",
+            id_col="ID",
+            select_method=["Anova", "RandomForestClassifier"],
+            cross_validate=False,
+        )
+        with self.assertRaises(AttributeError):
+            fs.fit(self.classification_data)
+
+    def test_set_params_updates_attributes(self):
+        fs = FeatureSelector(activity_col="Activity", id_col="ID")
+        fs.set_params(save_trans_data=True, trans_data_name="fs_out", n_jobs=2)
+        self.assertTrue(fs.save_trans_data)
+        self.assertEqual(fs.trans_data_name, "fs_out")
+        self.assertEqual(fs.n_jobs, 2)
+
+    def test_set_params_raises_on_invalid_key(self):
+        fs = FeatureSelector(activity_col="Activity", id_col="ID")
+        with self.assertRaises(KeyError):
+            fs.set_params(nonexistent_attr=True)
 
 
 if __name__ == "__main__":

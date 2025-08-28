@@ -120,7 +120,9 @@ class TestLowVarianceHandler(unittest.TestCase):
         binary_columns = ["Activity", "ID", "Feature1", "Feature2"]
         binary_data = self.data[binary_columns]
         transformed_data = self.handler.fit_transform(binary_data)
-        self.assertListEqual(list(transformed_data.columns), ["ID", "Activity", "Feature1", "Feature2"])
+        self.assertListEqual(
+            list(transformed_data.columns), ["ID", "Activity", "Feature1", "Feature2"]
+        )
 
     def test_fit_transform_no_non_binary_meeting_threshold(self):
         """
@@ -141,7 +143,9 @@ class TestLowVarianceHandler(unittest.TestCase):
 
     def test_transform_raises_not_fitted(self):
         with self.assertRaises(Exception):
-            _ = LowVarianceHandler(activity_col="Activity", id_col="ID").transform(self.data)
+            _ = LowVarianceHandler(activity_col="Activity", id_col="ID").transform(
+                self.data
+            )
 
     def test_deactivate_returns_unmodified(self):
         h = LowVarianceHandler(activity_col="Activity", id_col="ID", deactivate=True)

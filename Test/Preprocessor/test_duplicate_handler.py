@@ -162,7 +162,9 @@ class TestDuplicateHandler(unittest.TestCase):
         self.assertEqual(len(out), 5)
 
     def test_disable_cols_or_rows_flags(self):
-        h = DuplicateHandler(id_col="ID", activity_col="Activity", cols=False, rows=True)
+        h = DuplicateHandler(
+            id_col="ID", activity_col="Activity", cols=False, rows=True
+        )
         h.fit(self.train_data)
         # Columns should not be removed, only rows
         out = h.transform(self.train_data)
@@ -170,7 +172,9 @@ class TestDuplicateHandler(unittest.TestCase):
         self.assertIn("Feature6", out.columns)
         self.assertEqual(len(out), 5)  # duplicate rows removed
         # Now disable rows removal
-        h2 = DuplicateHandler(id_col="ID", activity_col="Activity", cols=True, rows=False)
+        h2 = DuplicateHandler(
+            id_col="ID", activity_col="Activity", cols=True, rows=False
+        )
         h2.fit(self.train_data)
         out2 = h2.transform(self.train_data)
         self.assertNotIn("Feature2", out2.columns)
@@ -178,9 +182,16 @@ class TestDuplicateHandler(unittest.TestCase):
         self.assertEqual(len(out2), 7)  # rows kept
 
     def test_save_method_persists_model(self):
-        h = DuplicateHandler(id_col="ID", activity_col="Activity", save_method=True, save_dir=self.temp_dir.name)
+        h = DuplicateHandler(
+            id_col="ID",
+            activity_col="Activity",
+            save_method=True,
+            save_dir=self.temp_dir.name,
+        )
         h.fit(self.train_data)
-        self.assertTrue(os.path.exists(os.path.join(self.temp_dir.name, "duplicate_handler.pkl")))
+        self.assertTrue(
+            os.path.exists(os.path.join(self.temp_dir.name, "duplicate_handler.pkl"))
+        )
 
 
 if __name__ == "__main__":
