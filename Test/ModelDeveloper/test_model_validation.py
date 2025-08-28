@@ -174,13 +174,13 @@ class TestModelReports(unittest.TestCase):
             fig_prefix="test_cv_graph",
             save_dir=self.temp_dir.name,
         )
-        # Ensure the figure file is saved
-        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_cv_graph_box.png"))
+        # Ensure the figure file is saved (pdf per implementation)
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_cv_graph_box.pdf"))
 
     def test_make_roc_curve(self):
         data_train = self.class_data.sample(frac=0.8, random_state=42)
         data_test = self.class_data.drop(data_train.index)
-        ModelValidation.make_roc_curve(
+        ModelValidation.make_curve(
             data_train=data_train,
             data_test=data_test,
             activity_col="Activity",
@@ -188,14 +188,15 @@ class TestModelReports(unittest.TestCase):
             select_model=["KNeighborsClassifier", "SVC", "ExtraTreesClassifier"],
             save_dir=self.temp_dir.name,
             fig_name="test_make_roc_curve",
+            curve_type="roc",
         )
-        # Ensure the csv file is saved
-        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_make_roc_curve.png"))
+        # Ensure the image file is saved (pdf per implementation)
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_make_roc_curve.pdf"))
 
     def test_make_pr_curve(self):
         data_train = self.class_data.sample(frac=0.8, random_state=42)
         data_test = self.class_data.drop(data_train.index)
-        ModelValidation.make_pr_curve(
+        ModelValidation.make_curve(
             data_train=data_train,
             data_test=data_test,
             activity_col="Activity",
@@ -203,9 +204,60 @@ class TestModelReports(unittest.TestCase):
             select_model=["KNeighborsClassifier", "SVC", "ExtraTreesClassifier"],
             save_dir=self.temp_dir.name,
             fig_name="test_make_pr_curve",
+            curve_type="pr",
         )
-        # Ensure the csv file is saved
-        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_make_pr_curve.png"))
+        # Ensure the image file is saved (pdf per implementation)
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_make_pr_curve.pdf"))
+
+    def test_make_scatter_plot_regression(self):
+        # Happy path: regression data, selected models, and a simple scoring_df overlay
+        data_train = self.reg_data.sample(frac=0.8, random_state=42)
+        data_test = self.reg_data.drop(data_train.index)
+        # Simple scoring_df with one metric for displayed annotation
+        scoring_df = pd.DataFrame({
+            "LinearRegression": {"r2": 0.8},
+            "RandomForestRegressor": {"r2": 0.85},
+        })
+        ModelValidation.make_scatter_plot(
+            data_train=data_train,
+            data_test=data_test,
+            activity_col="Activity",
+            id_col="ID",
+            select_model=["LinearRegression", "RandomForestRegressor"],
+            scoring_df=scoring_df,
+            save_dir=self.temp_dir.name,
+            fig_name="test_scatter_plot",
+        )
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/test_scatter_plot.pdf"))
+
+    def test_make_scatter_plot_invalid_task_raises(self):
+        # Using classification data should raise ValueError
+        data_train = self.class_data.sample(frac=0.8, random_state=42)
+        data_test = self.class_data.drop(data_train.index)
+        with self.assertRaises(ValueError):
+            ModelValidation.make_scatter_plot(
+                data_train=data_train,
+                data_test=data_test,
+                activity_col="Activity",
+                id_col="ID",
+                select_model=["LinearRegression"],
+                save_dir=self.temp_dir.name,
+                fig_name="invalid_scatter_plot",
+            )
+
+    def test_make_scatter_plot_invalid_model_raises(self):
+        data_train = self.reg_data.sample(frac=0.8, random_state=42)
+        data_test = self.reg_data.drop(data_train.index)
+        with self.assertRaises(ValueError):
+            ModelValidation.make_scatter_plot(
+                data_train=data_train,
+                data_test=data_test,
+                activity_col="Activity",
+                id_col="ID",
+                select_model=["InvalidModelName"],
+                save_dir=self.temp_dir.name,
+                fig_name="invalid_model_scatter",
+            )
 
 
 if __name__ == "__main__":

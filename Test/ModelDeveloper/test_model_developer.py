@@ -7,6 +7,7 @@ from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from ProQSAR.ModelDeveloper.model_developer import ModelDeveloper
+import os
 
 
 def create_classification_data(
@@ -48,8 +49,6 @@ class TestModelDeveloper(unittest.TestCase):
         self.model_dev = ModelDeveloper(
             activity_col="Activity",
             id_col="ID",
-            best=True,
-            scoring="accuracy",
             add_model={"NewModel": RandomForestClassifier()},
         )
         self.temp_dir = TemporaryDirectory()
@@ -68,7 +67,7 @@ class TestModelDeveloper(unittest.TestCase):
         """Test predicting using the fitted model."""
         self.model_dev.fit(self.train_data)
         predictions = self.model_dev.predict(self.test_data)
-        self.assertIn("Predicted values", predictions.columns)
+        self.assertIn("Predicted value", predictions.columns)
         self.assertEqual(predictions.shape[0], self.test_data.shape[0])
 
     def test_fit_invalid_model(self):
@@ -81,6 +80,45 @@ class TestModelDeveloper(unittest.TestCase):
         """Test prediction raises NotFittedError if model is not fitted."""
         with self.assertRaises(NotFittedError):
             self.model_dev.predict(self.test_data)
+
+    def test_string_model_with_cv_generates_report(self):
+        md = ModelDeveloper(activity_col="Activity", id_col="ID", select_model="SVC")
+        md.save_dir = self.temp_dir.name
+        md.fit(self.train_data)
+        self.assertIsNotNone(md.report)
+        self.assertTrue(isinstance(md.report, pd.DataFrame))
+
+    def test_list_model_without_cv_raises(self):
+        md = ModelDeveloper(
+            activity_col="Activity",
+            id_col="ID",
+            select_model=["SVC", "KNeighborsClassifier"],
+            cross_validate=False,
+        )
+        with self.assertRaises(AttributeError):
+            md.fit(self.train_data)
+
+    def test_set_params_updates_and_invalid_key_raises(self):
+        md = ModelDeveloper(activity_col="Activity", id_col="ID")
+        md.set_params(save_pred_result=True, pred_result_name="out", n_jobs=2)
+        self.assertTrue(md.save_pred_result)
+        self.assertEqual(md.pred_result_name, "out")
+        self.assertEqual(md.n_jobs, 2)
+        with self.assertRaises(KeyError):
+            md.set_params(bad_key=True)
+
+    def test_save_model_and_prediction_artifacts(self):
+        md = ModelDeveloper(
+            activity_col="Activity",
+            id_col="ID",
+            save_model=True,
+            save_pred_result=True,
+        )
+        md.save_dir = self.temp_dir.name
+        md.fit(self.train_data)
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/model.pkl"))
+        pred = md.predict(self.test_data)
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/{md.pred_result_name}.csv"))
 
 
 if __name__ == "__main__":
