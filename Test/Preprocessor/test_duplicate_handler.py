@@ -149,6 +149,39 @@ class TestDuplicateHandler(unittest.TestCase):
         # Check that the file exists with the correct name and that it's a CSV
         self.assertTrue(expected_filename.endswith(".csv"))
 
+    def test_deactivate_returns_unmodified(self):
+        h = DuplicateHandler(id_col="ID", activity_col="Activity", deactivate=True)
+        out = h.fit_transform(self.train_data)
+        self.assertTrue(out.equals(self.train_data))
+
+    def test_transform_before_fit_handles_missing_dup_cols(self):
+        # If transform is called before fit, dup_cols is None; ensure it doesn't crash
+        h = DuplicateHandler(id_col="ID", activity_col="Activity")
+        out = h.transform(self.train_data)
+        self.assertIsInstance(out, pd.DataFrame)
+        self.assertEqual(len(out), 5)
+
+    def test_disable_cols_or_rows_flags(self):
+        h = DuplicateHandler(id_col="ID", activity_col="Activity", cols=False, rows=True)
+        h.fit(self.train_data)
+        # Columns should not be removed, only rows
+        out = h.transform(self.train_data)
+        self.assertIn("Feature2", out.columns)
+        self.assertIn("Feature6", out.columns)
+        self.assertEqual(len(out), 5)  # duplicate rows removed
+        # Now disable rows removal
+        h2 = DuplicateHandler(id_col="ID", activity_col="Activity", cols=True, rows=False)
+        h2.fit(self.train_data)
+        out2 = h2.transform(self.train_data)
+        self.assertNotIn("Feature2", out2.columns)
+        self.assertNotIn("Feature6", out2.columns)
+        self.assertEqual(len(out2), 7)  # rows kept
+
+    def test_save_method_persists_model(self):
+        h = DuplicateHandler(id_col="ID", activity_col="Activity", save_method=True, save_dir=self.temp_dir.name)
+        h.fit(self.train_data)
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir.name, "duplicate_handler.pkl")))
+
 
 if __name__ == "__main__":
     unittest.main()

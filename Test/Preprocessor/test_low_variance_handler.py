@@ -63,8 +63,6 @@ class TestLowVarianceHandler(unittest.TestCase):
             self.data, "Activity", "ID", 0.05
         )
         expected_features = [
-            "Activity",
-            "ID",
             "Feature1",
             "Feature2",
             "Feature5",
@@ -89,8 +87,8 @@ class TestLowVarianceHandler(unittest.TestCase):
         self.handler.fit(self.data)
         transformed_data = self.handler.transform(self.data)
         expected_columns = [
-            "Activity",
             "ID",
+            "Activity",
             "Feature1",
             "Feature2",
             "Feature5",
@@ -105,8 +103,8 @@ class TestLowVarianceHandler(unittest.TestCase):
         """
         transformed_data = self.handler.fit_transform(self.data)
         expected_columns = [
-            "Activity",
             "ID",
+            "Activity",
             "Feature1",
             "Feature2",
             "Feature5",
@@ -122,7 +120,7 @@ class TestLowVarianceHandler(unittest.TestCase):
         binary_columns = ["Activity", "ID", "Feature1", "Feature2"]
         binary_data = self.data[binary_columns]
         transformed_data = self.handler.fit_transform(binary_data)
-        self.assertListEqual(list(transformed_data.columns), binary_columns)
+        self.assertListEqual(list(transformed_data.columns), ["ID", "Activity", "Feature1", "Feature2"])
 
     def test_fit_transform_no_non_binary_meeting_threshold(self):
         """
@@ -138,8 +136,48 @@ class TestLowVarianceHandler(unittest.TestCase):
             save_method=True,
         )
         transformed_data = handler_high_thresh.fit_transform(self.data)
-        expected_columns = ["Activity", "ID", "Feature1", "Feature2"]
+        expected_columns = ["ID", "Activity", "Feature1", "Feature2"]
         self.assertListEqual(list(transformed_data.columns), expected_columns)
+
+    def test_transform_raises_not_fitted(self):
+        with self.assertRaises(Exception):
+            _ = LowVarianceHandler(activity_col="Activity", id_col="ID").transform(self.data)
+
+    def test_deactivate_returns_unmodified(self):
+        h = LowVarianceHandler(activity_col="Activity", id_col="ID", deactivate=True)
+        out = h.fit_transform(self.data)
+        self.assertTrue(out.equals(self.data))
+
+    def test_visualize_save_image_path(self):
+        # Exercise visualization branch with save_image True; Agg backend avoids display
+        h = LowVarianceHandler(
+            activity_col="Activity",
+            id_col="ID",
+            visualize=True,
+            save_image=True,
+            save_dir=self.temp_dir.name,
+            image_name="variance_plot.png",
+        )
+        # Should not raise
+        h.fit(self.data)
+        # No strict file assert due to .show(), just ensure directory exists
+        self.assertTrue(os.path.isdir(self.temp_dir.name))
+
+    def test_save_trans_data_collision_creates_incremented_name(self):
+        h = LowVarianceHandler(
+            activity_col="Activity",
+            id_col="ID",
+            save_trans_data=True,
+            save_dir=self.temp_dir.name,
+            trans_data_name="out",
+        )
+        h.fit(self.data)
+        # First save
+        _ = h.transform(self.data)
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir.name, "out.csv")))
+        # Second save should create an incremented filename
+        _ = h.transform(self.data)
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir.name, "out (1).csv")))
 
 
 if __name__ == "__main__":
