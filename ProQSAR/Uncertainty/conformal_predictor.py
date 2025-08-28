@@ -47,6 +47,7 @@ class ConformalPredictor(BaseEstimator):
         self.cp_kwargs = kwargs
         self.task_type = None
         self.cp_kwargs = kwargs
+        self.cp = None
 
     def fit(self, data: pd.DataFrame):
 
