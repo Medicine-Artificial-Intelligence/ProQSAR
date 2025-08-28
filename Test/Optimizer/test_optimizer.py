@@ -46,6 +46,7 @@ class TestOptimizer(unittest.TestCase):
             activity_col="Activity",
             id_col="ID",
             scoring="accuracy",
+            study_name="study_classification",
         )
 
         best_params, best_score = optimizer.optimize(self.classification_data)
@@ -69,6 +70,7 @@ class TestOptimizer(unittest.TestCase):
             activity_col="Activity",
             id_col="ID",
             scoring="r2",
+            study_name="study_regression",
         )
 
         best_params, best_score = optimizer.optimize(self.regression_data)
@@ -93,6 +95,7 @@ class TestOptimizer(unittest.TestCase):
             activity_col="Activity",
             id_col="ID",
             add_model=custom_model,
+            study_name="study_custom_model",
         )
 
         best_params, best_score = optimizer.optimize(self.classification_data)
