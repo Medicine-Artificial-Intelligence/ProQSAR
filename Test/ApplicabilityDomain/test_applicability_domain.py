@@ -112,7 +112,13 @@ class TestApplicabilityDomain(unittest.TestCase):
         self.assertTrue(os.path.exists(f"{self.temp_dir.name}/ad_pred_result.csv"))
 
     def test_deactivate_returns_without_fitting(self):
-        ad = ApplicabilityDomain(method="ocsvm", activity_col="Activity", id_col="ID", deactivate=True, save_dir=self.temp_dir.name)
+        ad = ApplicabilityDomain(
+            method="ocsvm",
+            activity_col="Activity",
+            id_col="ID",
+            deactivate=True,
+            save_dir=self.temp_dir.name,
+        )
         res = ad.fit(self.train_data)
         self.assertIsNone(res)
         # predict should raise NotFittedError since not fitted
@@ -120,20 +126,34 @@ class TestApplicabilityDomain(unittest.TestCase):
             ad.predict(self.test_data)
 
     def test_ocsvm_manual_gamma_path(self):
-        ad = ApplicabilityDomain(method="ocsvm", activity_col="Activity", id_col="ID", gamma=0.1, save_dir=None)
+        ad = ApplicabilityDomain(
+            method="ocsvm",
+            activity_col="Activity",
+            id_col="ID",
+            gamma=0.1,
+            save_dir=None,
+        )
         ad.fit(self.train_data)
         self.assertEqual(ad.optimal_gamma, 0.1)
         self.assertIsNotNone(ad.ad)
 
     def test_no_save_dir_does_not_write_files(self):
-        ad = ApplicabilityDomain(method="ocsvm", activity_col="Activity", id_col="ID", save_dir=None)
+        ad = ApplicabilityDomain(
+            method="ocsvm", activity_col="Activity", id_col="ID", save_dir=None
+        )
         ad.fit(self.train_data)
         ad.predict(self.test_data)
-        self.assertFalse(os.path.exists(os.path.join(self.temp_dir.name, "applicability_domain.pkl")))
-        self.assertFalse(os.path.exists(os.path.join(self.temp_dir.name, "ad_pred_result.csv")))
+        self.assertFalse(
+            os.path.exists(os.path.join(self.temp_dir.name, "applicability_domain.pkl"))
+        )
+        self.assertFalse(
+            os.path.exists(os.path.join(self.temp_dir.name, "ad_pred_result.csv"))
+        )
 
     def test_predict_includes_id_column_when_present(self):
-        ad = ApplicabilityDomain(method="knn", activity_col="Activity", id_col="ID", save_dir=None)
+        ad = ApplicabilityDomain(
+            method="knn", activity_col="Activity", id_col="ID", save_dir=None
+        )
         ad.fit(self.train_data)
         res = ad.predict(self.test_data)
         self.assertIn("ID", res.columns)

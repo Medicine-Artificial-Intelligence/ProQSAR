@@ -96,6 +96,19 @@ class TestStatisticalAnalysis(unittest.TestCase):
         )
         self.assertFalse(scoring_dfs.empty)
 
+    def test_extract_scoring_dfs_melt_true(self):
+        scoring_dfs, scoring_list, method_list = (
+            StatisticalAnalysis.extract_scoring_dfs(
+                self.cv_class,
+                scoring_list=["accuracy", "f1"],
+                method_list=["KNeighborsClassifier", "SVC"],
+                melt=True,
+            )
+        )
+        self.assertIn("method", scoring_dfs.columns)
+        self.assertIn("value", scoring_dfs.columns)
+        self.assertTrue({"accuracy", "f1"}.issubset(set(scoring_list)))
+
     def test_check_variance_homogeneity(self):
         result_df = StatisticalAnalysis.check_variance_homogeneity(
             self.cv_class,
@@ -186,6 +199,31 @@ class TestStatisticalAnalysis(unittest.TestCase):
         )
         self.assertTrue(os.path.exists(f"{self.temp_dir.name}/tukey_mcs.pdf"))
         self.assertTrue(os.path.exists(f"{self.temp_dir.name}/tukey_ci.pdf"))
+
+    def test_analysis_end_to_end(self):
+        out = StatisticalAnalysis.analysis(
+            report_df=self.cv_class,
+            scoring_list=["accuracy"],
+            method_list=["KNeighborsClassifier", "SVC", "ExtraTreesClassifier"],
+            check_assumptions=True,
+            method="parametric",
+            save_dir=self.temp_dir.name,
+        )
+        self.assertIn("variance", out)
+        self.assertIn("normality", out)
+        self.assertIn("anova_test", out)
+        self.assertIn("posthoc_tukey", out)
+        self.assertTrue(
+            os.path.exists(f"{self.temp_dir.name}/variance_homogeneity.csv")
+        )
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/normality.pdf"))
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/anova_test.pdf"))
+        # Tukey artifacts
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/tukey_mcs.pdf"))
+        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/tukey_ci.pdf"))
+        self.assertTrue(
+            os.path.exists(f"{self.temp_dir.name}/tukey_result_tab_accuracy.csv")
+        )
 
 
 if __name__ == "__main__":

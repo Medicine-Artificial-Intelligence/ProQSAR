@@ -120,7 +120,9 @@ class TestConformalPredictor(unittest.TestCase):
         predictor.fit(self.class_cal_data)
         predictions = predictor.predict(self.class_test_data, alpha=[0.1, 0.2])
         self.assertIn("Predicted value", predictions.columns)
-        self.assertTrue(any(col.startswith("Prediction Set (alpha=") for col in predictions.columns))
+        self.assertTrue(
+            any(col.startswith("Prediction Set (alpha=") for col in predictions.columns)
+        )
 
     def test_predict_with_alpha_regression_intervals(self):
         predictor = ConformalPredictor(
@@ -129,7 +131,12 @@ class TestConformalPredictor(unittest.TestCase):
         predictor.fit(self.reg_cal_data)
         predictions = predictor.predict(self.reg_test_data, alpha=[0.1])
         self.assertIn("Predicted value", predictions.columns)
-        self.assertTrue(any(col.startswith("Prediction Interval (alpha=") for col in predictions.columns))
+        self.assertTrue(
+            any(
+                col.startswith("Prediction Interval (alpha=")
+                for col in predictions.columns
+            )
+        )
 
     def test_not_fitted_error(self):
         predictor = ConformalPredictor(

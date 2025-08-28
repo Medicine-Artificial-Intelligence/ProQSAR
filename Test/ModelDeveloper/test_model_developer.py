@@ -118,7 +118,9 @@ class TestModelDeveloper(unittest.TestCase):
         md.fit(self.train_data)
         self.assertTrue(os.path.exists(f"{self.temp_dir.name}/model.pkl"))
         pred = md.predict(self.test_data)
-        self.assertTrue(os.path.exists(f"{self.temp_dir.name}/{md.pred_result_name}.csv"))
+        self.assertTrue(
+            os.path.exists(f"{self.temp_dir.name}/{md.pred_result_name}.csv")
+        )
 
 
 if __name__ == "__main__":

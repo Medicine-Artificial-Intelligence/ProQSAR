@@ -200,6 +200,12 @@ class StatisticalAnalysis:
                 2, len(scoring_list), figsize=(5 * len(scoring_list), 10)
             )
 
+            # Ensure axes is 2D for consistent indexing when len(scoring_list) == 1
+            if not isinstance(axes, np.ndarray):
+                axes = np.array(axes)
+            if axes.ndim == 1:
+                axes = axes.reshape(2, 1)
+
             for i, scoring in enumerate(scoring_list):
                 ax = axes[0, i]
                 scoring_data = df_norm[df_norm["scoring"] == scoring]["value"]

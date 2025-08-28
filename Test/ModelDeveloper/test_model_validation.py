@@ -214,10 +214,12 @@ class TestModelReports(unittest.TestCase):
         data_train = self.reg_data.sample(frac=0.8, random_state=42)
         data_test = self.reg_data.drop(data_train.index)
         # Simple scoring_df with one metric for displayed annotation
-        scoring_df = pd.DataFrame({
-            "LinearRegression": {"r2": 0.8},
-            "RandomForestRegressor": {"r2": 0.85},
-        })
+        scoring_df = pd.DataFrame(
+            {
+                "LinearRegression": {"r2": 0.8},
+                "RandomForestRegressor": {"r2": 0.85},
+            }
+        )
         ModelValidation.make_scatter_plot(
             data_train=data_train,
             data_test=data_test,
