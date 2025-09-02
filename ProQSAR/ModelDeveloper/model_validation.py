@@ -24,6 +24,14 @@ from ProQSAR.ModelDeveloper.model_developer_utils import (
 
 
 class ModelValidation:
+    """
+    A collection of static methods for evaluating models via cross-validation,
+    external validation, and plotting model performance.
+
+    Methods are implemented as @staticmethod to allow direct usage without
+    instantiating the class.
+    """
+
     @staticmethod
     def _plot_cv_report(
         report_df: pd.DataFrame,
@@ -34,26 +42,33 @@ class ModelValidation:
         save_dir: str = "Project/ModelDevelopment",
     ) -> None:
         """
-        Plots internal validation report for model comparison based on specified scoring metrics.
+        Create summary plots from a cross-validation report DataFrame.
 
-        Parameters:
-        -----------
+        The function supports 'box', 'bar' and 'violin' plot types. The report_df
+        is expected to be in a wide format where columns include 'scoring' and
+        'cv_cycle' and the rest of the columns correspond to methods.
+
+        Parameters
+        ----------
         report_df : pd.DataFrame
-            DataFrame containing the model comparison scores.
-        scoring_list : List[str]
-            List of metrics used to evaluate model performance.
-        graph_type : Optional[str]
-            Type of graph to plot ('box', 'bar', 'violin'). Default is 'box'.
-        save_fig : bool
-            Whether to save the figure. Default is False.
-        fig_prefix : str
-            Name of the figure to save. Default is 'cv_graph'.
-        save_dir : str
-            Directory where the figure will be saved. Default is 'Project/Model_Development'.
+            CV report in wide format (columns include 'scoring' and 'cv_cycle').
+        scoring_list : list[str] | str
+            A metric name or list of metric names to plot.
+        graph_type : str, optional
+            One of 'box', 'bar' or 'violin' (default 'box').
+        save_fig : bool, optional
+            If True, save the resulting figure to disk (default False).
+        fig_prefix : str, optional
+            Filename prefix for the saved figure (default 'cv_graph').
+        save_dir : str, optional
+            Directory to save plots if save_fig=True (default 'Project/ModelDevelopment').
 
-        Returns:
-        --------
-        None
+        Raises
+        ------
+        ValueError
+            If an unsupported graph_type is provided.
+        Exception
+            Unexpected exceptions are logged and re-raised.
         """
         try:
             if isinstance(scoring_list, str):
@@ -186,16 +201,47 @@ class ModelValidation:
 
     @staticmethod
     def _perform_cross_validation(
-        models,
-        X_data,
-        y_data,
+        models: Dict[str, Any],
+        X_data: Union[pd.DataFrame, np.ndarray],
+        y_data: Union[pd.Series, np.ndarray],
         cv,
-        scoring_list,
-        include_stats,
-        n_splits,
-        n_repeats,
-        n_jobs,
-    ):
+        scoring_list: List[str],
+        include_stats: bool,
+        n_splits: int,
+        n_repeats: int,
+        n_jobs: int,
+    ) -> pd.DataFrame:
+        """
+        Internal helper that runs sklearn.cross_validate for multiple models and
+        returns a flattened DataFrame with per-cycle scores and optional stats.
+
+        Parameters
+        ----------
+        models : dict
+            Mapping from model name to estimator (must support sklearn API).
+        X_data : DataFrame or ndarray
+            Feature matrix.
+        y_data : Series or ndarray
+            Target vector.
+        cv : cross-validation splitter
+            CV splitter (e.g., RepeatedKFold).
+        scoring_list : list[str]
+            List of scoring metric names compatible with sklearn.
+        include_stats : bool
+            If True, add mean, std, and median rows per method/metric.
+        n_splits : int
+            Number of folds per repeat.
+        n_repeats : int
+            Number of CV repeats.
+        n_jobs : int
+            Number of parallel jobs for cross_validate.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns ['scoring', 'cv_cycle', 'method', 'value'] and
+            optional aggregated rows for 'mean', 'std', 'median'.
+        """
         result = []
 
         for name, model in models.items():
@@ -276,45 +322,49 @@ class ModelValidation:
         random_state: Optional[int] = 42,
     ) -> pd.DataFrame:
         """
-        Performs internal validation (cross-validation) for multiple models and generates a report.
+        Run cross-validation for supplied models and return a structured report.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         data : pd.DataFrame
-            The full dataset used for validation.
+            Data including feature columns, activity_col and id_col.
         activity_col : str
-            The target column in the dataset.
+            Name of the target column.
         id_col : str
-            The identifier column in the dataset.
-        add_model : Optional[dict]
-            Dictionary of additional models to include.
-        select_model : Optional[List[str]]
-            List of models to be selected for validation.
-        scoring_list : Optional[List[str]]
-            List of scoring metrics for the validation. If None, default metrics are used.
-        n_splits : int
-            Number of splits for cross-validation. Default is 10.
-        n_repeats : int
-            Number of repeats for cross-validation. Default is 3.
-        visualize : Optional[str]
-            Visualization type ('box', 'bar', 'violin'). Default is None.
-        save_fig : bool
-            Whether to save the figures generated. Default is False.
-        save_csv : bool
-            Whether to save the report to a CSV file. Default is False.
-        fig_prefix : str
-            File name for saving the figure.
-        csv_name : str
-            File name for saving the report.
-        save_dir : str
-            Directory where the figure/report will be saved.
-        n_jobs : int
-            Number of parallel jobs to run.
+            Name of the id column to be dropped before training.
+        add_model : dict, optional
+            Extra model entries to include when building the model map.
+        select_model : list[str] | str | None, optional
+            If provided, restrict evaluation to named models.
+        scoring_list : list[str] | str | None
+            If None, default scoring is selected by task via _get_cv_scoring.
+        n_splits : int, optional
+            Number of folds per repeat (default 5).
+        n_repeats : int, optional
+            Number of CV repeats (default 5).
+        include_stats : bool, optional
+            Whether to include aggregated statistics rows (mean/std/median).
+        visualize : str | list[str] | None, optional
+            Visualizations to produce via _plot_cv_report.
+        save_fig : bool, optional
+            If True, save visualization figures.
+        save_csv : bool, optional
+            If True, save the resulting report CSV.
+        fig_prefix : str, optional
+            Prefix for plot filenames.
+        csv_name : str, optional
+            Filename for saved CSV.
+        save_dir : str, optional
+            Directory for saving figures and CSVs.
+        n_jobs : int, optional
+            Number of parallel jobs for model operations.
+        random_state : int | None, optional
+            Random seed used for model instantiation.
 
-        Returns:
-        --------
+        Returns
+        -------
         pd.DataFrame
-            DataFrame containing the validation results for each model.
+            A wide-format CV report with columns ['scoring','cv_cycle', ...methods...].
         """
         try:
             if isinstance(scoring_list, str):
@@ -419,37 +469,37 @@ class ModelValidation:
         n_jobs: int = 1,
     ) -> pd.DataFrame:
         """
-        Performs external validation (on test data) for multiple models and generates a report.
+        Evaluate models on an external test set and return per-model evaluation metrics.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         data_train : pd.DataFrame
-            Training data used to fit the models.
+            Training dataset with features, activity_col and id_col.
         data_test : pd.DataFrame
-            Test data used for evaluating the models.
+            External test dataset with same feature columns.
         activity_col : str
-            The target column in the dataset.
+            Name of the target column.
         id_col : str
-            The identifier column in the dataset.
-        add_model : Optional[dict]
-            Dictionary of additional models to include.
-        select_model : Optional[List[str]]
-            List of models to be selected for validation.
-        scoring_list : Optional[List[str]]
-            List of scoring metrics for the validation. If None, default metrics are used.
-        save_csv : bool
-            Whether to save the report to a CSV file. Default is False.
-        csv_name : str
-            File name for saving the report.
-        save_dir : str
-            Directory where the figure/report will be saved.
-        n_jobs : int
-            Number of parallel jobs to run.
+            Identifier column name (dropped before training).
+        add_model : dict, optional
+            Extra models to include.
+        select_model : list[str] | None, optional
+            If provided, restrict evaluation to these models.
+        scoring_list : list[str] | str | None, optional
+            If provided, only include these metrics in the output.
+        save_csv : bool, optional
+            If True, save results to CSV.
+        csv_name : str, optional
+            Filename for saved CSV.
+        save_dir : str, optional
+            Directory for saving outputs.
+        n_jobs : int, optional
+            Number of threads for model libraries that accept it.
 
-        Returns:
-        --------
+        Returns
+        -------
         pd.DataFrame
-            DataFrame containing the evaluation results for each model.
+            DataFrame of evaluation metrics (rows = metric, columns = model).
         """
         try:
             if isinstance(scoring_list, str):
@@ -531,41 +581,43 @@ class ModelValidation:
         save_dir: Optional[str] = "Project/ModelDevelopment",
         fig_name: Optional[str] = None,
         n_jobs: int = 1,
-    ):
+    ) -> None:
         """
-        Draws ROC and/or Precision-Recall curves for selected models and saves the plot.
+        Plot ROC and/or Precision-Recall curves for one or more models evaluated
+        on an external test set (classification only).
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         data_train : pd.DataFrame
-            Training data used to fit the models.
+            Training data to fit models.
         data_test : pd.DataFrame
-            Test data used for evaluating the models.
+            Test data used to compute curves.
         activity_col : str
-            The target column in the dataset.
+            Name of the target column.
         id_col : str
-            The identifier column in the dataset.
-        curve_type : Union[str, List[str]], default="roc"
-            The type of curve(s) to generate. Can be a single value ("roc" or "pr")
-            or a list of values (e.g., ["roc", "pr"]).
-        select_model : Optional[List[str]]
-            List of models to be selected for plotting. If None, all models are used.
-        add_model : Optional[dict]
-            Dictionary of additional models to include.
-        legend_loc : Optional[Union[str, Tuple[float, float]]]
-            The location for the legend in the plot. If not provided, defaults are set based on the curve type.
-            For ROC: "lower right", for PR: "lower left".
-        save_dir : str, default="Project/ModelDevelopment"
-            Directory where the figure will be saved.
-        fig_name : Optional[str]
-            The base name of the file where the plot will be saved. If multiple curves are plotted,
-            a suffix is added based on the curve type.
-        n_jobs : int, default=1
-            The number of jobs to run in parallel when fitting models.
+            Identifier column name (dropped before training).
+        curve_type : str | list[str], default ['roc','pr']
+            Which curves to plot. Accepts 'roc' and/or 'pr'.
+        select_model : list[str] | str | None
+            Subset of model names to evaluate (default: all).
+        add_model : dict, optional
+            Extra models to include in the model map.
+        legend_loc : str | tuple, optional
+            Legend location for matplotlib (default 'best').
+        save_dir : str | None, optional
+            Directory to save the resulting plot PDF. If None, no file is saved.
+        fig_name : str | None, optional
+            Filename (without extension) for saved figure. If None, a default name
+            is constructed based on curve_type.
+        n_jobs : int, optional
+            Number of threads to pass to model libraries that accept it.
 
-        Returns:
-        --------
-        None
+        Raises
+        ------
+        ValueError
+            If non-classification task is passed or unsupported curve_type value.
+        Exception
+            Unexpected exceptions are logged and re-raised.
         """
         try:
             # Normalize curve_type to a list.
@@ -692,37 +744,45 @@ class ModelValidation:
         save_dir: str = "Project/ModelDevelopment",
         fig_name: str = "scatter_plot",
         n_jobs: int = 1,
-    ):
+    ) -> None:
         """
-        Generates separate scatter plots (using subplots) for regression tasks, each comparing
-        actual vs. predicted values for a selected model.
+        Produce scatter plots of predicted vs actual values for regression models.
 
-        Parameters:
-        -----------
+        Each selected model is fitted on the training set and its predictions on
+        the test set are plotted in a subplot. Optionally, per-model scores from
+        scoring_df are displayed within each subplot.
+
+        Parameters
+        ----------
         data_train : pd.DataFrame
-            Training data used to fit the models.
+            Training dataset with features and target.
         data_test : pd.DataFrame
-            Test data used for evaluating the models.
+            Test dataset with features and target.
         activity_col : str
-            The target column (response variable) in the dataset.
+            Target column name.
         id_col : str
-            The identifier column in the dataset.
-        select_model : Optional[List[str]]
-            List of model names to be selected for plotting. If None, all available models are used.
-        add_model : Optional[dict]
-            Dictionary of additional models to include.
-        legend_loc : Union[str, Tuple[float, float]], default="best"
-            The location for the legend in each subplot.
-        save_dir : str, default="Project/ModelDevelopment"
-            Directory where the figure will be saved.
-        fig_name : str, default="scatter_plot"
-            The base name of the file where the plot will be saved.
-        n_jobs : int, default=1
-            The number of jobs to run in parallel when fitting models.
+            Identifier column name (dropped before training).
+        select_model : list[str] | str | None
+            Names of models to compare (default: all available models).
+        add_model : dict, optional
+            Additional models to include.
+        scoring_df : pd.DataFrame, optional
+            DataFrame containing per-model scoring information to display.
+        scoring_loc : tuple(float,float), optional
+            Location (x,y in axes coords) where the scoring text is placed.
+        save_dir : str, optional
+            Directory to save the combined figure.
+        fig_name : str, optional
+            Filename (without extension) for saved plot.
+        n_jobs : int, optional
+            Number of threads to pass to model libraries that accept it.
 
-        Returns:
-        --------
-        None
+        Raises
+        ------
+        ValueError
+            If a non-regression task is provided or no valid models are selected.
+        Exception
+            Unexpected exceptions are logged and re-raised.
         """
         try:
             if isinstance(select_model, str):

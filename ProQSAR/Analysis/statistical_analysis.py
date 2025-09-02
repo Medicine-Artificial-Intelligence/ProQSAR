@@ -17,6 +17,17 @@ import logging
 
 
 class StatisticalAnalysis:
+    """
+    A collection of static utility methods for:
+      - extracting and reshaping scoring DataFrames,
+      - testing statistical assumptions (homogeneity of variance, normality),
+      - performing repeated-measures ANOVA or Friedman tests,
+      - running posthoc analyses (Conover-Friedman and Tukey HSD),
+      - and creating summary plots (MCS heatmaps, CI plots, CD diagrams).
+
+    The class is intentionally stateless — all methods are static and operate on
+    pandas DataFrames passed by the caller.
+    """
 
     @staticmethod
     def extract_scoring_dfs(
@@ -24,26 +35,47 @@ class StatisticalAnalysis:
         scoring_list: Optional[Union[list, str]] = None,
         method_list: Optional[Union[list, str]] = None,
         melt: bool = False,
-    ) -> Union[pd.DataFrame, list, list]:
+    ) -> Tuple[pd.DataFrame, List[str], List[str]]:
         """
-        Extract scoring DataFrames from the report DataFrame based on the given scoring list and method list.
+        Extract and optionally melt scoring DataFrames for a set of metrics and methods.
 
-        Args:
-            report_df (pd.DataFrame): The input report DataFrame.
-            scoring_list (Optional[Union[list, str]]): The list of scoring metrics to extract. Default is None.
-            method_list (Optional[Union[list, str]]): The list of methods to extract. Default is None.
-            melt (bool): Whether to melt the DataFrame to long format. Default is False.
+        Parameters
+        ----------
+        report_df
+            DataFrame containing at least columns ['scoring', 'cv_cycle', ...methods...].
+        scoring_list
+            Metric or list of metrics to extract (e.g., 'accuracy' or ['accuracy','f1']).
+            If None, all unique values from report_df['scoring'] are used.
+        method_list
+            Column name or list of method column names to include. If None, every column
+            except 'scoring' and 'cv_cycle' is used.
+        melt
+            If True, return the result in long/melted format with columns
+            ['scoring','cv_cycle','method','value'].
 
-        Returns:
-            Union[pd.DataFrame, list, list]: The extracted scoring DataFrames, scoring list, and method list.
+        Returns
+        -------
+        Tuple[pd.DataFrame, List[str], List[str]]
+            - scoring_dfs : concatenated DataFrame (melted if requested)
+            - scoring_list : list of scoring metric names used
+            - method_list : list of method column names used
+
+        Raises
+        ------
+        ValueError
+            If an explicitly provided scoring is not present in report_df.
+        Exception
+            Any unexpected exceptions are logged and re-raised.
         """
         try:
+            # Normalize scoring_list input to list
             if isinstance(scoring_list, str):
                 scoring_list = [scoring_list]
 
             if scoring_list is None:
                 scoring_list = report_df["scoring"].unique()
 
+            # Normalize method_list input to list
             if isinstance(method_list, str):
                 method_list = [method_list]
 
@@ -66,6 +98,7 @@ class StatisticalAnalysis:
                 filtered_dfs.append(score_df)
 
             scoring_dfs = pd.concat(filtered_dfs)
+            # exclude aggregated rows
             scoring_dfs = scoring_dfs[
                 ~scoring_dfs["cv_cycle"].isin(["mean", "median", "std"])
             ]
@@ -95,19 +128,38 @@ class StatisticalAnalysis:
         csv_name: str = "check_variance_homogeneity",
     ) -> pd.DataFrame:
         """
-        Check variance homogeneity across methods for the given scoring metrics.
+        Check variance homogeneity for each scoring metric across methods.
 
-        Args:
-            report_df (pd.DataFrame): The input report DataFrame.
-            scoring_list (Optional[Union[list, str]]): The list of scoring metrics to check. Default is None.
-            method_list (Optional[Union[list, str]]): The list of methods to check. Default is None.
-            levene_test (bool): Whether to perform Levene's test for variance homogeneity. Default is True.
-            save_csv (bool): Whether to save the result as a CSV file. Default is True.
-            save_dir (str): The directory to save the CSV file. Default is "Project/Analysis".
-            csv_name (str): The name of the CSV file. Default is "check_variance_homogeneity".
+        For each scoring metric:
+          - compute variance per method and the fold difference (max/min)
+          - optionally perform Levene's test to assess equality of variances
 
-        Returns:
-            pd.DataFrame: The result DataFrame with variance fold difference and p-value (if applicable).
+        Parameters
+        ----------
+        report_df
+            Input DataFrame (will be melted internally).
+        scoring_list
+            Optional metric or list of metrics.
+        method_list
+            Optional method column name(s).
+        levene_test
+            If True, run Levene's test and include p-value in the output.
+        save_csv
+            If True, save the result DataFrame as CSV to save_dir/csv_name.csv.
+        save_dir
+            Directory where CSV (and other artifacts) will be saved.
+        csv_name
+            Base filename (without extension) for saved CSV.
+
+        Returns
+        -------
+        pd.DataFrame
+            Index: scoring metric; Columns: ['variance_fold_difference', 'p_value' (if levene_test)]
+
+        Raises
+        ------
+        Exception
+            Unexpected exceptions are logged and re-raised.
         """
         try:
             report_new, scoring_list, _ = StatisticalAnalysis.extract_scoring_dfs(
@@ -148,7 +200,7 @@ class StatisticalAnalysis:
             if save_csv:
                 if save_dir and not os.path.exists(save_dir):
                     os.makedirs(save_dir, exist_ok=True)
-                result_df.to_csv(f"{save_dir}/{csv_name}.csv", index=False)
+                result_df.to_csv(f"{save_dir}/{csv_name}.csv", index=True)
 
             return result_df
 
@@ -166,18 +218,34 @@ class StatisticalAnalysis:
         fig_name: str = "check_normality",
     ) -> None:
         """
-        Check the normality of the data for the given scoring metrics and methods.
+        Create histograms + Q-Q plots to visually inspect normality for each scoring metric.
 
-        Args:
-            report_df (pd.DataFrame): The input report DataFrame.
-            scoring_list (Optional[Union[list, str]]): The list of scoring metrics to check. Default is None.
-            method_list (Optional[Union[list, str]]): The list of methods to check. Default is None.
-            save_fig (bool): Whether to save the resulting figure as a file. Default is True.
-            save_dir (str): The directory to save the figure. Default is "Project/Analysis".
-            fig_name (str): The name of the figure file. Default is "check_normality".
+        The method normalizes (centers) values per (method, scoring) before plotting
+        so that the distribution shape (rather than absolute scale) is shown.
 
-        Returns:
-            None
+        Parameters
+        ----------
+        report_df
+            Input DataFrame with scoring and method columns.
+        scoring_list
+            Optional metric or list of metrics.
+        method_list
+            Optional method column name(s).
+        save_fig
+            If True, save the figure as a PDF to save_dir/fig_name.pdf.
+        save_dir
+            Directory to store the figure.
+        fig_name
+            Base filename (without extension) for saved figure.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        Exception
+            Unexpected exceptions are logged and re-raised.
         """
         try:
             report_new, scoring_list, _ = StatisticalAnalysis.extract_scoring_dfs(
@@ -242,30 +310,39 @@ class StatisticalAnalysis:
         fig_name: Optional[str] = None,
     ) -> None:
         """
-        Perform a statistical test (AnovaRM or friedman) on the report dataframe and plot the results.
+        Run either repeated-measures ANOVA (AnovaRM) or Friedman test per scoring metric
+        and produce boxplots annotated with p-values.
 
         Parameters
         ----------
-        report_df : pd.DataFrame
-            The input report dataframe.
-        scoring_list : Optional[Union[list, str]], optional
-            List or string of scoring metrics, by default None.
-        method_list : Optional[list], optional
-            List or string of methods, by default None.
-        select_test : str, optional
-            The statistical test to use ('AnovaRM' or 'friedman'), by default "AnovaRM".
-        showmeans : bool, optional
-            Whether to show means in the boxplot, by default True.
-        save_fig : bool, optional
-            Whether to save the figure, by default True.
-        save_dir : str, optional
-            Directory to save the figure, by default "Project/Analysis".
-        fig_name : Optional[str], optional
-            Name of the saved figure, by default None.
+        report_df
+            Input DataFrame containing melted data with columns ['scoring','cv_cycle','method','value'].
+            If passing a wide DataFrame, the method will call extract_scoring_dfs(melt=True).
+        scoring_list
+            Metric or list of metrics to test.
+        method_list
+            List of method names. If length <= 1, the test is skipped.
+        select_test
+            'AnovaRM' or 'friedman' (non-parametric).
+        showmeans
+            Whether boxplots display means.
+        save_fig
+            If True, save the summary figure to save_dir.
+        save_dir
+            Directory where figure will be saved.
+        fig_name
+            Filename base for saved figure. Defaults to select_test if None.
 
         Returns
         -------
         None
+
+        Raises
+        ------
+        ValueError
+            If select_test is not one of the supported tests.
+        Exception
+            Unexpected exceptions are logged and re-raised.
         """
         try:
             report_new, scoring_list, method_list = (
@@ -385,35 +462,41 @@ class StatisticalAnalysis:
         save_fig: bool = True,
         save_result: bool = True,
         save_dir: str = "Project/Analysis",
-    ) -> tuple:
+    ) -> Tuple[Dict[str, pd.DataFrame], Dict[str, pd.Series]]:
         """
-        Perform posthoc Conover-Friedman test on the report dataframe and generate plots.
+        Run Conover posthoc tests following Friedman and create visualizations:
+           - 'sign' plot (significance heatmap)
+           - 'ccd' plot (critical difference diagram)
 
         Parameters
         ----------
-        report_df : pd.DataFrame
-            The input report dataframe.
-        scoring_list : Optional[Union[list, str]], optional
-            List or string of scoring metrics, by default None.
-        method_list : Optional[list], optional
-            List or string of methods, by default None.
-        plot : Optional[Union[list, str]], optional
-            Type of plot to generate ('sign' or 'ccd'), by default None.
-        axis_text_size : float, optional
-            Text size for axis labels, by default 12.
-        title_size : float, optional
-            Text size for titles, by default 16.
-        save_fig : bool, optional
-            Whether to save the figure, by default True.
-        save_result : bool, optional
-            Whether to save the results, by default True.
-        save_dir : str, optional
-            Directory to save the figure and results, by default "Project/Analysis".
+        report_df
+            Input DataFrame (wide format expected unless melt=False).
+        scoring_list
+            Optional metric or list of metrics.
+        method_list
+            List of method column names.
+        plot
+            Plot types to produce: None (defaults to ['sign','ccd']), 'sign', 'ccd', or a list.
+        axis_text_size, title_size
+            Sizes used for plot labels/titles.
+        save_fig
+            If True, save generated figures to save_dir.
+        save_result
+            If True, save per-metric posthoc result CSVs to save_dir.
+        save_dir
+            Directory for saving figures and CSVs.
 
         Returns
         -------
-        tuple
-            A tuple containing the posthoc Conover-Friedman results and the rank results.
+        (pc_results, rank_results)
+            pc_results : dict mapping scoring -> DataFrame of pairwise adjusted p-values (Conover)
+            rank_results : dict mapping scoring -> Series of mean relative ranks
+
+        Notes
+        -----
+        Uses scikit-posthocs for Conover-Friedman posthoc test and
+        scikit-posthocs plotting helpers for sign_plot and critical_difference_diagram.
         """
         try:
             report_new, scoring_list, method_list = (
@@ -507,26 +590,20 @@ class StatisticalAnalysis:
         save_dir: str = "Project/Analysis",
     ) -> None:
         """
-        Generate sign plots for each scoring metric.
+        Internal: create 'sign' heatmap plots from scikit-posthocs sign_plot.
 
         Parameters
         ----------
-        pc_results : dict
-            Dictionary containing pairwise comparison results.
-        scoring_list : list
-            List of scoring metrics.
-        axis_text_size : float, optional
-            Font size for axis labels, by default 12.
-        title_size : float, optional
-            Font size for plot titles, by default 16.
-        save_fig : bool, optional
-            Whether to save the figure, by default True.
-        save_dir : str, optional
-            Directory to save the figure, by default "Project/Analysis".
-
-        Returns
-        -------
-        None
+        pc_results
+            Mapping scoring -> pairwise p-value DataFrame (from posthoc_conover_friedman).
+        scoring_list
+            Ordered list of scoring metrics to plot.
+        axis_text_size, title_size
+            Text sizes used in the plot.
+        save_fig
+            Save resulting PDF when True.
+        save_dir
+            Directory where figures are saved.
         """
         heatmap_args = {
             "linewidths": 0.25,
@@ -578,28 +655,16 @@ class StatisticalAnalysis:
         save_dir: str = "Project/Analysis",
     ) -> None:
         """
-        Generate critical difference diagrams for each scoring metric.
+        Internal: create critical difference diagrams (CCD) for each scoring metric.
 
         Parameters
         ----------
-        pc_results : dict
-            Dictionary containing pairwise comparison results.
-        rank_results : dict
-            Dictionary containing rank results.
-        scoring_list : list
-            List of scoring metrics.
-        axis_text_size : float, optional
-            Font size for axis labels, by default 12.
-        title_size : float, optional
-            Font size for plot titles, by default 16.
-        save_fig : bool, optional
-            Whether to save the figure, by default True.
-        save_dir : str, optional
-            Directory to save the figure, by default "Project/Analysis".
-
-        Returns
-        -------
-        None
+        pc_results
+            Mapping scoring -> pairwise p-values DataFrame.
+        rank_results
+            Mapping scoring -> average rank Series.
+        scoring_list
+            Ordered list of scoring metrics to plot.
         """
         sns.set_context("notebook")
         sns.set_style("whitegrid")
@@ -652,47 +717,46 @@ class StatisticalAnalysis:
         save_fig: bool = True,
         save_result: bool = True,
         save_dir: str = "Project/Analysis",
-    ) -> dict:
+    ) -> Dict[str, Dict[str, pd.DataFrame]]:
         """
-        Perform posthoc Tukey's HSD test on the report dataframe and generate plots.
+        Implement Tukey HSD posthoc comparisons for repeated-measures like data.
+
+        This function computes:
+          - Tukey-like pairwise comparisons using a studentized range approximation
+          - produces pairwise adjusted p-values matrix (pc), mean differences matrix,
+            and a table of comparisons with confidence intervals.
 
         Parameters
         ----------
-        report_df : pd.DataFrame
-            The input report dataframe.
-        scoring_list : Optional[Union[list, str]], optional
-            List or string of scoring metrics, by default None.
-        method_list : Optional[list], optional
-            List or string of methods, by default None.
-        plot : Optional[Union[list, str]], optional
-            Type of plot to generate ('mcs_plot' or 'ci_plot'), by default None.
-        alpha : float, optional
-            Significance level for the test, by default 0.05.
-        direction_dict : dict, optional
-            Dictionary specifying the direction to maximize or minimize for each scoring metric, by default {}.
-        effect_dict : dict, optional
-            Dictionary specifying the effect size for each scoring metric, by default {}.
-        title_size : float, optional
-            Text size for titles, by default 16.
-        cell_text_size : (for MCS plot) float, optional
-            Text size for cell annotations, by default 16.
-        axis_text_size : float, optional
-            Text size for axis labels, by default 12.
-        left_xlim : (for CI plot) float, optional
-            Left limit for x-axis, by default -0.5.
-        right_xlim : (for CI plot) float, optional
-            Right limit for x-axis, by default 0.5.
-        save_fig : bool, optional
-            Whether to save the figure, by default True.
-        save_result : bool, optional
-            Whether to save the results, by default True.
-        save_dir : str, optional
-            Directory to save the figure and results, by default "Project/Analysis".
+        report_df
+            Melted input DataFrame or a wide DataFrame (melt=True will be applied).
+        scoring_list
+            Optional metric or list of metrics.
+        method_list
+            List of method columns.
+        plot
+            Which plots to create: 'mcs' (matrix of comparisons heatmap) and/or 'ci' (confidence interval plot).
+        alpha
+            Significance level for CI calculation.
+        direction_dict
+            Dict mapping scoring -> 'maximize' or 'minimize' (affects ordering of means).
+        effect_dict
+            Dict mapping scoring -> effect size threshold to scale heatmaps.
+        title_size, cell_text_size, axis_text_size
+            Visual parameters for plots.
+        left_xlim, right_xlim
+            X-axis limits for CI plots.
+        save_fig, save_result, save_dir
+            Save control and directory.
 
         Returns
         -------
-        dict
-            A dictionary containing Tukey's HSD results.
+        Dict[str, Dict[str, pd.DataFrame]]
+            Mapping scoring -> dict with keys:
+                - 'result_tab' : comparisons table (DataFrame)
+                - 'df_means' : per-method mean values
+                - 'df_means_diff' : matrix of mean differences
+                - 'pc' : pairwise adjusted p-values matrix
         """
         try:
             report_new, scoring_list, method_list = (
@@ -906,41 +970,42 @@ class StatisticalAnalysis:
         **kwargs,
     ) -> plt.Axes:
         """
-        Generate a heatmap plot of effect sizes with significance annotations.
+        Draw a matrix-of-comparisons (MCS) heatmap showing effect sizes and significance markers.
 
         Parameters
         ----------
-        pc : pd.DataFrame
-            Pairwise comparison matrix containing p-values.
-        effect_size : pd.DataFrame
-            Matrix of effect sizes.
-        means : pd.DataFrame
-            Mean values for each method.
-        labels : bool, optional
-            Whether to show method labels, by default True.
-        cmap : Optional[str], optional
-            Colormap to use for the heatmap, by default None.
-        cbar_ax_bbox : Optional[tuple], optional
-            Bounding box for the colorbar, by default None.
-        ax : Optional[plt.Axes], optional
-            Axes object to draw the heatmap on, by default None.
-        show_diff : bool, optional
-            Whether to show effect size differences, by default True.
-        cell_text_size : float, optional
-            Text size for cell annotations, by default 16.
-        axis_text_size : float, optional
-            Text size for axis labels, by default 12.
-        show_cbar : bool, optional
-            Whether to show the colorbar, by default True.
-        reverse_cmap : bool, optional
-            Whether to reverse the colormap, by default False.
-        vlim : Optional[float], optional
-            Value limit for the heatmap, by default None.
+        pc
+            Pairwise adjusted p-values DataFrame (methods x methods).
+        effect_size
+            Matrix of effect sizes / mean differences (methods x methods).
+        means
+            DataFrame of per-method means (index aligns with methods).
+        labels
+            Whether to annotate the axis ticks with method names and mean values.
+        cmap
+            Colormap name (default 'coolwarm').
+        ax
+            Optional matplotlib axis to draw on. If None, seaborn will create one.
+        show_diff
+            If True, annotate cells with numeric difference plus significance markers.
+        cell_text_size, axis_text_size
+            Font sizes for cell annotations and axis ticks.
+        show_cbar
+            Show colorbar if True.
+        reverse_cmap
+            Reverse the colormap if True.
+        vlim
+            Maximum absolute effect size used to clip color range.
 
         Returns
         -------
         plt.Axes
-            Axes object with the heatmap.
+            Axis handle with the heatmap drawn.
+
+        Notes
+        -----
+        - The function converts p-values to significance markers ('***','**','*','').
+        - Diagonal entries are blanked out.
         """
         try:
             for key in ["cbar", "vmin", "vmax", "center"]:
@@ -1043,36 +1108,26 @@ class StatisticalAnalysis:
         save_dir: str = "Project/Analysis",
     ) -> None:
         """
-        Generate a grid of MCS plots for each scoring metric.
+        Create a grid of MCS heatmaps (one per scoring metric) using results from Tukey HSD.
 
         Parameters
         ----------
-        tukey_results : dict
-            Dictionary containing Tukey's HSD results.
-        scoring_list : list
-            List of scoring metrics.
-        method_list : list
-            List of methods.
-        direction_dict : dict, optional
-            Dictionary specifying the direction to maximize or minimize for each scoring metric, by default {}.
-        effect_dict : dict, optional
-            Dictionary specifying the effect size for each scoring metric, by default {}.
-        show_diff : bool, optional
-            Whether to show effect size differences, by default True.
-        cell_text_size : float, optional
-            Text size for cell annotations, by default 16.
-        axis_text_size : float, optional
-            Text size for axis labels, by default 12.
-        title_size : float, optional
-            Text size for titles, by default 16.
-        save_fig : bool, optional
-            Whether to save the figure, by default True.
-        save_dir : str, optional
-            Directory to save the figure, by default "Project/Analysis".
-
-        Returns
-        -------
-        None
+        tukey_results
+            Output from posthoc_tukeyhsd, mapping scoring -> result dict.
+        scoring_list
+            Ordered list of scoring metrics.
+        method_list
+            List of method column names (used to compute grid sizing).
+        direction_dict
+            Mapping scoring -> 'maximize'|'minimize' controlling colormap direction.
+        effect_dict
+            Mapping scoring -> vlim (effect scale) for color clipping.
+        show_diff, cell_text_size, axis_text_size, title_size
+            Plot formatting options.
+        save_fig
+            If True, save to save_dir/tukey_mcs.pdf
+        save_dir
+            Directory to save plots.
         """
         try:
             # Set defaults
@@ -1164,30 +1219,24 @@ class StatisticalAnalysis:
         save_dir: str = "Project/Analysis",
     ) -> None:
         """
-        Generate a grid of confidence interval plots for each scoring metric.
+        Create confidence-interval plots (mean differences with CI bars) for Tukey comparisons.
 
         Parameters
         ----------
-        tukey_results : dict
-            Dictionary containing Tukey's HSD results.
-        scoring_list : list
-            List of scoring metrics.
-        method_list : list
-            List of methods.
-        title_size : float, optional
-            Text size for titles, by default 16.
-        left_xlim : float, optional
-            Left limit for x-axis, by default -0.5.
-        right_xlim : float, optional
-            Right limit for x-axis, by default 0.5.
-        save_fig : bool, optional
-            Whether to save the figure, by default True.
-        save_dir : str, optional
-            Directory to save the figure, by default "Project/Analysis".
-
-        Returns
-        -------
-        None
+        tukey_results
+            Output from posthoc_tukeyhsd.
+        scoring_list
+            Ordered list of scoring metrics.
+        method_list
+            List of method names.
+        title_size, axis_text_size
+            Plot text sizes.
+        left_xlim, right_xlim
+            X-axis limits for CI axis.
+        save_fig
+            Save output to save_dir/tukey_ci.pdf if True.
+        save_dir
+            Directory to save plots.
         """
         try:
             nmethod = len(method_list)
@@ -1264,26 +1313,35 @@ class StatisticalAnalysis:
         check_assumptions=True,
         method: str = "all",  # Options: None, 'parametric', 'non-parametric', 'all'
         save_dir="Project/Analysis",
-    ):
+    ) -> Dict[str, object]:
         """
-        Run statistical analyses based on provided parameters.
+        High-level convenience pipeline that:
+          1) checks statistical assumptions (variance homogeneity & normality),
+          2) runs parametric (AnovaRM + Tukey HSD) and/or non-parametric (Friedman + Conover)
+             tests depending on the 'method' parameter, and
+          3) saves figures/tables to disk (by default) in save_dir.
 
-        Parameters:
-            report_df (pd.DataFrame): The input report DataFrame.
-            scoring_list (list or str, optional): List of scoring metrics.
-            method_list (list or str, optional): List of methods.
-            check_assumptions (bool): If True, perform variance homogeneity and normality checks.
-            method (str, optional): Which tests to perform. Options:
-                - None: Do not perform any further tests.
-                - "parametric": Run parametric test (AnovaRM) and posthoc Tukey HSD.
-                - "non-parametric": Run non-parametric test (Friedman) and posthoc Conover-Friedman.
-                - "all": Run both parametric and non-parametric tests.
-            save_dir (str): Directory to save outputs.
+        Parameters
+        ----------
+        report_df
+            Input DataFrame containing scoring/method columns.
+        scoring_list
+            Optional metric or list of metrics to analyze.
+        method_list
+            Optional list of method column names.
+        check_assumptions
+            If True, run variance & normality checks first.
+        method
+            Which tests to run: 'parametric', 'non-parametric', 'all', or None.
+        save_dir
+            Directory to save any generated files.
 
-        Returns:
-            dict: A dictionary containing the outputs of the analyses.
+        Returns
+        -------
+        Dict[str, object]
+            A dictionary summarizing generated results and file locations.
         """
-        results = {}
+        results: Dict[str, object] = {}
 
         try:
             # 1. Check Assumptions (Variance Homogeneity & Normality)

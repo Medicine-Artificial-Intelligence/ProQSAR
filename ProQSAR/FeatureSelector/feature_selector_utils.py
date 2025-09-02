@@ -41,26 +41,41 @@ def _get_method_map(
     random_state: Optional[int] = 42,
 ) -> dict[str, object]:
     """
-    Creates a dictionary of feature selection methods based on the task type.
+    Build a dictionary mapping human-readable method names to feature-selector
+    objects appropriate for the given task type.
 
-    Parameters:
-    -----------
+    The returned selectors are configured with reasonable defaults:
+      - SelectKBest with ANOVA / mutual information depending on task
+      - SelectFromModel wrapping tree-based models, linear models, or XGBoost
+
+    Parameters
+    ----------
     task_type : str
-        Specifies the type of task: 'C' for classification or 'R' for regression.
-    add_method :
-        Additional feature selection methods to include, with method names as keys and selectors as values.
-    n_jobs : int
-        Number of parallel jobs for methods that support parallel processing. Default is -1 (use all processors).
+        Either 'C' for classification or 'R' for regression. Determines which
+        selectors and scoring functions are used.
+    add_method : dict, optional
+        Optional additional method mappings to merge into the default map.
+        The keys should be method names and the values should be selector
+        objects or callables compatible with the interface used below.
+    n_jobs : int, default=1
+        Number of parallel jobs passed to underlying estimators where supported.
+    random_state : Optional[int], default=42
+        Random seed used to instantiate stochastic estimators.
 
-    Returns:
-    --------
-    Dict[str, object]
-        Dictionary of feature selection methods keyed by method name.
-
-    Raises:
+    Returns
     -------
+    dict[str, object]
+        Mapping from method name to an instantiated feature-selection object.
+
+    Raises
+    ------
     ValueError
-        If task_type is not 'C' or 'R'.
+        If `task_type` is not one of the supported options ('C' or 'R').
+
+    Notes
+    -----
+    This function intentionally returns instances (not classes). Callers will
+    call .fit(...)/.transform(...) on the returned selectors.
     """
     try:
         if task_type == "C":
@@ -158,50 +173,68 @@ def evaluate_feature_selectors(
     random_state: Optional[int] = 42,
 ) -> pd.DataFrame:
     """
-    Evaluates various feature selection methods using cross-validation on the given dataset.
+    Evaluate multiple feature-selection strategies by applying each selector to
+    the input data, training a default model on the selected features, and
+    performing repeated cross-validation.
 
-    Parameters:
-    -----------
+    The function:
+      - infers task type (classification or regression) from `data` and `activity_col`
+      - constructs a method map of selectors (merged with `add_method`)
+      - for each selector:
+          - fits the selector, transforms X to the selected feature set
+          - trains a default RandomForest model (classifier/regressor depending on task)
+          - performs repeated cross-validation using ModelValidation utilities
+      - aggregates and returns a CV report DataFrame with columns ['scoring','cv_cycle', 'method', 'value']
+
+    Parameters
+    ----------
     data : pd.DataFrame
-        The full dataset including features and target for feature selection evaluation.
+        Input data containing feature columns and the activity & id columns.
     activity_col : str
-        The target column in the dataset.
+        Column name containing the target variable.
     id_col : str
-        The identifier column in the dataset.
-    add_method : Optional[Dict[str, object]]
-        Additional feature selection methods to include.
-    select_method : Optional[List[str]]
-        List of specific methods to use for feature selection. If None, all available methods are used.
-    scoring_list : Optional[List[str]]
-        List of scoring metrics for model evaluation. If None, default metrics are used based on task type.
-    n_splits : int
-        Number of splits for cross-validation. Default is 10.
-    n_repeats : int
-        Number of repeats for cross-validation. Default is 3.
-    visualize : Optional[str]
-        Type of visualization ('box', 'bar', 'violin') for displaying results. Default is None.
-    save_fig : bool
-        Whether to save the generated figures. Default is False.
-    save_csv : bool
-        Whether to save the report as a CSV file. Default is False.
-    fig_prefix : str
-        Prefix for the saved figure file name. Default is 'fs_graph'.
-    csv_name : str
-        File name for saving the report as CSV. Default is 'fs_report'.
-    save_dir : str
-        Directory where the report and figures will be saved. Default is 'Project/FeatureSelector'.
-    n_jobs : int
-        Number of parallel jobs for processing. Default is -1 (use all processors).
+        Column name containing a unique identifier for each sample (will be dropped).
+    add_method : dict, optional
+        Additional selectors to include in the method map (key -> selector instance).
+    select_method : list or str or None, optional
+        If provided, evaluate only the named selectors (must exist in the method map).
+    scoring_list : list or str or None, optional
+        Metrics to evaluate. If None, defaults to the project's CV scoring for the task.
+    n_splits : int, default=5
+        Number of folds for each repetition in repeated CV.
+    n_repeats : int, default=5
+        Number of repeated cross-validation runs.
+    include_stats : bool, default=True
+        Whether to include summary statistics in the reported CV outputs.
+    visualize : str | list[str] | None, optional
+        If provided, one or more visualization types to produce via ModelValidation.
+    save_fig : bool, default=False
+        If True, save generated figures to disk.
+    save_csv : bool, default=False
+        If True, save the aggregated CV report CSV to `save_dir/csv_name.csv`.
+    fig_prefix : str, default="fs_graph"
+        Filename prefix used for saved figures.
+    csv_name : str, default="fs_report"
+        Base filename for the saved CSV report.
+    save_dir : str, default="Project/FeatureSelector"
+        Directory used to store saved figures and CSVs.
+    n_jobs : int, default=1
+        Number of parallel jobs passed to underlying estimators where supported.
+    random_state : Optional[int], default=42
+        Random seed used to instantiate stochastic estimators.
 
-    Returns:
-    --------
-    pd.DataFrame
-        DataFrame containing cross-validation results for each feature selection method.
-
-    Raises:
+    Returns
     -------
+    pd.DataFrame
+        A flattened CV report DataFrame with columns ['scoring','cv_cycle','method','value']
+        (and possibly other CV-statistics depending on ModelValidation._perform_cross_validation).
+
+    Raises
+    ------
     ValueError
-        If a selected method is not recognized in the method map.
+        If a user-specified method in `select_method` is not found in the method map.
+    Exception
+        Unexpected exceptions are logged and re-raised.
     """
     try:
 

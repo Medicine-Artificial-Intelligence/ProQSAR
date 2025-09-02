@@ -54,17 +54,29 @@ from sklearn.metrics import (
 
 def _get_task_type(data: pd.DataFrame, activity_col: str) -> str:
     """
-    Determines the type of task based on the number of unique target values.
+    Infer whether the modelling task is classification or regression.
 
-    Args:
-        data (pd.DataFrame): Data containing the features and target.
-        activity_col (str): Column name for the target variable.
+    Logic:
+      - If the target column contains exactly 2 unique values -> binary classification ('C')
+      - If the target column contains >2 unique values -> regression ('R')
+      - Otherwise raise ValueError.
 
-    Returns:
-        str: 'C' for classification (binary), 'R' for regression (continuous).
+    Parameters
+    ----------
+    data : pd.DataFrame
+        DataFrame containing features and the target column.
+    activity_col : str
+        Column name containing the target values.
 
-    Raises:
-        ValueError: If insufficient categories to determine model type.
+    Returns
+    -------
+    str
+        'C' for classification or 'R' for regression.
+
+    Raises
+    ------
+    ValueError
+        If there are fewer than 2 unique values in the target column.
     """
     y_data = data[activity_col]
     unique_targets = len(np.unique(y_data))
@@ -81,19 +93,35 @@ def _get_model_map(
     add_model: dict = {},
     n_jobs: int = 1,
     random_state: Optional[int] = 42,
-) -> dict:
+) -> Dict[str, object]:
     """
-    Retrieves a dictionary mapping model names to their corresponding estimators.
+    Build a default dictionary mapping model names -> instantiated estimators.
 
-    Args:
-        task_type (str): 'C' for classification, 'R' for regression.
-        add_model (Optional[dict]): Additional models to add to the map.
-        n_jobs (Optional[int]): Number of jobs for parallelization.
+    Parameters
+    ----------
+    task_type : Optional[str]
+        'C' for classification, 'R' for regression, or None to include both sets.
+    add_model : dict, optional
+        Additional model entries to merge into the default map. Values may be:
+        - an estimator instance, or
+        - a tuple whose first element is an estimator instance (legacy support).
+        If the supplied estimator is not fitted, and it accepts 'random_state'
+        in get_params(), this function will set that parameter for reproducibility.
+    n_jobs : int, default=1
+        Number of parallel jobs passed to applicable estimators.
+    random_state : Optional[int], default=42
+        Seed used to set 'random_state' on added estimators if applicable.
 
-    Returns:
-        dict: A dictionary of model names and estimators.
+    Returns
+    -------
+    dict[str, object]
+        Mapping from human-readable model name to sklearn-like estimator instance.
+
+    Raises
+    ------
+    ValueError
+        If `task_type` is not 'C', 'R', or None.
     """
-
     model_map_c = {
         "DummyClassifier": DummyClassifier(random_state=random_state),
         "LogisticRegression": LogisticRegression(
@@ -116,7 +144,9 @@ def _get_model_map(
         "XGBClassifier": XGBClassifier(
             random_state=random_state, verbosity=0, eval_metric="logloss", n_jobs=n_jobs
         ),
-        "CatBoostClassifier": CatBoostClassifier(random_state=random_state, verbose=0, thread_count=n_jobs),
+        "CatBoostClassifier": CatBoostClassifier(
+            random_state=random_state, verbose=0, thread_count=n_jobs
+        ),
         "MLPClassifier": MLPClassifier(
             alpha=0.01,
             max_iter=10000,
@@ -146,7 +176,9 @@ def _get_model_map(
             objective="reg:squarederror",
             n_jobs=n_jobs,
         ),
-        "CatBoostRegressor": CatBoostRegressor(random_state=random_state, verbose=0, thread_count=n_jobs),
+        "CatBoostRegressor": CatBoostRegressor(
+            random_state=random_state, verbose=0, thread_count=n_jobs
+        ),
         "MLPRegressor": MLPRegressor(
             alpha=0.01,
             max_iter=10000,
@@ -194,15 +226,28 @@ def _get_cv_strategy(
     random_state: Optional[int] = 42,
 ) -> Union[RepeatedStratifiedKFold, RepeatedKFold]:
     """
-    Defines the cross-validation strategy based on task type.
+    Return a repeated CV splitting strategy appropriate for the task.
 
-    Args:
-        task_type (str): 'C' for classification, 'R' for regression.
-        n_splits (int): Number of splits for cross-validation.
-        n_repeats (int): Number of repetitions for cross-validation.
+    Parameters
+    ----------
+    task_type : str
+        'C' for classification or 'R' for regression.
+    n_splits : int
+        Number of folds per repetition.
+    n_repeats : int
+        Number of repetitions.
+    random_state : Optional[int]
+        Random seed for reproducibility.
 
-    Returns:
-        RepeatedStratifiedKFold or RepeatedKFold: Cross-validation strategy.
+    Returns
+    -------
+    RepeatedStratifiedKFold | RepeatedKFold
+        CV splitter to be used in cross-validation.
+
+    Raises
+    ------
+    ValueError
+        If task_type is not 'C' or 'R'.
     """
     if task_type == "C":
         return RepeatedStratifiedKFold(
@@ -220,13 +265,22 @@ def _get_cv_strategy(
 
 def _get_cv_scoring(task_type: str) -> list:
     """
-    Returns a list of scoring metrics based on the task type.
+    Return a list of scoring metric keys appropriate for sklearn's cross_validate.
 
-    Args:
-        task_type (str): 'C' for classification, 'R' for regression.
+    Parameters
+    ----------
+    task_type : str
+        'C' or 'R'
 
-    Returns:
-        list: List of scoring metrics.
+    Returns
+    -------
+    list[str]
+        Metric names (strings) that sklearn understands for scoring.
+
+    Raises
+    ------
+    ValueError
+        If task_type is not 'C' or 'R'.
     """
     if task_type == "C":
         return [
@@ -261,18 +315,30 @@ def _get_ev_scoring(
     y_test: pd.Series,
     y_test_pred: pd.Series,
     y_test_proba: Optional[pd.Series] = None,
-) -> dict:
+) -> Dict[str, float]:
     """
-    Returns a dictionary of evaluation metrics based on the task type.
+    Compute evaluation metrics for a single test fold.
 
-    Args:
-        task_type (str): 'C' for classification, 'R' for regression.
-        y_test (pd.Series): Ground truth values.
-        y_test_pred (pd.Series): Predicted values.
-        y_test_proba (Optional[pd.Series]): Predicted probabilities (for classification).
+    Parameters
+    ----------
+    task_type : str
+        'C' for classification, 'R' for regression.
+    y_test : pd.Series
+        True labels/values for the test split.
+    y_test_pred : pd.Series
+        Predicted labels/values.
+    y_test_proba : pd.Series, optional
+        Predicted probabilities for the positive class (classification only).
 
-    Returns:
-        dict: A dictionary of evaluation metrics.
+    Returns
+    -------
+    dict[str, float]
+        Mapping metric_name -> computed value for the fold.
+
+    Raises
+    ------
+    ValueError
+        If task_type is not supported or required inputs for a metric are missing.
     """
     if task_type == "C":
         scoring_dict = {
@@ -308,7 +374,24 @@ def _get_ev_scoring(
 
 
 def _match_cv_ev_metrics(cv_scoring: Union[str, List[str]]) -> List:
+    """
+    Convert cross-validation scoring metric keys (possibly prefixed with 'neg_')
+    into corresponding evaluation metric names used by _get_ev_scoring.
 
+    Example:
+      - 'neg_mean_squared_error' -> 'mean_squared_error'
+      - 'accuracy' -> 'accuracy'
+
+    Parameters
+    ----------
+    cv_scoring : str | list[str]
+        CV scoring key(s) as used by sklearn's cross_validate.
+
+    Returns
+    -------
+    list[str]
+        Corresponding evaluation metric names (without 'neg_' prefix).
+    """
     if isinstance(cv_scoring, str):
         cv_scoring = [cv_scoring]
 

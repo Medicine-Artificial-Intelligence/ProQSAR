@@ -40,14 +40,18 @@ class ApplicabilityDomain(BaseEstimator):
         ----------
         Parameters
         ----------
-        method_name: str, default 'ocsvm'
+        activity_col: Optional[str], default None
+            Column name for activity or target variable.
+        id_col: Optional[str], default None
+            Column name for the unique identifier.
+        method: str, default 'ocsvm'
             The name of method to set AD. 'knn', 'lof', or 'ocsvm'
         rate_of_outliers: float, default 0.01
             Rate of outlier samples. This is used to set threshold.
-        gamma : (only for 'ocsvm') float, default ’auto’
+        gamma: (only for 'ocsvm') float, default ’auto’
             Kernel coefficient for ‘rbf’.
             Current default is ‘auto’ which optimize gamma to maximize variance in Gram matrix
-        nu : (only for 'ocsvm') float, default 0.5
+        nu: (only for 'ocsvm') float, default 0.5
             An upper bound on the fraction of training errors and a lower bound of the fraction of support vectors.
             Should be in the interval (0, 1]. By default 0.5 will be taken.
             https://scikit-learn.org/stable/modules/generated/sklearn.svm.OneClassSVM.html#sklearn.svm.OneClassSVM
@@ -57,13 +61,15 @@ class ApplicabilityDomain(BaseEstimator):
         metric : string or callable, default ‘minkowski’
             Metric to use for distance computation. Any metric from scikit-learn or scipy.spatial.distance can be used.
             https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.NearestNeighbors.html
-        p : integer, default 2
+        p: integer, default 2
             Parameter for the Minkowski metric from sklearn.metrics.pairwise.pairwise_distances.
             When p = 1, this is equivalent to using manhattan_distance (l1), and euclidean_distance (l2) for p = 2.
             For arbitrary p, minkowski_distance (l_p) is used.
             https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.NearestNeighbors.html
         save_dir: (Optional[str]):
             Directory to save fitted ApplicabilityDomain and prediction results.
+        deactivate: bool, default False
+            Flag to deactivate the process.
         """
         if method not in ["knn", "lof", "ocsvm"]:
             logging.error(

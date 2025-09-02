@@ -177,10 +177,8 @@ class OptimalDataset(CrossValidationConfig):
             )
             del X_data, y_data
             del self.train[i]
-            #del self.data_features[i]
+            # del self.data_features[i]
             gc.collect()
-
-
 
         # Pivot the DataFrame so that each model becomes a separate column
         self.report = pd.concat(result).pivot_table(

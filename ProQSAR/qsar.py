@@ -217,7 +217,9 @@ class ProQSAR:
         ):
 
             self.selected_feature = (
-                "original" if self.config.featurizer.deactivate else self.config.featurizer.feature_types
+                "original"
+                if self.config.featurizer.deactivate
+                else self.config.featurizer.feature_types
             )
 
             # Generate features
@@ -257,11 +259,10 @@ class ProQSAR:
         # Save the fitted data preprocessor
         save_path = f"{self.save_dir}/proqsar.pkl"
         self.save_pipeline(save_path)
-    
 
         # Feature selection - train
         self.feature_selector.set_params(
-            trans_data_name=f"train_{self.selected_feature}_feature_selector", 
+            trans_data_name=f"train_{self.selected_feature}_feature_selector",
         )
         self.train = self.feature_selector.fit_transform(self.train)
 
@@ -297,7 +298,6 @@ class ProQSAR:
         if self.optimizer:
             self._optimize_model(select_model=self.select_model)
             self.save_pipeline(save_path)
-
 
         # Conformal predictor
         if self.conf_pred:
@@ -341,11 +341,10 @@ class ProQSAR:
         # Compare optimized score to baseline
         if base_report is not None:
             base_best_score = (
-                base_report
-                .query(f"scoring == @self.model_dev.scoring_target")
+                base_report.query(f"scoring == @self.model_dev.scoring_target")
                 .set_index("cv_cycle")
                 .at["mean", select_model]
-                )
+            )
 
             if opt_best_score > base_best_score:
                 self.logger.info(
@@ -387,10 +386,9 @@ class ProQSAR:
             self.model_dev.set_params(
                 add_model=add_model,
                 select_model=f"{select_model}_opt",
-                #cross_validate=True,
+                # cross_validate=True,
             )
             self.model_dev.fit(self.train)
-
 
     def optimize(self):
         """
@@ -418,7 +416,6 @@ class ProQSAR:
 
         return self
 
-
     def save_pipeline(self, path: str):
         """
         Save the ProQSAR pipeline to a pickle file.
@@ -430,7 +427,6 @@ class ProQSAR:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as file:
             pickle.dump(self, file)
-
 
     def load_pipeline(self, path: str):
         """
@@ -447,13 +443,9 @@ class ProQSAR:
         self.__dict__.update(loaded_pipeline.__dict__)
         self.logger.info(f"ProQSAR: Pipeline loaded from {path}.")
         return self
-    
-    
+
     def _apply_generator(
-        self,
-        data: pd.DataFrame,
-        data_name: str = "test",
-        record_shape=True
+        self, data: pd.DataFrame, data_name: str = "test", record_shape=True
     ) -> pd.DataFrame:
         """
         Take the raw data and run it through the DataGenerator pipeline.
@@ -565,7 +557,7 @@ class ProQSAR:
             data_pred,
             data_name="data_pred",
             record_shape=True,
-        ) 
+        )
 
         # Preprocess data_pred
         data_pred = self._apply_prep(
@@ -774,7 +766,7 @@ class ProQSAR:
             self.predict(data_pred, alpha)
 
         self.get_shape_summary_df()
-        
+
         self.logger.info(
             f"----------PROQSAR PIPELINE COMPLETED AT {datetime.datetime.now()}----------"
         )

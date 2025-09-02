@@ -16,53 +16,42 @@ from ProQSAR.Config.validation_config import CrossValidationConfig
 
 class ModelDeveloper(CrossValidationConfig, BaseEstimator):
     """
-    Class to handle model development for machine learning tasks.
+    Wrapper for model selection, cross-validated evaluation, model fitting and prediction.
 
-    Attributes:
-    -----------
+    This class:
+      - infers the task type (classification/regression) from the data,
+      - constructs a default model map (mergeable with `add_model`),
+      - optionally cross-validates candidate models and selects the best one,
+      - fits the selected model on the full provided dataset,
+      - exposes `predict` to create a predictions DataFrame,
+      - optionally saves the fitted ModelDeveloper instance or prediction results.
+
+    Parameters
+    ----------
     activity_col : str
-        Name of the activity column in the dataset.
+        Column name for the target variable (default "activity").
     id_col : str
-        Name of the ID column in the dataset.
-    select_model : str, optional
-        The model to use for model development.
-    add_model : Optional[dict], optional
-        Additional models to be added (default: None).
-    scoring : Optional[str], optional
-        Scoring metric to target for comparison (default: None).
-    n_splits : int, optional
-        Number of cross-validation splits (default: 10).
-    n_repeats : int, optional
-        Number of cross-validation repeats (default: 3).
-    save_model : bool, optional
-        Whether to save the model (default: True).
-    save_pred_result : bool, optional
-        Whether to save prediction results (default: True).
-    pred_result_name : str, optional
-        Name of the prediction result file (default: 'pred_result').
-    save_dir : str, optional
-        Directory to save model and results (default: 'Project/Model_Development').
-    save_cv_report : bool, optional
-        Whether to save the IV report (default: False).
-    cv_report_name : str, optional
-        Name of the IV report file (default: 'cv_report').
-    visualize : Optional[str], optional
-        Visualization option for report (default: None).
-    save_fig : bool, optional
-        Whether to save figures (default: False).
-    fig_prefix : str, optional
-        Name of the figure file (default: 'cv_graph').
-    n_jobs : int, optional
-        Number of jobs to run in parallel (default: -1).
-
-    Methods:
-    --------
-    fit(data: pd.DataFrame) -> BaseEstimator
-        Fits the model to the provided data.
-
-    predict(data: pd.DataFrame) -> pd.DataFrame
-        Predicts outcomes using the fitted model.
-
+        Column name for the identifier column (default "id").
+    select_model : str | list[str] | None
+        Name of the model to use or a list of candidate names to evaluate (default None).
+    add_model : dict
+        Additional models to include in the model map (name -> estimator or (estimator, ...)).
+    cross_validate : bool
+        Whether to run cross-validation to select among candidate models (default True).
+    save_model : bool
+        If True, save the fitted ModelDeveloper object (pickle) to `save_dir`.
+    save_pred_result : bool
+        If True, save prediction results to CSV when `predict` is called.
+    pred_result_name : str
+        Filename (without directory) for saved prediction results (default "pred_result").
+    save_dir : str | None
+        Directory for saving model/prediction files (default "Project/ModelDeveloper").
+    n_jobs : int
+        Number of parallel jobs passed to underlying estimators (default 1).
+    random_state : Optional[int]
+        Random seed for reproducible estimators (default 42).
+    **kwargs
+        Forwarded to CrossValidationConfig for CV-related parameters (e.g., n_splits, scoring_target, scoring_list).
     """
 
     def __init__(
@@ -101,12 +90,30 @@ class ModelDeveloper(CrossValidationConfig, BaseEstimator):
 
     def fit(self, data: pd.DataFrame) -> "ModelDeveloper":
         """
-        Fits a machine learning model based on the specified model.
+        Fit (or select and fit) the model on the provided dataset.
 
-        Parameters:
-        -----------
+        Behavior:
+          - Infers task type and CV strategy,
+          - Builds the model map merged with `add_model`,
+          - If `select_model` is None or a list and `cross_validate` is True,
+            runs cross-validation to select the best model and fits it on full data.
+          - If `select_model` is a string, fits that model directly and optionally runs CV.
+          - Saves the fitted ModelDeveloper instance if `save_model` is True.
+
+        Parameters
+        ----------
         data : pd.DataFrame
-            The training dataset including features, activity, and ID columns.
+            DataFrame containing features and the activity/id columns.
+
+        Returns
+        -------
+        ModelDeveloper
+            The fitted ModelDeveloper instance.
+
+        Raises
+        ------
+        Exception
+            Any unexpected exception is logged and re-raised.
         """
         try:
             X_data = data.drop([self.activity_col, self.id_col], axis=1)
@@ -128,7 +135,7 @@ class ModelDeveloper(CrossValidationConfig, BaseEstimator):
             # Set scorings
             if self.scoring_target is None:
                 self.scoring_target = "f1" if self.task_type == "C" else "r2"
-                
+
             if self.scoring_list:
                 if isinstance(self.scoring_list, str):
                     self.scoring_list = [self.scoring_list]
@@ -185,7 +192,7 @@ class ModelDeveloper(CrossValidationConfig, BaseEstimator):
                 else:
                     logging.info(f"ModelDeveloper: Using model: {self.select_model}")
                     self.model = model_map[self.select_model].fit(X=X_data, y=y_data)
-                    
+
                     if self.cross_validate:
                         self.report = ModelValidation.cross_validation_report(
                             data=data,
@@ -228,17 +235,29 @@ class ModelDeveloper(CrossValidationConfig, BaseEstimator):
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Predicts outcomes using the fitted model.
+        Generate predictions for the provided data using the fitted model.
 
-        Parameters:
-        -----------
+        The method returns a DataFrame that always contains the id column and a
+        'Predicted value' column, and includes the true activity values if available.
+        For classification tasks, probability columns for each class are also included.
+
+        Parameters
+        ----------
         data : pd.DataFrame
-            The dataset to predict on, including features, activity, and ID columns.
+            DataFrame containing features and id/activity columns.
 
-        Returns:
-        --------
+        Returns
+        -------
         pd.DataFrame
-            A DataFrame containing the predicted outcomes and optionally the probabilities.
+            DataFrame with prediction results and optionally saved to CSV if
+            `save_pred_result` is True.
+
+        Raises
+        ------
+        NotFittedError
+            If `fit` has not been called and the internal model is not present.
+        Exception
+            Any unexpected exception is logged and re-raised.
         """
         try:
             if self.model is None:
@@ -282,6 +301,27 @@ class ModelDeveloper(CrossValidationConfig, BaseEstimator):
             raise
 
     def set_params(self, **kwargs):
+        """
+        Update attributes of the ModelDeveloper instance.
+
+        Only existing attributes may be updated; unknown keys raise KeyError.
+        Returns self to allow fluent chaining.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Attribute names and their new values.
+
+        Returns
+        -------
+        ModelDeveloper
+            The same instance with updated attributes.
+
+        Raises
+        ------
+        KeyError
+            If a provided key does not correspond to an existing attribute.
+        """
         valid_keys = self.__dict__.keys()
         for key in kwargs:
             if key not in valid_keys:

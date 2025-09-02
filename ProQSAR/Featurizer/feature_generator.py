@@ -14,19 +14,66 @@ from ProQSAR.Featurizer.featurizer_wrapper import (
     Avalon,
     RDKDes,
     mol2pharm2dgbfp,
-    MordredDes
+    MordredDes,
 )
 from typing import Optional, Union, Dict, Any, List
 
 
 class FeatureGenerator(BaseEstimator):
+    """
+    Transformer that generates molecular feature DataFrames for a variety of
+    fingerprint and descriptor types.
+
+    Typical usage:
+        fg = FeatureGenerator(n_jobs=4, save_dir="out")
+        feature_dfs = fg.generate_features(df)  # dict: feature_type -> DataFrame
+
+    Parameters
+    ----------
+    mol_col : str
+        Column name in input records containing RDKit Mol objects (default "mol").
+    activity_col : str
+        Column name for target/activity values (default "activity").
+    id_col : str
+        Column name for a unique sample identifier (default "id").
+    smiles_col : str
+        Column name holding SMILES strings if present (default "SMILES").
+    feature_types : list[str] | str
+        Names of feature sets to compute. Defaults to commonly used types:
+        ["ECFP4","FCFP4","RDK5","MACCS","avalon","rdkdes","pubchem","mordred"].
+        Use FeatureGenerator.get_all_types() to list supported names.
+    save_dir : Optional[str]
+        If provided, generated feature CSVs will be saved under this directory.
+    data_name : Optional[str]
+        Base name used when saving files (appended with feature type).
+    n_jobs : int
+        Number of parallel jobs (joblib) to use for per-molecule processing.
+    verbose : int
+        Verbosity for Parallel.
+    deactivate : bool
+        If True, generation is skipped and input is returned unchanged.
+
+    Attributes
+    ----------
+    All constructor args are stored as instance attributes.
+    """
+
     def __init__(
         self,
         mol_col: str = "mol",
         activity_col: str = "activity",
         id_col: str = "id",
         smiles_col: str = "SMILES",
-        feature_types: Union[list, str] = ['ECFP4','FCFP4','RDK5','MACCS','avalon','rdkdes','pubchem','mordred'],
+        feature_types: Union[list, str] = [
+            "ECFP4",
+            "FCFP4",
+            "RDK5",
+            "MACCS",
+            "avalon",
+            "rdkdes",
+            "pubchem",
+            "mordred",
+        ],
         save_dir: Optional[str] = None,
         data_name: Optional[str] = None,
         n_jobs=1,
@@ -50,18 +97,20 @@ class FeatureGenerator(BaseEstimator):
         mol: Optional[Chem.Mol], feature_types: list = ["RDK5"]
     ) -> Dict[str, Optional[np.ndarray]]:
         """
-        Compute various fingerprints based on the specified feature types for a given molecule object.
+        Compute fingerprint/descriptor arrays for a single RDKit Mol object.
 
-        Parameters:
-        - mol (Optional[Chem.Mol]): Molecule object.
-        - feature_types (list of str): List of fingerprint types to calculate.
+        Parameters
+        ----------
+        mol : rdkit.Chem.Mol or None
+            Molecule to process. If None, an error is logged and None is returned.
+        feature_types : list[str]
+            List of fingerprint/descriptor type names to compute.
 
-        Returns:
-        - Dict[str, Optional[np.ndarray]]: A dictionary with keys as fingerprint types
-        and values as their respective numpy array representations.
-
-        Raises:
-        - ValueError: If the provided molecule object is None.
+        Returns
+        -------
+        dict or None
+            A mapping feature_type -> numpy array (or None for failed types), or
+            None when `mol` is None.
         """
         if mol is None:
             logging.error("Invalid molecule object provided.")
@@ -119,17 +168,24 @@ class FeatureGenerator(BaseEstimator):
         feature_types: List[str] = ["RDK5"],
     ) -> Dict[str, Any]:
         """
-        Processes a single record to extract features based on the molecule data.
+        Joblib-compatible wrapper that extracts a molecule record and computes
+        fingerprints/descriptors using `_mol_process`.
 
-        Parameters:
-        - record (Dict[str, Any]): The dictionary containing the data.
-        - mol_col (str): The key for the molecule column.
-        - activity_col (str): The key for the activity column.
-        - ID (str): The key for the identifier column.
-        - feature_types (List[str]): List of feature types to process.
+        Parameters
+        ----------
+        record : dict
+            A mapping containing at least mol_col and id_col (and optionally
+            activity_col and smiles_col).
+        mol_col, activity_col, id_col, smiles_col : str
+            Column keys within the record.
+        feature_types : list[str]
+            Feature types passed to `_mol_process`.
 
-        Returns:
-        - Dict[str, Any]: A dictionary with the processed features along with the original ID and activity.
+        Returns
+        -------
+        dict or None
+            A dictionary containing fingerprint arrays and preserved metadata
+            (id, mol, activity, smiles) or None if required keys are missing.
         """
         try:
             mol = record[mol_col]
@@ -148,6 +204,9 @@ class FeatureGenerator(BaseEstimator):
 
     @staticmethod
     def get_all_types():
+        """
+        Return the list of supported feature type names.
+        """
         return [
             "ECFP2",
             "ECFP4",
@@ -163,7 +222,7 @@ class FeatureGenerator(BaseEstimator):
             "rdkdes",
             "pubchem",
             "mordred",
-            #"pharm2dgbfp",
+            # "pharm2dgbfp",
         ]
 
     def generate_features(
@@ -171,19 +230,22 @@ class FeatureGenerator(BaseEstimator):
         df: Union[pd.DataFrame, List[Dict[str, Any]]],
     ) -> Dict[str, pd.DataFrame]:
         """
-        Generates features for molecules contained in a DataFrame or a list of dictionaries
-        using parallel processing.
+        Compute feature DataFrames for each requested feature type.
 
-        Parameters:
-        - df (Union[pd.DataFrame, List[Dict[str, Any]]]): The input data as either
-        a DataFrame or a list of dictionaries.
+        Parameters
+        ----------
+        df : pandas.DataFrame or list[dict]
+            Input data. If a DataFrame is provided, it is converted to a list
+            of records with `to_dict('records')`. Each record must contain the
+            keys matching mol_col and id_col (and optionally activity_col/smiles_col).
 
-        Returns:
-        - Dict[str, pd.DataFrame]: A dictionary where keys are feature types and values are DataFrames
-        with expanded fingerprints.
-
-        Raises:
-        - ValueError: If the input data type is neither a pandas DataFrame nor a list of dictionaries.
+        Returns
+        -------
+        dict | DataFrame | list | None
+            - If `deactivate` is True, the original `df` is returned unchanged.
+            - Otherwise, returns a dict mapping feature_type -> pandas.DataFrame
+              (each DataFrame includes id/activity/SMILES/mol columns + fingerprint columns).
+            - Returns None on invalid input types or unexpected failures.
         """
         if self.deactivate:
             logging.info("FeatureGenerator is deactivated. Skipping generate feature.")
@@ -205,7 +267,12 @@ class FeatureGenerator(BaseEstimator):
         # Parallel processing of records using joblib
         results = Parallel(n_jobs=self.n_jobs, verbose=self.verbose)(
             delayed(self._single_process)(
-                record, self.mol_col, self.activity_col, self.id_col, self.smiles_col, self.feature_types
+                record,
+                self.mol_col,
+                self.activity_col,
+                self.id_col,
+                self.smiles_col,
+                self.feature_types,
             )
             for record in data
         )
@@ -214,6 +281,7 @@ class FeatureGenerator(BaseEstimator):
         feature_dfs = {}
 
         for feature_type in self.feature_types:
+            # Stack fingerprint arrays into a 2D numpy array and create a DataFrame
             fp_df = pd.DataFrame(np.stack(results[feature_type]), index=results.index)
 
             if feature_type == "mordred":
@@ -221,10 +289,20 @@ class FeatureGenerator(BaseEstimator):
                 fp_df.columns = [str(des) for des in calc.descriptors]
 
             # Concat with ID & Activity columns
-            feature_df = pd.concat([
-                results.filter(items=[self.id_col, self.activity_col, self.smiles_col, self.mol_col]),
-                fp_df
-            ], axis=1)
+            feature_df = pd.concat(
+                [
+                    results.filter(
+                        items=[
+                            self.id_col,
+                            self.activity_col,
+                            self.smiles_col,
+                            self.mol_col,
+                        ]
+                    ),
+                    fp_df,
+                ],
+                axis=1,
+            )
 
             feature_df.columns = feature_df.columns.astype(str)
 

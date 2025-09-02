@@ -2,6 +2,34 @@ from typing import Optional, Union
 
 
 class CrossValidationConfig:
+    """
+    Configuration object for cross-validation and reporting.
+
+    This small datalike object centralizes the common parameters used when
+    running repeated cross-validation and generating reports/figures.
+
+    Parameters
+    ----------
+    scoring_target : optional str
+        The primary metric name used for model selection (e.g. "f1_score", "accuracy", "r2").
+    scoring_list : optional list or str
+        A single metric name or a list of metric names to compute during CV.
+        If a string is passed, it is treated as a single metric.
+    n_splits : int, default=5
+        Number of folds for each CV repeat (e.g., K in K-fold CV).
+    n_repeats : int, default=5
+        Number of repeated CV iterations (if using RepeatedKFold-like schemes).
+    save_cv_report : bool, default=False
+        If True, save an aggregated CV report (CSV) to disk.
+    cv_report_name : str, default="cv_report"
+        Base filename (without extension) for the saved CV report.
+    visualize : optional str
+        Type of visualization requested (e.g., "boxplot", "violin"); None disables.
+    save_fig : bool, default=False
+        If True, save CV figures to disk using fig_prefix.
+    fig_prefix : str, default="cv_graph"
+        Filename prefix for saved CV figures.
+    """
 
     def __init__(
         self,

@@ -18,35 +18,58 @@ from ProQSAR.Config.validation_config import CrossValidationConfig
 
 class FeatureSelector(CrossValidationConfig, BaseEstimator):
     """
-    A class for selecting features from a dataset based on specified criteria.
+    FeatureSelector is a pipeline component that wraps a collection of
+    feature-selection strategies and provides an estimator-like interface.
 
-    Attributes:
-        activity_col (str): Column name for the target variable.
-        id_col (str): Column name for the unique identifier.
-        select_method (str): Feature selection method.
-        add_method (Optional[dict]): Additional feature selection methods.
-        scoring (Optional[str]): Scoring metric for model evaluation.
-        n_splits (int): Number of splits for cross-validation.
-        n_repeats (int): Number of repeats for cross-validation.
-        save_method (bool): Whether to save the fitted feature selector.
-        save_trans_data (bool): Whether to save the transformed data.
-        trans_data_name (str): File name for saved transformed data.
-        save_dir (Optional[str]): Directory to save outputs.
-        save_cv_report (bool): Whether to save a CV report.
-        cv_report_name (str): Name for the CV report file.
-        visualize (Optional[str]): Visualization options.
-        save_fig (bool): Whether to save figures.
-        fig_prefix (str): Prefix for saved figure files.
-        n_jobs (int): Number of jobs to run in parallel.
-        deactivate (bool): Flag to deactivate the feature selection process.
+    Key behaviors:
+      - If `select_method` is a list or None and `cross_validate` is True,
+        the class will evaluate the candidate selectors using repeated CV and
+        choose the best-performing selector according to `scoring_target`.
+      - If `select_method` is a string, the corresponding selector will be
+        fitted on the provided data.
+      - The fitted selector can be used to transform new data with `transform`.
+      - The object supports `fit`, `transform`, `fit_transform`, and a
+        `set_params` method for simple parameter injection.
 
-    Methods:
-        fit(data: pd.DataFrame) -> object:
-            Fits the feature selector to the provided data.
-        transform(data: pd.DataFrame) -> pd.DataFrame:
-            Transforms the data based on the fitted selector.
-        fit_transform(data: pd.DataFrame) -> pd.DataFrame:
-            Fits and transforms the data in one step.
+    Parameters (constructor)
+    ------------------------
+    activity_col : str
+        Column name for the target variable (default: "activity").
+    id_col : str
+        Column name for the record identifier (default: "id").
+    select_method : Optional[str | List[str]]
+        Name of the method to use, or a list of methods to compare.
+    add_method : Optional[dict]
+        Extra methods to add to the default method map (name -> selector instance).
+    cross_validate : bool
+        If True, evaluate candidates with CV (default True).
+    save_method : bool
+        If True, save the fitted FeatureSelector object as a pickle (default False).
+    save_trans_data : bool
+        If True, save produced transformed data to CSV when transform is called.
+    trans_data_name : str
+        Base filename for transformed data.
+    save_dir : Optional[str]
+        Directory used to save pickles / transformed data (default: Project/FeatureSelector).
+    n_jobs : int
+        Number of parallel jobs passed to underlying estimators (default 1).
+    random_state : Optional[int]
+        Random seed for stochastic methods (default 42).
+    deactivate : bool
+        If True, the selector is deactivated and fit/transform will skip processing.
+    **kwargs
+        Forwarded to CrossValidationConfig for CV-related settings (n_splits, n_repeats, scoring, etc.)
+
+    Attributes
+    ----------
+    feature_selector
+        The fitted selector instance (after calling `fit`).
+    report
+        CV report DataFrame generated when comparing methods (if cross-validated).
+    task_type
+        Task type inferred from data ('C' or 'R').
+    cv
+        Cross-validation strategy object created via _get_cv_strategy.
     """
 
     def __init__(
@@ -66,9 +89,8 @@ class FeatureSelector(CrossValidationConfig, BaseEstimator):
         **kwargs,
     ):
         """
-        Initializes the FeatureSelector with the specified parameters.
-
-        Parameters are set based on selection and cross-validation criteria.
+        Initialize FeatureSelector and forward CV-related kwargs to
+        CrossValidationConfig.__init__ (keeps original behavior).
         """
         CrossValidationConfig.__init__(self, **kwargs)
         self.activity_col = activity_col
@@ -86,20 +108,34 @@ class FeatureSelector(CrossValidationConfig, BaseEstimator):
 
     def fit(self, data: pd.DataFrame) -> object:
         """
-        Fits the feature selector to the data.
+        Fit the feature selector(s) on `data`.
 
-        Determines the best feature selection method based on cross-validation or
-        uses a specified method, then fits the data.
+        Behavior:
+          - If `deactivate` is True, the method returns immediately.
+          - Infers task type and CV strategy.
+          - If `select_method` is a list or None and `cross_validate` is True,
+            evaluate candidate selectors using `evaluate_feature_selectors`
+            and pick the best method. Fit that selector to the whole dataset.
+          - If `select_method` is a single string, fit the corresponding selector.
+          - Optionally save the FeatureSelector instance to disk (pickle) when
+            `save_method` is True.
 
-        Parameters:
-            data (pd.DataFrame): Input data containing features and target column.
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Input DataFrame including features, activity_col, and id_col.
 
-        Returns:
-            object: Fitted feature selector object.
+        Returns
+        -------
+        self : FeatureSelector
+            The fitted FeatureSelector object.
 
-        Raises:
-            ValueError: If an unrecognized selection method is specified.
+        Raises
+        ------
+        Exception
+            Any unexpected exception is logged and re-raised.
         """
+
         if self.deactivate:
             logging.info("FeatureSelector is deactivated. Skipping fit.")
             return self
@@ -124,7 +160,7 @@ class FeatureSelector(CrossValidationConfig, BaseEstimator):
             # Set scorings
             if self.scoring_target is None:
                 self.scoring_target = "f1" if self.task_type == "C" else "r2"
-                
+
             if self.scoring_list:
                 if isinstance(self.scoring_list, str):
                     self.scoring_list = [self.scoring_list]
@@ -238,16 +274,31 @@ class FeatureSelector(CrossValidationConfig, BaseEstimator):
 
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Transforms data using the fitted feature selector.
+        Transform `data` by selecting features using the fitted selector.
 
-        Parameters:
-            data (pd.DataFrame): Input data containing features and target column.
+        Behavior:
+          - If `deactivate` is True, returns the input data unchanged.
+          - Raises NotFittedError if `fit` has not been called.
+          - Produces a DataFrame containing selected feature columns and preserves
+            the id and activity columns (if present).
+          - Optionally saves the transformed data to CSV when `save_trans_data` is True.
 
-        Returns:
-            pd.DataFrame: Transformed data with selected features.
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Input DataFrame to transform.
 
-        Raises:
-            NotFittedError: If the feature selector is not fitted yet.
+        Returns
+        -------
+        pd.DataFrame
+            Transformed DataFrame with selected features and original id/activity columns.
+
+        Raises
+        ------
+        NotFittedError
+            If the internal feature selector has not been fitted yet.
+        Exception
+            Any unexpected exception is logged and re-raised.
         """
         if self.deactivate:
             logging.info("FeatureSelector is deactivated. Returning unmodified data.")
@@ -311,13 +362,9 @@ class FeatureSelector(CrossValidationConfig, BaseEstimator):
 
     def fit_transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Fits and transforms the data in one step.
+        Convenience method that runs `fit` followed by `transform`.
 
-        Parameters:
-            data (pd.DataFrame): Input data containing features and target column.
-
-        Returns:
-            pd.DataFrame: Transformed data with selected features.
+        If `deactivate` is True, returns the input data unchanged.
         """
         if self.deactivate:
             logging.info("FeatureSelector is deactivated. Returning unmodified data.")
@@ -327,6 +374,20 @@ class FeatureSelector(CrossValidationConfig, BaseEstimator):
         return self.transform(data)
 
     def set_params(self, **kwargs):
+        """
+        Simple parameter setter that updates attributes if they exist.
+
+        Raises KeyError for unknown keys. Returns self to allow fluent chaining.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Attribute names and their new values.
+
+        Returns
+        -------
+        self : FeatureSelector
+        """
         valid_keys = self.__dict__.keys()
         for key in kwargs:
             if key not in valid_keys:
