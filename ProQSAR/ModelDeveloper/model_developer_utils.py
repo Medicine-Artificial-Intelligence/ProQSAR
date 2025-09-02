@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Dict
 from sklearn.utils.validation import check_is_fitted
 from sklearn.exceptions import NotFittedError
 from sklearn.base import BaseEstimator
@@ -193,7 +193,7 @@ def _get_model_map(
         model_map = model_map_c
     elif task_type == "R":
         model_map = model_map_r
-    elif task_type == None:
+    elif task_type is None:
         model_map = {**model_map_c, **model_map_r}
     else:
         raise ValueError(

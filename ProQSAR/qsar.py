@@ -5,8 +5,6 @@ import datetime
 import pandas as pd
 import matplotlib
 
-matplotlib.use("Agg")
-
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_model_map,
     _match_cv_ev_metrics,
@@ -19,10 +17,53 @@ from ProQSAR.Config.debug import setup_logging
 from ProQSAR.ModelDeveloper.model_validation import ModelValidation
 from ProQSAR.Analysis.statistical_analysis import StatisticalAnalysis
 from copy import deepcopy
-from typing import Optional, Iterable, Union, Any
+from typing import Optional, Iterable, Union, Any, Tuple
+
+matplotlib.use("Agg")
 
 
 class ProQSAR:
+    """
+    Top-level class that orchestrates the end-to-end QSAR modeling pipeline.
+
+    Parameters
+    ----------
+    activity_col : str
+        Column name for the target/activity variable in input DataFrames.
+    id_col : str
+        Column name for the sample identifier.
+    smiles_col : str
+        Column name holding SMILES strings.
+    mol_col : str, optional
+        Column name for molecule objects (default "mol").
+    project_name : str, optional
+        Name of the project used to create a project directory (default "Project").
+    n_jobs : int, optional
+        Number of parallel jobs to use where applicable (default 1).
+    random_state : int, optional
+        Random seed for reproducibility (default 42).
+    scoring_target : Optional[str], optional
+        Primary metric used for selecting models/feature sets (default None).
+    scoring_list : Optional[list|str], optional
+        List of metrics to compute during CV (default None).
+    n_splits : int, optional
+        Number of CV splits (default 5).
+    n_repeats : int, optional
+        Number of CV repeats (default 5).
+    keep_all_train : bool, optional
+        If True, adjust preprocessing to keep all train rows (default False).
+    keep_all_test : bool, optional
+        If True, keep all test rows during preprocessing (default False).
+    keep_all_pred : bool, optional
+        If True, keep all prediction rows during preprocessing (default False).
+    config : Optional[Config], optional
+        ProQSAR configuration object (default None -> Config()).
+    log_file : Optional[str], optional
+        Filename for the log file inside the project directory (default "logging.log").
+    log_level : str, optional
+        Logging level (default "INFO").
+    """
+
     def __init__(
         self,
         activity_col: str = "pChEMBL",
@@ -111,7 +152,7 @@ class ProQSAR:
             mol_col=(
                 self.mol_col
                 if self.config.standardizer.deactivate
-                else f"standardized_mol"
+                else "standardized_mol"
             ),
             save_dir=self.save_dir,
             random_state=self.random_state,
@@ -176,11 +217,28 @@ class ProQSAR:
             else None
         )
 
-    def fit(self, data_dev: pd.DataFrame):
+    def fit(self, data_dev: pd.DataFrame) -> "ProQSAR":
         """
-        Fit the complete QSAR pipeline on the development dataset.
-        """
+        Fit the full ProQSAR pipeline on the development dataset.
 
+        The method will:
+          - find the optimal feature set (if multiple types are defined),
+          - generate features, split into train/test,
+          - fit the preprocessing and feature selection,
+          - run model development and optionally hyperparameter optimization,
+          - fit conformal predictor and applicability domain (if configured),
+          - save the pipeline state to disk.
+
+        Parameters
+        ----------
+        data_dev : pd.DataFrame
+            Input development dataset containing SMILES, id and activity columns.
+
+        Returns
+        -------
+        ProQSAR
+            Self (fitted pipeline).
+        """
         start_time = time.perf_counter()
         self.logger.info("----------FITTING----------")
 
@@ -231,7 +289,7 @@ class ProQSAR:
             self.splitter.set_params(data_name=self.selected_feature)
             self.train, self.test = self.splitter.fit(self.data_dev)
 
-            ## Record data shape transformation
+            # Record data shape transformation
             self._record_shape("original", self.selected_feature, "train", self.train)
             # self._record_shape("original", self.selected_feature, "test", self.test)
 
@@ -240,7 +298,7 @@ class ProQSAR:
             self.datapreprocessor.fit(self.train)
             self.train = self.datapreprocessor.transform(self.train)
 
-            ## Record data shape transformation
+            # Record data shape transformation
             for step, transformer in self.datapreprocessor.pipeline.steps:
                 self._record_shape(
                     step, self.selected_feature, "train", transformer.transformed_data
@@ -250,7 +308,7 @@ class ProQSAR:
             # self.datapreprocessor.set_params(data_name=f"test_{self.selected_feature}")
             # self.test = self.datapreprocessor.transform(self.test)
 
-            ## Record data shape transformation
+            # Record data shape transformation
             # for step, transformer in self.datapreprocessor.pipeline.steps:
             #    self._record_shape(
             #        step, self.selected_feature, "test", transformer.transformed_data
@@ -269,7 +327,7 @@ class ProQSAR:
         # Save the fitted feature selector
         self.save_pipeline(save_path)
 
-        ## Record data shape transformation after feature selection
+        # Record data shape transformation after feature selection
         self._record_shape(
             f"feature_selector ({self.feature_selector.select_method})",
             self.selected_feature,
@@ -320,8 +378,22 @@ class ProQSAR:
 
     def _optimize_model(self, select_model: str) -> None:
         """
-        Selects the current model, runs hyperparameter optimization,
-        and updates the model if the optimized version improves CV score.
+        Internal helper that runs hyperparameter optimization for a selected model.
+
+        The method:
+          - retrieves the existing baseline cross-validation report,
+          - runs the configured Optimizer to find improved hyperparameters,
+          - if the optimized model improves CV mean score it replaces the base
+            model in ModelDeveloper and refits, otherwise the baseline is kept.
+
+        Parameters
+        ----------
+        select_model : str
+            Name of the currently selected model to optimize.
+
+        Returns
+        -------
+        None
         """
         # Get the current report and add_model from model_dev
         add_model = deepcopy(self.model_dev.add_model)
@@ -341,7 +413,7 @@ class ProQSAR:
         # Compare optimized score to baseline
         if base_report is not None:
             base_best_score = (
-                base_report.query(f"scoring == @self.model_dev.scoring_target")
+                base_report.query("scoring == @self.model_dev.scoring_target")
                 .set_index("cv_cycle")
                 .at["mean", select_model]
             )
@@ -390,9 +462,17 @@ class ProQSAR:
             )
             self.model_dev.fit(self.train)
 
-    def optimize(self):
+    def optimize(self) -> "ProQSAR":
         """
-        Standalone hyperparameter optimization on the existing trained model.
+        Standalone method that runs hyperparameter optimization using the configured Optimizer.
+
+        After optimization, it will refit the conformal predictor and applicability
+        domain (if configured) and update the saved pipeline.
+
+        Returns
+        -------
+        ProQSAR
+            Self (after optimization).
         """
         self.logger.info("----------OPTIMIZING HYPERPARAMETERS----------")
         start_time = time.perf_counter()
@@ -416,25 +496,32 @@ class ProQSAR:
 
         return self
 
-    def save_pipeline(self, path: str):
+    def save_pipeline(self, path: str) -> None:
         """
-        Save the ProQSAR pipeline to a pickle file.
-        Parameters:
-        -----------
+        Persist the entire ProQSAR pipeline instance to disk using pickle.
+
+        Parameters
+        ----------
         path : str
-            The path where the ProQSAR pipeline will be saved.
+            File path where the pipeline will be saved.
         """
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as file:
             pickle.dump(self, file)
 
-    def load_pipeline(self, path: str):
+    def load_pipeline(self, path: str) -> "ProQSAR":
         """
-        Load a ProQSAR pipeline from a pickle file.
-        Parameters:
-        -----------
+        Load a pipeline saved previously via `save_pipeline` and update self.
+
+        Parameters
+        ----------
         path : str
-            The path to the pickle file containing the ProQSAR pipeline.
+            Path to the pickled ProQSAR object.
+
+        Returns
+        -------
+        ProQSAR
+            The current instance after updating its internal state from the loaded pipeline.
         """
         with open(path, "rb") as file:
             loaded_pipeline = pickle.load(file)
@@ -448,8 +535,21 @@ class ProQSAR:
         self, data: pd.DataFrame, data_name: str = "test", record_shape=True
     ) -> pd.DataFrame:
         """
-        Take the raw data and run it through the DataGenerator pipeline.
-        Returns the generated features DataFrame.
+        Run DataGenerator on raw input and return feature DataFrame.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Raw input DataFrame containing SMILES and id columns.
+        data_name : str, optional
+            Name used for metadata / saved files (default "test").
+        record_shape : bool, optional
+            If True, record the shape of the produced DataFrame in shape_summary.
+
+        Returns
+        -------
+        pd.DataFrame
+            The generated features DataFrame with SMILES/mol columns removed.
         """
         # Copy the data to avoid modifying the original DataFrame
         df = deepcopy(data)
@@ -474,8 +574,23 @@ class ProQSAR:
         record_shape: bool = False,
     ) -> pd.DataFrame:
         """
-        Take the raw data and run it through the already‐fitted
-        DataPreprocessor and FeatureSelector pipelines. Returns the fully transformed data DataFrame.
+        Apply the fitted DataPreprocessor and FeatureSelector on the provided data.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Input DataFrame to preprocess and transform.
+        data_name : str, optional
+            Name used in metadata and saved outputs (default "test").
+        keep_all_records : bool, optional
+            If True, adjust preprocessors to keep all records (useful for predictions).
+        record_shape : bool, optional
+            If True, record shapes at each preprocessing step.
+
+        Returns
+        -------
+        pd.DataFrame
+            The fully transformed DataFrame after preprocessing and feature selection.
         """
         if keep_all_records:
             self.datapreprocessor.duplicate.set_params(rows=False)
@@ -521,7 +636,26 @@ class ProQSAR:
         alpha: Optional[Union[float, Iterable[float]]] = None,
         save_name: str = "pred",
     ):
+        """
+        Produce predictions assuming `data` is already preprocessed (no generator or prep step).
 
+        This is a thin wrapper that optionally uses the ConformalPredictor and
+        ApplicabilityDomain (if configured) and saves the prediction CSV.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Preprocessed data for prediction.
+        alpha : float or iterable of floats, optional
+            Significance level(s) for conformal predictions (if ConformalPredictor is used).
+        save_name : str, optional
+            File name (without directory) to use when saving predictions.
+
+        Returns
+        -------
+        pd.DataFrame
+            Prediction result DataFrame.
+        """
         # Conformal Predictor
         if self.conf_pred:
             pred_result = self.conf_pred.predict(data, alpha=alpha)
@@ -540,15 +674,31 @@ class ProQSAR:
 
         return pred_result
 
-    def predict(self, data_pred, alpha: Optional[Union[float, Iterable[float]]] = None):
+    def predict(
+        self,
+        data_pred: pd.DataFrame,
+        alpha: Optional[Union[float, Iterable[float]]] = None,
+    ) -> pd.DataFrame:
         """
-        Predict activity values for new data.
+        Generate predictions on raw input data.
 
-        Parameters:
-        -----------
+        This method runs:
+          - Data generation (features),
+          - Preprocessing and feature selection,
+          - Prediction (ConformalPredictor or ModelDeveloper),
+          - Optional AD merging and saving of results.
+
+        Parameters
+        ----------
         data_pred : pd.DataFrame
-            The input data for prediction. It should include the SMILES & ID columns.
+            Raw dataset containing SMILES & ID columns for which to generate predictions.
+        alpha : float or iterable of floats, optional
+            Significance level(s) for conformal predictions (if ConformalPredictor configured).
 
+        Returns
+        -------
+        pd.DataFrame
+            Prediction result DataFrame.
         """
         self.logger.info("----------PREDICTING----------")
 
@@ -572,7 +722,27 @@ class ProQSAR:
 
         return pred_result
 
-    def validate(self, external_test_data: Optional[pd.DataFrame] = None):
+    def validate(
+        self, external_test_data: Optional[pd.DataFrame] = None
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Run validation for the fitted pipeline.
+
+        This produces:
+         - cross-validation report (self.cv_report),
+         - external validation report (self.ev_report) which may be computed using
+           a provided external_test_data or the pipeline's internal test set.
+
+        Parameters
+        ----------
+        external_test_data : Optional[pd.DataFrame]
+            Optional external test dataset to use for external validation.
+
+        Returns
+        -------
+        Tuple[pd.DataFrame, pd.DataFrame]
+            (cv_report, ev_report)
+        """
         self.logger.info("----------VALIDATING----------")
 
         # Cross validation report
@@ -661,7 +831,12 @@ class ProQSAR:
 
         return self.cv_report, self.ev_report
 
-    def analysis(self):
+    def analysis(self) -> None:
+        """
+        Run statistical analyses on collected CV reports (optimaldata, feature_selector, model_dev).
+
+        Results (plots/csvs) are saved under the project folders configured earlier.
+        """
         self.logger.info("----------ANALYSING----------")
 
         if self.optimaldata.report is not None:
@@ -701,9 +876,22 @@ class ProQSAR:
         feature_set_name: str,
         data_name: str,
         data: Optional[Union[pd.DataFrame, tuple]] = None,
-    ):
-        """Helper method to record shapes at different pipeline stages in a dictionary format."""
+    ) -> None:
+        """
+        Helper method to record shapes at different pipeline stages in a nested dictionary.
 
+        Parameters
+        ----------
+        stage_name : str
+            Name of the pipeline stage (e.g., 'duplicate', 'lowvar').
+        feature_set_name : str
+            Feature set identifier (e.g., 'ECFP4').
+        data_name : str
+            The dataset label (e.g., 'train', 'test', 'data_pred').
+        data : pd.DataFrame or tuple or None
+            If DataFrame is provided, its .shape is recorded. If tuple is provided,
+            it is assumed to be (n_rows, n_cols). Otherwise 'N/A' is stored.
+        """
         if isinstance(data, tuple):
             data_shape = data
         elif isinstance(data, pd.DataFrame):
@@ -720,7 +908,14 @@ class ProQSAR:
         self.shape_summary[feature_set_name]["Data"][data_name][stage_name] = data_shape
 
     def get_shape_summary_df(self) -> pd.DataFrame:
-        """Converts the shape_summary dictionary into a structured pandas DataFrame."""
+        """
+        Convert the recorded shape_summary into a tidy pandas DataFrame and save it.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame summarizing shapes across pipeline stages and datasets.
+        """
         records = []
         for feature_set, data_entries in self.shape_summary.items():
             for data_name, stages in data_entries["Data"].items():
@@ -738,16 +933,20 @@ class ProQSAR:
         data_pred: Optional[pd.DataFrame] = None,
         data_test: Optional[pd.DataFrame] = None,
         alpha: Optional[Union[float, Iterable[float]]] = None,
-    ):
-        """Run the entire ProQSAR pipeline from fitting to prediction.
-        Parameters:
-        -----------
+    ) -> None:
+        """
+        End-to-end convenience method that runs fit, validate, analysis and prediction.
+
+        Parameters
+        ----------
         data_dev : pd.DataFrame
-            The development dataset for fitting the model.
+            Development dataset used to fit the pipeline.
         data_pred : Optional[pd.DataFrame]
-            The prediction dataset. If provided, predictions will be made on this data.
-        alpha : Optional[Union[float, Iterable[float]]]
-            Significance level for the conformal predictor. If None, predictions will be made without confidence intervals.
+            Optional dataset to run final predictions on after fitting.
+        data_test : Optional[pd.DataFrame]
+            Optional dataset used for external validation.
+        alpha : Optional[float or iterable]
+            Significance level(s) for conformal predictions (if configured).
         """
         # Start the timer
         start = time.perf_counter()

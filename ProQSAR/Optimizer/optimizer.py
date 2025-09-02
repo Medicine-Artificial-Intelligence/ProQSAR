@@ -2,65 +2,71 @@ import optuna
 import pandas as pd
 import logging
 from sklearn.model_selection import cross_val_score
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any, Union
 from ProQSAR.ModelDeveloper.model_developer_utils import (
     _get_task_type,
     _get_cv_strategy,
 )
 from ProQSAR.Optimizer.optimizer_utils import _get_model_list, _get_model_and_params
 from sklearn.base import BaseEstimator
-from optuna.samplers import TPESampler
 
 
 class Optimizer(BaseEstimator):
     """
-    A class to optimize machine learning models using Optuna for hyperparameter tuning.
+    Optimize hyperparameters for one or more candidate models using Optuna.
 
-    Parameters:
+    The Optimizer supports:
+      - specifying which models to search over (select_model),
+      - custom parameter ranges for each model (param_ranges),
+      - adding custom models (add_model: mapping model_name -> (estimator, param_ranges)),
+      - repeated cross-validation for robust scoring,
+      - retrieving best parameters and score after optimization.
+
+    Parameters
     ----------
     activity_col : str
-        The name of the target column in the dataset.
+        Column name for the target variable (default "activity").
     id_col : str
-        The name of the identifier column in the dataset (not used in modeling).
-    select_model : Optional[List[str]], default=None
-        A list of model names to optimize. If None, all compatible models will be considered.
-    scoring : Optional[str], default=None
-        The scoring metric to use for model evaluation. If None, defaults to "f1" for classification
-        tasks and "r2" for regression tasks.
-    param_ranges : dict, default={}
-        A dictionary specifying the ranges of hyperparameters for each model.
-    add_model : dict, default={}
-        A dictionary of additional models and their parameter ranges to consider during optimization.
-    n_trials : int, default=100
-        The number of trials to run for hyperparameter optimization.
-    n_splits : int, default=5
-        The number of splits for cross-validation.
-    n_repeats : int, default=2
-        The number of times to repeat cross-validation.
-    n_jobs : int, default=-1
-        The number of parallel jobs to run for cross-validation. -1 means using all processors.
+        Column name for the identifier column (default "id").
+    select_model : list[str] | None
+        Optional list of model names to evaluate. If None, the default model
+        list for the detected task will be used.
+    scoring : str | None
+        Scoring metric name used by sklearn (e.g., 'f1', 'r2'). If None, defaults
+        to 'f1' for classification and 'r2' for regression.
+    param_ranges : dict
+        Mapping model_name -> parameter ranges used by the trial sampler.
+        Example: {"RandomForestClassifier": {"n_estimators": (50,200)}}.
+    add_model : dict
+        Mapping of custom models to add. Expected format:
+        {name: (estimator_instance, param_range_dict)}.
+    n_trials : int
+        Number of Optuna trials to run (default 50).
+    n_splits : int
+        Number of CV folds (default 5).
+    n_repeats : int
+        Number of CV repeats (default 2).
+    n_jobs : int
+        Number of parallel jobs passed to cross_val_score and some estimators.
+    random_state : int
+        Random seed used for reproducibility (default 42).
+    study_name : str
+        Optuna study name / storage key base (default 'my_study').
+    deactivate : bool
+        If True, optimization is skipped and the instance is returned as-is.
 
-    Attributes:
+    Attributes
     ----------
-    best_model : Optional
-        The best model found during optimization.
-    best_params : Optional[dict]
-        The best hyperparameters found during optimization.
-    best_score : Optional[float]
-        The best score achieved with the best parameters.
-    task_type : Optional[str]
-        The type of task (classification or regression).
-    cv : Optional
-        The cross-validation strategy used.
-
-    Methods:
-    -------
-    optimize(data: pd.DataFrame) -> tuple:
-        Optimizes the model based on the provided dataset.
-    get_best_params() -> dict:
-        Retrieves the best hyperparameters found during optimization.
-    get_best_score() -> float:
-        Retrieves the best score achieved during optimization.
+    best_model : Any
+        Best model discovered (not always set; kept for compatibility).
+    best_params : dict | None
+        Best parameters found by the study after optimization.
+    best_score : float | None
+        Best cross-validated score achieved.
+    task_type : str | None
+        Inferred task type: 'C' or 'R'.
+    cv : object | None
+        Cross-validation splitter used during optimization.
     """
 
     def __init__(
@@ -106,19 +112,38 @@ class Optimizer(BaseEstimator):
             {name: params for name, (model, params) in self.add_model.items()}
         )
 
-    def optimize(self, data: pd.DataFrame) -> Tuple[Dict[str, Any], float]:
+    def optimize(
+        self, data: pd.DataFrame
+    ) -> Union[Tuple[Dict[str, Any], float], "Optimizer"]:
         """
-        Runs hyperparameter optimization using Optuna.
+        Run the Optuna optimization process to find the best hyperparameters.
+
+        Steps:
+          - Infer task type and CV splitting strategy.
+          - Build the list of candidate models (either user-provided or the
+            default from _get_model_list).
+          - Define an Optuna objective that samples model name (if multiple)
+            and hyperparameters, sets them on the model, and evaluates via
+            cross_val_score using the configured CV splitter.
+          - Create or load an Optuna study (SQLite storage 'example.db') and
+            run the specified number of trials.
+          - Store `best_params` and `best_score` on the instance and return them.
 
         Parameters
         ----------
         data : pd.DataFrame
-            The dataset containing features and target variable.
+            DataFrame containing feature columns and the activity/id columns.
 
         Returns
         -------
-        Tuple[Dict[str, Any], float]
-            The best hyperparameters and the best score obtained during optimization.
+        tuple(dict, float) | Optimizer
+            Returns (best_params, best_score) upon successful optimization.
+            If `deactivate` is True, returns `self` without performing optimization.
+
+        Raises
+        ------
+        Exception
+            Any unexpected exceptions are logged and re-raised.
         """
         if self.deactivate:
             logging.info("Optimizer is deactivated. Skipping optimize.")
@@ -187,6 +212,7 @@ class Optimizer(BaseEstimator):
             # Setting the logging level WARNING, the INFO logs are suppressed.
             optuna.logging.set_verbosity(optuna.logging.WARNING)
 
+            # Simple SQLite storage to persist studies; load_if_exists=True resumes studies.
             storage = "sqlite:///example.db"
             study = optuna.create_study(
                 study_name=self.study_name,
@@ -211,17 +237,12 @@ class Optimizer(BaseEstimator):
 
     def get_best_params(self) -> Dict[str, Any]:
         """
-        Retrieves the best model and hyperparameters found during optimization.
+        Return the best hyperparameter dictionary found by the last optimize() call.
 
-        Returns:
-        -------
-        Dict[str, Any]
-            Dictionary of the best parameters.
-
-        Raises:
+        Raises
         ------
         AttributeError
-            If called before running 'optimize'.
+            If optimize() has not been run and best_params is not set.
         """
         if self.best_params:
             return self.best_params
@@ -233,17 +254,12 @@ class Optimizer(BaseEstimator):
 
     def get_best_score(self) -> float:
         """
-        Retrieves the best score achieved during optimization.
+        Return the best cross-validated score found by the last optimize() call.
 
-        Returns:
-        -------
-        float
-            The best score.
-
-        Raises:
+        Raises
         ------
         AttributeError
-            If called before running 'optimize'.
+            If optimize() has not been run and best_score is not set.
         """
         if self.best_params:
             return self.best_score

@@ -5,13 +5,6 @@ import pandas as pd
 from tempfile import TemporaryDirectory
 from ProQSAR.Config.config import Config
 from ProQSAR.data_preprocessor import DataPreprocessor
-from ProQSAR.Preprocessor.duplicate_handler import DuplicateHandler
-from ProQSAR.Preprocessor.missing_handler import MissingHandler
-from ProQSAR.Preprocessor.low_variance_handler import LowVarianceHandler
-from ProQSAR.Outlier.univariate_outliers import UnivariateOutliersHandler
-from ProQSAR.Outlier.kbin_handler import KBinHandler
-from ProQSAR.Outlier.multivariate_outliers import MultivariateOutliersHandler
-from ProQSAR.Rescaler.rescaler import Rescaler
 
 
 def make_preproc_df(
@@ -31,20 +24,22 @@ def make_preproc_df(
       - Optional duplicate columns (Feature1=Feature2 and Feature5=Feature6)
     """
     rng = np.random.default_rng(seed)
-    df = pd.DataFrame({
-        id_col: np.arange(1, n + 1),
-        activity_col: rng.random(n) * 10.0,           # ~U(0,10)
-        "Feature1": rng.integers(0, 2, n),            # binary
-        "Feature2": rng.integers(0, 2, n),            # binary
-        "Feature3": rng.normal(0.0, 0.1, n),          # low-variance normal (std ~0.1)
-        "Feature4": rng.normal(0.0, 0.1, n),          # low-variance normal
-        "Feature5": rng.normal(0.0, np.sqrt(0.5), n), # mixed variance
-        "Feature6": rng.normal(0.0, np.sqrt(0.8), n),
-        "Feature7": rng.normal(0.0, 1.0, n),
-        "Feature8": rng.random(n),
-        "Feature9": rng.random(n),
-        "Feature10": rng.random(n),
-    })
+    df = pd.DataFrame(
+        {
+            id_col: np.arange(1, n + 1),
+            activity_col: rng.random(n) * 10.0,  # ~U(0,10)
+            "Feature1": rng.integers(0, 2, n),  # binary
+            "Feature2": rng.integers(0, 2, n),  # binary
+            "Feature3": rng.normal(0.0, 0.1, n),  # low-variance normal (std ~0.1)
+            "Feature4": rng.normal(0.0, 0.1, n),  # low-variance normal
+            "Feature5": rng.normal(0.0, np.sqrt(0.5), n),  # mixed variance
+            "Feature6": rng.normal(0.0, np.sqrt(0.8), n),
+            "Feature7": rng.normal(0.0, 1.0, n),
+            "Feature8": rng.random(n),
+            "Feature9": rng.random(n),
+            "Feature10": rng.random(n),
+        }
+    )
 
     if missing_rates is None:
         missing_rates = {
@@ -77,8 +72,6 @@ def make_preproc_df(
     return df
 
 
-
-
 class TestDataPreprocessor(unittest.TestCase):
     def setUp(self):
         # Use lowercase schema for DataPreprocessor tests
@@ -93,11 +86,21 @@ class TestDataPreprocessor(unittest.TestCase):
 
     def test_pipeline_order_and_param_wiring(self):
         cfg = self._fast_config()
-        dp = DataPreprocessor(activity_col="activity", id_col="id", config=cfg, save_dir=None)
+        dp = DataPreprocessor(
+            activity_col="activity", id_col="id", config=cfg, save_dir=None
+        )
 
         self.assertEqual(
             list(dp.pipeline.named_steps.keys()),
-            ["duplicate", "missing", "lowvar", "univ_outlier", "kbin", "multiv_outlier", "rescaler"],
+            [
+                "duplicate",
+                "missing",
+                "lowvar",
+                "univ_outlier",
+                "kbin",
+                "multiv_outlier",
+                "rescaler",
+            ],
         )
         for step in dp.pipeline.named_steps.values():
             self.assertTrue(hasattr(step, "activity_col"))
@@ -107,13 +110,17 @@ class TestDataPreprocessor(unittest.TestCase):
 
     def test_fit_returns_self(self):
         cfg = self._fast_config()
-        dp = DataPreprocessor(activity_col="activity", id_col="id", config=cfg, save_dir=None)
+        dp = DataPreprocessor(
+            activity_col="activity", id_col="id", config=cfg, save_dir=None
+        )
         out = dp.fit(self.df)
         self.assertIs(out, dp)
 
     def test_transform_without_save_dir(self):
         cfg = self._fast_config()
-        dp = DataPreprocessor(activity_col="activity", id_col="id", config=cfg, save_dir=None)
+        dp = DataPreprocessor(
+            activity_col="activity", id_col="id", config=cfg, save_dir=None
+        )
         dp.fit(self.df)
         tr = dp.transform(self.df)
 
@@ -144,7 +151,9 @@ class TestDataPreprocessor(unittest.TestCase):
 
     def test_get_params_deep_and_shallow(self):
         cfg = self._fast_config()
-        dp = DataPreprocessor(activity_col="activity", id_col="id", config=cfg, save_dir=None)
+        dp = DataPreprocessor(
+            activity_col="activity", id_col="id", config=cfg, save_dir=None
+        )
         shallow = dp.get_params(deep=False)
         self.assertIn("activity_col", shallow)
         self.assertIn("duplicate", shallow)
@@ -162,7 +171,9 @@ class TestDataPreprocessor(unittest.TestCase):
             kbin={"deactivate": True},
             rescaler={"deactivate": True},
         )
-        dp = DataPreprocessor(activity_col="activity", id_col="id", config=cfg, save_dir=None)
+        dp = DataPreprocessor(
+            activity_col="activity", id_col="id", config=cfg, save_dir=None
+        )
         dp.fit(self.df)
         tr = dp.transform(self.df)
         self.assertIsInstance(tr, pd.DataFrame)
@@ -172,10 +183,11 @@ class TestDataPreprocessor(unittest.TestCase):
     def test_invalid_multivariate_method_raises(self):
         bad_cfg = self._fast_config()
         bad_cfg.multiv_outlier.set_params(select_method="__INVALID__")
-        dp = DataPreprocessor(activity_col="activity", id_col="id", config=bad_cfg, save_dir=None)
+        dp = DataPreprocessor(
+            activity_col="activity", id_col="id", config=bad_cfg, save_dir=None
+        )
         with self.assertRaises(ValueError):
             dp.fit(self.df)
-
 
 
 if __name__ == "__main__":

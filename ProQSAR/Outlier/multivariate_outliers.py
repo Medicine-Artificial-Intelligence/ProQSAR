@@ -13,21 +13,51 @@ from typing import Optional, List
 
 class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
     """
-    A class to handle multivariate outlier detection using various algorithms
-    including Local Outlier Factor, Isolation Forest, One-Class SVM, and
-    Elliptic Envelope methods.
+    Detect and remove multivariate outliers from tabular datasets.
 
-    Attributes:
-        id_col (Optional[str]): Column name for the unique identifier.
-        activity_col (Optional[str]): Column name for activity or target variable.
-        select_method (str): Method to use for outlier detection.
-        n_jobs (int): Number of parallel jobs to run (-1 uses all processors).
-        save_method (bool): If True, saves the fitted model to disk.
-        save_dir (Optional[str]): Directory path to save model and transformed data.
-        save_trans_data (bool): If True, saves the transformed data to disk.
-        trans_data_name (str): Name for the transformed data file.
-        multi_outlier_handler (Optional[object]): Initialized outlier detection model.
-        features (Optional[pd.Index]): Feature columns used in outlier detection.
+    The handler supports fitting one of several multivariate outlier detectors
+    and then removing rows flagged as outliers in `transform`.
+
+    Supported methods (select_method):
+      - "LocalOutlierFactor"
+      - "IsolationForest"
+      - "OneClassSVM"
+      - "RobustCovariance" (EllipticEnvelope with contamination=0.1)
+      - "EmpiricalCovariance" (EllipticEnvelope with support_fraction=1)
+
+    Parameters
+    ----------
+    activity_col : Optional[str]
+        Name of the activity/target column to ignore when fitting (default None).
+    id_col : Optional[str]
+        Name of the id column to ignore when fitting (default None).
+    select_method : str
+        The chosen multivariate outlier detection method (default "LocalOutlierFactor").
+    n_jobs : int
+        Number of parallel jobs to use where supported (default 1).
+    random_state : Optional[int]
+        Random seed for algorithms that accept it (default 42).
+    save_method : bool
+        If True, save the fitted handler object as a pickle to `save_dir`.
+    save_dir : Optional[str]
+        Directory where pickles / transformed data will be saved (default "Project/MultivOutlierHandler").
+    save_trans_data : bool
+        If True, save transformed data to CSV after `transform`.
+    trans_data_name : str
+        Base filename to use when saving transformed data (default "trans_data").
+    deactivate : bool
+        If True, the handler is deactivated and `fit`/`transform` become no-ops.
+
+    Attributes
+    ----------
+    multi_outlier_handler : object | None
+        The fitted outlier detection estimator instance.
+    features : Index | None
+        List of feature column names used during fit (excludes id/activity).
+    data_fit : pd.DataFrame
+        The feature matrix used for fitting (kept so some detectors can operate in novelty mode).
+    transformed_data : pd.DataFrame | None
+        Stores the last transformed DataFrame after `transform()` is called.
     """
 
     def __init__(
@@ -43,20 +73,7 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         trans_data_name: str = "trans_data",
         deactivate: bool = False,
     ) -> None:
-        """
-        Initializes MultivariateOutliersHandler with given parameters.
 
-        Args:
-            activity_col (Optional[str]): Column name for activity or target variable.
-            id_col (Optional[str]): Column name for the unique identifier.
-            select_method (str): Method to use for outlier detection.
-            n_jobs (int): Number of parallel jobs to run (-1 uses all processors).
-            save_method (bool): If True, saves the fitted model to disk.
-            save_dir (Optional[str]): Directory path to save model and transformed data.
-            save_trans_data (bool): If True, saves the transformed data to disk.
-            trans_data_name (str): Name for the transformed data file.
-            deactivate (bool): Flag to deactivate the process.
-        """
         self.activity_col = activity_col
         self.id_col = id_col
         self.select_method = select_method
@@ -70,15 +87,28 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         self.multi_outlier_handler = None
         self.features = None
 
-    def fit(self, data: pd.DataFrame, y=None) -> None:
+    def fit(self, data: pd.DataFrame, y=None) -> "MultivariateOutliersHandler":
         """
-        Fits the selected outlier detection model to the provided data.
+        Fit the selected multivariate outlier detection method on the provided data.
 
-        Args:
-            data (pd.DataFrame): The input dataset.
+        The handler will ignore `id_col` and `activity_col` (if present) when fitting.
 
-        Raises:
-            ValueError: If an unsupported outlier detection method is provided.
+        Parameters
+        ----------
+        data : pd.DataFrame
+            DataFrame containing feature columns (plus optional id/activity columns).
+        y : Optional[pd.Series]
+            Ignored — present for sklearn compatibility.
+
+        Returns
+        -------
+        MultivariateOutliersHandler
+            The fitted handler (self).
+
+        Raises
+        ------
+        Exception
+            Unexpected exceptions are logged and re-raised.
         """
         if self.deactivate:
             logging.info("MultivariateOutliersHandler is deactivated. Skipping fit.")
@@ -142,16 +172,31 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Transforms the data by removing detected outliers based on the fitted model.
+        Remove rows detected as multivariate outliers from `data`.
 
-        Args:
-            data (pd.DataFrame): The input dataset to be transformed.
+        Behavior varies slightly depending on the chosen method:
+          - For LocalOutlierFactor, the handler attempts to detect whether the
+            incoming `data` is novel (different from the data used to fit). If so,
+            it sets novelty mode and re-fits if necessary.
+          - For other estimators, it uses `predict` to mark outliers (-1).
 
-        Returns:
-            pd.DataFrame: The transformed dataset with outliers removed.
+        Parameters
+        ----------
+        data : pd.DataFrame
+            DataFrame to be filtered of outliers. Must contain the same feature
+            columns that were present at `fit` time.
 
-        Raises:
-            NotFittedError: If the model has not been fitted yet.
+        Returns
+        -------
+        pd.DataFrame
+            The input DataFrame with outlier rows removed.
+
+        Raises
+        ------
+        NotFittedError
+            If called before the handler was fitted.
+        Exception
+            Unexpected exceptions are logged and re-raised.
         """
         if self.deactivate:
             self.transformed_data = data
@@ -222,13 +267,20 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
 
     def fit_transform(self, data: pd.DataFrame, y=None) -> pd.DataFrame:
         """
-        Fits the model and transforms the data in a single step.
+        Convenience method that fits the outlier detector on `data` and then
+        transforms `data` to remove detected outliers.
 
-        Args:
-            data (pd.DataFrame): The input dataset to fit and transform.
+        Parameters
+        ----------
+        data : pd.DataFrame
+            DataFrame to fit and transform.
+        y : Optional[pd.Series]
+            Ignored — present for sklearn compatibility.
 
-        Returns:
-            pd.DataFrame: The transformed dataset with outliers removed.
+        Returns
+        -------
+        pd.DataFrame
+            The transformed DataFrame with outliers removed.
         """
         if self.deactivate:
             logging.info(
@@ -251,19 +303,34 @@ class MultivariateOutliersHandler(BaseEstimator, TransformerMixin):
         save_dir: Optional[str] = "Project/OutlierHandler",
     ) -> pd.DataFrame:
         """
-        Compares the effect of different outlier detection methods on one or two datasets.
+        Compare several multivariate outlier detection methods by applying each
+        to `data1` (and optionally `data2`) and returning a summary table with
+        the number of rows removed by each method.
 
-        Args:
-            data1 (pd.DataFrame): The primary dataset for comparison.
-            data2 (Optional[pd.DataFrame]): The secondary dataset for comparison, if any.
-            data1_name (str): Name for the primary dataset in output.
-            data2_name (str): Name for the secondary dataset in output.
-            activity_col (Optional[str]): Column name for activity or target variable.
-            id_col (Optional[str]): Column name for unique identifier.
-            methods_to_compare (List[str]): List of methods to include in comparison.
+        Parameters
+        ----------
+        data1 : pd.DataFrame
+            Primary dataset to evaluate outlier removal on.
+        data2 : Optional[pd.DataFrame]
+            Optional second dataset to evaluate using the same fitted handlers.
+        data1_name : str
+            Name label for data1 in the output table.
+        data2_name : str
+            Name label for data2 in the output table (if provided).
+        activity_col : Optional[str]
+            Activity/target column name (optional).
+        id_col : Optional[str]
+            Identifier column name (optional).
+        methods_to_compare : Optional[List[str]]
+            List of method names to compare. If None, a default set is used.
+        save_dir : Optional[str]
+            If provided, saves the comparison table CSV into this directory.
 
-        Returns:
-            pd.DataFrame: A DataFrame summarizing the outlier removal effects of each method.
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame summarizing, for each method and dataset, the original
+            row count, the row count after handling, and the number of removed rows.
         """
         try:
             comparison_data = []

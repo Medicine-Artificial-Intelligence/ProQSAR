@@ -1,4 +1,3 @@
-from ProQSAR.Splitter.stratified_scaffold_splitter import StratifiedScaffoldSplitter
 from ProQSAR.Splitter.stratified_scaffold_kfold import StratifiedScaffoldKFold
 import pandas as pd
 import numpy as np
@@ -53,7 +52,7 @@ class TestStratifiedScaffoldSplitter(unittest.TestCase):
             n_splits=3, scaff_based="median"
         )
         data = self.data.copy()
-        smiles_list = data["smiles"].to_list()
+
         X = data.drop(["pIC50", "smiles"], axis=1)
         y = data["pIC50"]
         groups = get_scaffold_groups(data, "smiles", None)
@@ -77,7 +76,6 @@ class TestStratifiedScaffoldSplitter(unittest.TestCase):
             n_splits=3, scaff_based="mean"
         )
         data = self.data.copy()
-        smiles_list = data["smiles"].to_list()
         X = data.drop(["pIC50", "smiles"], axis=1)
         y = data["pIC50"]
         groups = get_scaffold_groups(data, "smiles", None)
@@ -98,7 +96,6 @@ class TestStratifiedScaffoldSplitter(unittest.TestCase):
     def test_StratifiedScaffoldKFold_iter_test_indices_invalid(self):
         stratifiedscaffoldkfold = StratifiedScaffoldKFold(n_splits=30)
         data = self.data.copy()
-        smiles_list = data["smiles"].to_list()
         X = data.drop(["pIC50", "smiles"], axis=1)
         y = data["pIC50"]
         groups = get_scaffold_groups(data, "smiles", None)

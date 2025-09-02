@@ -11,7 +11,7 @@ from scipy import stats
 from scipy.stats import levene
 from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.libqsturng import psturng, qsturng
-from typing import Optional, Union
+from typing import Optional, Union, Tuple, List, Dict
 import scikit_posthocs as sp
 import logging
 
@@ -538,7 +538,8 @@ class StatisticalAnalysis:
                         f"{save_dir}/cofried_pc_{scoring}.csv", index=False
                     )
                     logging.info(
-                        f"StatisticalAnalysis: Posthoc Conover-Friedman results saved at {save_dir}/cofried_pc_{scoring}.csv"
+                        "StatisticalAnalysis: Posthoc Conover-Friedman results saved at"
+                        + f" {save_dir}/cofried_pc_{scoring}.csv"
                     )
 
             if not plot:

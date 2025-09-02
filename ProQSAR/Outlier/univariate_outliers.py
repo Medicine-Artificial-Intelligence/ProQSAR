@@ -359,7 +359,7 @@ class UnivariateOutliersHandler(BaseEstimator, TransformerMixin):
     - fit: Fits the outlier handler based on the selected method.
     - transform: Transforms the data by handling outliers.
     - fit_transform: Combines fitting and transforming in one method.
-    - compare_outlier_methods: Compares the effect of different outlier handling methods on two datasets.
+    - compare_univariate_methods: Compares the effect of different outlier handling methods on two datasets.
     """
 
     def __init__(

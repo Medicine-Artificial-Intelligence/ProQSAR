@@ -27,16 +27,22 @@ from sklearn.neural_network import MLPClassifier, MLPRegressor
 
 def _get_model_list(task_type: str, add_model: dict = {}) -> list[str]:
     """
-    Retrieve a list of model names based on the specified task type.
+    Return a list of default model names appropriate for the task.
 
-    Parameters:
-    - task_type (str): The type of task to perform. Use "C" for classification and "R" for regression.
-    - add_model (dict): An optional dictionary containing additional models to include,
-      where keys are model names.
+    Parameters
+    ----------
+    task_type : str
+        'C' for classification or 'R' for regression.
+    add_model : dict, optional
+        Additional user-supplied models (mapping name -> model spec). The keys
+        of this dict will be appended to the returned list so callers can see
+        custom model names.
 
-    Returns:
-    - list[str]: A list of model names suitable for the specified task type,
-      including any additional models provided.
+    Returns
+    -------
+    list[str]
+        A list of model names (strings). If an unexpected error occurs an
+        empty list is returned (and the error is logged).
     """
     try:
         if task_type == "C":
@@ -79,18 +85,49 @@ def _get_model_and_params(
     trial, model_name: str, param_ranges: dict = {}, add_model: dict = {}
 ) -> Tuple[object, Dict[str, Union[int, float, str]]]:
     """
-    Create a model instance and suggest hyperparameters based on the given model name.
+    Construct a model instance and a dict of hyperparameters sampled from a
+    trial object (e.g., an Optuna trial).
 
-    Parameters:
-    - trial: An object representing the current optimization trial, which can suggest values for hyperparameters.
-    - model_name (str): The name of the model for which to create an instance and suggest parameters.
-    - param_ranges (dict): A dictionary specifying the parameter ranges for each model.
-    - add_model (dict): A dictionary of additional models and their parameters.
+    The function supports many common sklearn / xgboost / catboost models and
+    returns a tuple `(model, params)` where `model` is an instantiated estimator
+    and `params` is a dictionary containing sampled hyperparameter values for
+    that estimator. If `model_name` appears in `add_model`, a user-specified
+    model and parameter ranges can be used.
 
-    Returns:
-    - tuple: A tuple containing:
-        - model: An instance of the specified model.
-        - params: A dictionary of suggested hyperparameters for the model.
+    Parameters
+    ----------
+    trial : Any
+        Optimization trial object exposing suggest_float / suggest_int /
+        suggest_categorical methods (e.g., optuna.trial.Trial). The code
+        calls trial.suggest_* directly to sample parameter values.
+    model_name : str
+        Name of the model to instantiate (one of the supported names).
+    param_ranges : dict, optional
+        Mapping model_name -> dict of parameter ranges. Each parameter range is
+        a tuple of either ints or floats or a list for categorical choices.
+        Example:
+            param_ranges = {
+                "RandomForestClassifier": {"n_estimators": (50, 200)}
+            }
+    add_model : dict, optional
+        Mapping for custom models. If `model_name in add_model`, the function
+        will expect add_model[model_name] to be a tuple like `(model_instance, custom_param_ranges)`
+        where `custom_param_ranges` is a dict mapping parameter name -> range.
+
+    Returns
+    -------
+    (model, params) : tuple
+        model : object
+            Instantiated model object (not yet fitted).
+        params : dict
+            Sampled hyperparameter values for the model. Keys are parameter names.
+
+    Raises
+    ------
+    ValueError
+        If `model_name` is not supported or not found in `add_model`.
+    Exception
+        Any unexpected exception is logged and re-raised.
     """
     try:
         if model_name == "LogisticRegression":

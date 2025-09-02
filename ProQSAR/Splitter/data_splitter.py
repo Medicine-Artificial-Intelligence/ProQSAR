@@ -38,13 +38,20 @@ class Splitter(BaseEstimator):
         smiles_col : str
             The name of the column containing SMILES strings for molecular data.
         option : str
-            The splitting method, either "random", "stratified_random", "scaffold", "random_scaffold"or "stratified_scaffold".
+            The splitting method, either "random", "stratified_random", "scaffold", "random_scaffold"
+            or "stratified_scaffold".
         test_size : float, optional
             The proportion of the dataset to include in the test split (default is 0.2).
         n_splits : int, optional
             Number of splits/folds to create for stratified partitions (default is 5).
         random_state : int, optional
             The random seed used by the random number generator (default is 42).
+        save_dir : Optional[str], default 'Project/Splitter'
+            Directory where the fitted splitter model will be saved.
+        data_name : Optional[str], default None
+            The name for the saved data file to be saved.
+        deactivate : bool
+            Flag to deactivate the process.
         """
         self.option = option
         self.test_size = test_size
@@ -71,6 +78,10 @@ class Splitter(BaseEstimator):
         --------
         Tuple[pd.DataFrame, pd.DataFrame]
             The training and testing sets as pandas DataFrames.
+
+        Raises:
+        - ValueError: If the splitting option is invalid.
+        - Exception: Unexpected exceptions are logged and re-raised.
         """
         if self.deactivate:
             logging.info(

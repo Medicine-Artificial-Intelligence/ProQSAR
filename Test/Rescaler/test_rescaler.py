@@ -7,7 +7,6 @@ from sklearn.preprocessing import (
     MinMaxScaler,
     StandardScaler,
     RobustScaler,
-    FunctionTransformer,
 )
 from ProQSAR.Rescaler.rescaler import Rescaler
 from sklearn.exceptions import NotFittedError

@@ -1,11 +1,7 @@
 import os
 import logging
-import numpy as np
 import pandas as pd
 from typing import Optional, List, Union
-from sklearn.model_selection import (
-    cross_validate,
-)
 from sklearn.feature_selection import (
     SelectFromModel,
     SelectKBest,

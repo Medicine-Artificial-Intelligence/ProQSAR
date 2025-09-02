@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 from typing import Tuple
 from ProQSAR.Splitter.scaffold_utils import generate_scaffold_dict, check_scaffold_dict

@@ -2,7 +2,7 @@ import os
 import gc
 import logging
 import pandas as pd
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any
 from sklearn.feature_selection import SelectFromModel
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from ProQSAR.data_generator import DataGenerator
@@ -19,6 +19,62 @@ from copy import deepcopy
 
 
 class OptimalDataset(CrossValidationConfig):
+    """
+    Search across generated feature sets to find the optimal dataset for modeling.
+
+    The class will:
+      - generate features using `DataGenerator` for each configured feature type,
+      - split each feature set into train/test using the configured splitter,
+      - apply the full preprocessing pipeline on the training portion,
+      - optionally run a simple SelectFromModel feature selector (RandomForest),
+      - evaluate the processed feature set using repeated cross-validation,
+      - collect results across feature sets and return the best-performing set.
+
+    Parameters
+    ----------
+    activity_col : str
+        Name of the activity/target column in the input data.
+    id_col : str
+        Name of the identifier column in the input data.
+    smiles_col : str
+        Name of the SMILES column in the raw input data.
+    mol_col : str, optional
+        Name of the molecule column. Defaults to "mol". If a standardizer is
+        active in the provided Config, it will expect 'standardized_mol'.
+    keep_all_train : bool, optional
+        If True, modifies preprocessing to keep all training rows (adjusts
+        duplicate/multivariate outlier behavior).
+    save_dir : Optional[str], optional
+        Directory used to save intermediate outputs (default "Project/OptimalDataset").
+    n_jobs : int, optional
+        Number of parallel jobs (default 1).
+    random_state : int, optional
+        Random seed used by splitters and models (default 42).
+    config : Optional[Config], optional
+        ProQSAR configuration object. If None, a default Config() will be used.
+    **kwargs
+        Additional keyword arguments forwarded to CrossValidationConfig.
+
+    Attributes
+    ----------
+    data_features : dict or None
+        Dictionary mapping feature-type names to DataFrames produced by DataGenerator.
+    train, test : dict
+        Containers storing splits for each feature set.
+    report : pd.DataFrame or None
+        Cross-validation report aggregated across feature sets.
+    optimal_set : Optional[str]
+        Name of the optimal feature set chosen according to `scoring_target`.
+    shape_summary : dict
+        Nested dictionary that records dataset shapes at each preprocessor stage.
+    datapreprocessor : DataPreprocessor
+        The configured preprocessing pipeline instance (fitted per-feature set).
+    datagenerator : DataGenerator
+        The configured data generator used to produce feature sets.
+    splitter : object
+        The configured splitter instance from the provided Config.
+    """
+
     def __init__(
         self,
         activity_col: str,
@@ -46,7 +102,7 @@ class OptimalDataset(CrossValidationConfig):
             else f"standardized_{smiles_col}"
         )
         self.mol_col = (
-            mol_col if self.config.standardizer.deactivate else f"standardized_mol"
+            mol_col if self.config.standardizer.deactivate else "standardized_mol"
         )
         self.data_features = None
         self.train, self.test = {}, {}
@@ -73,11 +129,36 @@ class OptimalDataset(CrossValidationConfig):
         self.datapreprocessor = DataPreprocessor(
             activity_col, id_col, save_dir=save_dir, config=config
         )
+        # Optionally tweak preprocessing to preserve all training rows
         if keep_all_train:
             self.datapreprocessor.duplicate.set_params(rows=False)
             self.datapreprocessor.multiv_outlier.set_params(deactivate=True)
 
-    def run(self, data):
+    def run(self, data: pd.DataFrame) -> Optional[str]:
+        """
+        Execute the optimal dataset search.
+
+        Steps
+        -----
+        1. Generate features for all configured feature types.
+        2. For each feature set:
+           - split into train/test,
+           - fit and apply the preprocessing pipeline to the train set,
+           - optionally perform feature selection (SelectFromModel with RF),
+           - run repeated CV evaluation using the configured CV splitter.
+        3. Aggregate per-feature set CV results into a single report and select
+           the best-performing feature set according to `scoring_target`.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Raw input data containing SMILES, id and activity columns.
+
+        Returns
+        -------
+        Optional[str]
+            Name of the best feature set (optimal_set). None if selection fails.
+        """
         # Generate all features
         self.data_features = self.datagenerator.generate(data)
 
@@ -228,9 +309,22 @@ class OptimalDataset(CrossValidationConfig):
         feature_set_name: str,
         data_name: str,
         data: Optional[Union[pd.DataFrame, tuple]] = None,
-    ):
-        """Helper method to record shapes at different pipeline stages in a dictionary format."""
+    ) -> None:
+        """
+        Helper to record shapes at different pipeline stages.
 
+        Parameters
+        ----------
+        stage_name : str
+            Name of the pipeline stage (e.g., 'duplicate', 'lowvar').
+        feature_set_name : str
+            Identifier for the feature set being processed.
+        data_name : str
+            Which dataset ('train' or 'test') this shape refers to.
+        data : pd.DataFrame or tuple or None
+            If a DataFrame is provided, its .shape is recorded. If a tuple is
+            provided it is assumed to be (n_rows, n_cols). Otherwise 'N/A' is stored.
+        """
         if isinstance(data, tuple):
             data_shape = data
         elif isinstance(data, pd.DataFrame):
@@ -247,7 +341,15 @@ class OptimalDataset(CrossValidationConfig):
         self.shape_summary[feature_set_name]["Data"][data_name][stage_name] = data_shape
 
     def get_shape_summary_df(self) -> pd.DataFrame:
-        """Converts the shape_summary dictionary into a structured pandas DataFrame."""
+        """
+        Convert the internal `shape_summary` dictionary to a tidy pandas DataFrame.
+
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame with one row per (feature set, data_name) containing the
+            recorded shapes for each preprocessing stage.
+        """
         records = []
         for feature_set, data_entries in self.shape_summary.items():
             for data_name, stages in data_entries["Data"].items():
@@ -256,10 +358,25 @@ class OptimalDataset(CrossValidationConfig):
 
         return pd.DataFrame(records)
 
-    def get_params(self, deep=True) -> dict:
-        """Return all hyperparameters as a dictionary, filtering nested parameters for specific attributes."""
+    def get_params(self, deep: bool = True) -> Dict[str, Any]:
+        """
+        Return a dictionary of parameters for this object.
+
+        For nested components (datagenerator, datapreprocessor) the nested
+        `get_params` are expanded into the returned dictionary.
+
+        Parameters
+        ----------
+        deep : bool, optional
+            If True, include parameters from nested estimators (default True).
+
+        Returns
+        -------
+        dict
+            Mapping of parameter names to values.
+        """
         excluded_keys = {"data_features", "train", "test", "report", "optimal_set"}
-        out = {}
+        out: Dict[str, Any] = {}
 
         for key, value in self.__dict__.items():
             if key in excluded_keys:

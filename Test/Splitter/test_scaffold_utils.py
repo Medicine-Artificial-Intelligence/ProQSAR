@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 import pandas as pd
 import numpy as np
 from ProQSAR.Splitter import scaffold_utils as su

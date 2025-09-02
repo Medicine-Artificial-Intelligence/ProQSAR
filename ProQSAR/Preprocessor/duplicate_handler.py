@@ -25,6 +25,8 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
         Parameters:
         - activity_col (str): The name of the column to be used for activity tracking.
         - id_col (str): The name of the column to be used as the identifier.
+        - cols (bool): Whether to remove duplicate columns.
+        - rows (bool): Whether to remove duplicate rows.
         - save_method (bool): Whether to save the fitted duplicate data handler.
         - save_dir (str): Directory to save the configuration.
         - save_trans_data (bool): Whether to save the transformed data.
@@ -48,6 +50,13 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
 
         Parameters:
         - data (pd.DataFrame): The data on which to fit the handler.
+        - y (Optional[pd.Series]): Ignored — present for sklearn compatibility.
+
+        Returns:
+        - DuplicateHandler: The fitted handler (self).
+
+        Raises:
+        - Exception: Unexpected exceptions are logged and re-raised.
         """
         if self.deactivate:
             logging.info("DuplicateHandler is deactivated. Skipping fit.")
@@ -86,6 +95,10 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
 
         Returns:
         - pd.DataFrame: The transformed DataFrame with duplicates removed.
+
+        Raises:
+        - KeyError: If a column is missing in the dataframe.
+        - Exception: Unexpected exceptions are logged and re-raised.
         """
         if self.deactivate:
             self.transformed_data = data
@@ -151,6 +164,7 @@ class DuplicateHandler(BaseEstimator, TransformerMixin):
 
         Parameters:
         - data (pd.DataFrame): The data to fit and transform.
+        - y (Optional[pd.Series]): Ignored — present for sklearn compatibility.
 
         Returns:
         - pd.DataFrame: The transformed DataFrame with duplicates removed.

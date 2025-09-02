@@ -1,6 +1,5 @@
 import unittest
 import pandas as pd
-import numpy as np
 from ProQSAR.Splitter.scaffold_splitter import ScaffoldSplitter
 
 

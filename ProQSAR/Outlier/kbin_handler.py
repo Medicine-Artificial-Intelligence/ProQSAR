@@ -11,25 +11,45 @@ from ProQSAR.Outlier.univariate_outliers import _feature_quality
 
 class KBinHandler(BaseEstimator, TransformerMixin):
     """
-    A handler for detecting and transforming univariate outliers in data using KBinsDiscretizer.
+    Handler that discretizes features identified as univariate outliers using
+    KBinsDiscretizer and appends the resulting binned columns to the dataset.
 
-    This class identifies "bad" features (columns with univariate outliers) and applies a
-    discretization transformation to them. It also allows for saving the transformation model
-    and the transformed data.
+    Typical usage:
+        kbin = KBinHandler(activity_col="activity", id_col="id", n_bins=3)
+        kbin.fit(df)
+        transformed = kbin.transform(df)
 
-    Attributes:
-        activity_col (Optional[str]): The name of the activity column to exclude from handling.
-        id_col (Optional[str]): The name of the ID column to exclude from handling.
-        n_bins (int): The number of bins to use in KBinsDiscretizer.
-        encode (str): The encoding method for transformed bins ('ordinal', 'onehot', or 'onehot-dense').
-        strategy (str): The binning strategy ('uniform', 'quantile', or 'kmeans').
-        save_method (bool): Whether to save the fitted model.
-        save_dir (Optional[str]): Directory path where the model and data should be saved.
-        save_trans_data (bool): Whether to save the transformed data to a CSV file.
-        trans_data_name (str): The name of the CSV file for transformed data.
-        deactivate (bool): Flag to deactivate the process.
-        kbin (Optional[KBinsDiscretizer]): The fitted KBinsDiscretizer object.
-        bad (list[str]): List of columns identified as having outliers.
+    Parameters
+    ----------
+    activity_col : Optional[str]
+        Name of the activity/target column (if present) used by `_feature_quality`.
+    id_col : Optional[str]
+        Name of the id column used by `_feature_quality`.
+    n_bins : int
+        Number of bins to produce (passed to KBinsDiscretizer).
+    encode : str
+        Encoding strategy for KBinsDiscretizer (default "ordinal").
+    strategy : str
+        Binning strategy for KBinsDiscretizer (default "quantile").
+    save_method : bool
+        If True, save the fitted KBinHandler object (pickle) to `save_dir`.
+    save_dir : Optional[str]
+        Directory to store saved objects / transformed data (default "Project/KBinHandler").
+    save_trans_data : bool
+        If True, save the transformed DataFrame to CSV.
+    trans_data_name : str
+        Base filename for transformed CSV (default "trans_data").
+    deactivate : bool
+        If True, the handler is deactivated and fit/transform become no-ops.
+
+    Attributes
+    ----------
+    kbin : Optional[KBinsDiscretizer]
+        Fitted KBinsDiscretizer after calling `fit`, or None if not applicable.
+    bad : list
+        Names of features identified as "bad" (univariate outliers) to be discretized.
+    transformed_data : pd.DataFrame
+        Stores the last transformed DataFrame after transform() is called.
     """
 
     def __init__(
@@ -45,7 +65,9 @@ class KBinHandler(BaseEstimator, TransformerMixin):
         trans_data_name: str = "trans_data",
         deactivate: bool = False,
     ) -> None:
-
+        """
+        Initialize the KBinHandler with the specified configuration.
+        """
         self.activity_col = activity_col
         self.id_col = id_col
         self.n_bins = n_bins
@@ -61,13 +83,32 @@ class KBinHandler(BaseEstimator, TransformerMixin):
 
     def fit(self, data: pd.DataFrame, y=None) -> "KBinHandler":
         """
-        Fit the KBinsDiscretizer to features with univariate outliers.
+        Fit the KBinsDiscretizer to features identified as "bad" (univariate outliers).
 
-        Args:
-            data (pd.DataFrame): The dataset to fit the model to.
+        Procedure:
+        - Use `_feature_quality` to identify bad features. `_feature_quality`
+          is expected to return a tuple where the second element is a list of bad
+          feature names.
+        - If bad features exist, instantiate and fit KBinsDiscretizer on those
+          columns.
+        - Optionally save the fitted handler as a pickle.
 
-        Returns:
-            KBinHandler: Returns self for chaining.
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Input DataFrame used to detect bad features and to fit the discretizer.
+        y : ignored
+            Present for sklearn compatibility.
+
+        Returns
+        -------
+        KBinHandler
+            The fitted handler (self).
+
+        Raises
+        ------
+        Exception
+            Unexpected exceptions are logged and re-raised.
         """
         if self.deactivate:
             logging.info("KBinHandler is deactivated. Skipping fit.")
@@ -104,13 +145,30 @@ class KBinHandler(BaseEstimator, TransformerMixin):
 
     def transform(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Apply the discretization transformation to the data.
+        Transform the provided DataFrame by discretizing the previously-detected
+        bad features and appending the resulting 'Kbin' columns.
 
-        Args:
-            data (pd.DataFrame): The dataset to transform.
+        Procedure:
+        - If deactivated, return the input unchanged.
+        - If no bad features were detected during fit, return the original data.
+        - Otherwise, apply the fitted KBinsDiscretizer and replace the original
+          bad columns with new columns named "Kbin1", "Kbin2", ...
 
-        Returns:
-            pd.DataFrame: The transformed dataset with "bad" features discretized.
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Input DataFrame to transform.
+
+        Returns
+        -------
+        pd.DataFrame
+            Transformed DataFrame with Kbin columns. The result is also stored in
+            `self.transformed_data`.
+
+        Raises
+        ------
+        Exception
+            Unexpected exceptions are logged and re-raised.
         """
         if self.deactivate:
             self.transformed_data = data
@@ -165,13 +223,19 @@ class KBinHandler(BaseEstimator, TransformerMixin):
 
     def fit_transform(self, data: pd.DataFrame, y=None) -> pd.DataFrame:
         """
-        Fit the KBinsDiscretizer to the data and transform it in a single step.
+        Convenience method for fitting and transforming in a single call.
 
-        Args:
-            data (pd.DataFrame): The dataset to fit and transform.
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Input DataFrame.
+        y : ignored
+            Present for sklearn compatibility.
 
-        Returns:
-            pd.DataFrame: The transformed dataset with "bad" features discretized.
+        Returns
+        -------
+        pd.DataFrame
+            Transformed DataFrame after fitting and applying the discretizer.
         """
         if self.deactivate:
             logging.info("KBinHandler is deactivated. Returning unmodified data.")

@@ -1,9 +1,5 @@
-from rdkit import Chem
-from rdkit.Chem.Scaffolds import MurckoScaffold
 import pandas as pd
-import numpy as np
-import logging
-from typing import List, Tuple, Literal, Optional
+from typing import Tuple, Literal
 from ProQSAR.Splitter.stratified_scaffold_kfold import StratifiedScaffoldKFold
 from ProQSAR.Splitter.scaffold_utils import get_scaffold_groups
 

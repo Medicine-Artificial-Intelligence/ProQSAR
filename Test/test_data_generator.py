@@ -9,6 +9,7 @@ from ProQSAR.Featurizer.feature_generator import FeatureGenerator
 from sklearn.base import BaseEstimator
 from typing import Optional
 
+
 class DataGenerator(BaseEstimator):
     def __init__(
         self,
@@ -22,6 +23,7 @@ class DataGenerator(BaseEstimator):
         config=None,
     ):
         from ProQSAR.Config.config import Config  # fallback only if none provided
+
         self.activity_col = activity_col
         self.id_col = id_col
         self.smiles_col = smiles_col
@@ -35,17 +37,27 @@ class DataGenerator(BaseEstimator):
             smiles_col=self.smiles_col, n_jobs=self.n_jobs
         )
         self.featurizer = self.config.featurizer.set_params(
-            mol_col=(self.mol_col if self.standardizer.deactivate else "standardized_mol"),
+            mol_col=(
+                self.mol_col if self.standardizer.deactivate else "standardized_mol"
+            ),
             activity_col=self.activity_col,
             id_col=self.id_col,
-            smiles_col=(self.smiles_col if self.standardizer.deactivate else ("standardized_" + self.smiles_col)),
+            smiles_col=(
+                self.smiles_col
+                if self.standardizer.deactivate
+                else ("standardized_" + self.smiles_col)
+            ),
             n_jobs=self.n_jobs,
             save_dir=self.save_dir,
         )
 
     def generate(self, data):
-        standardized_data = pd.DataFrame(self.standardizer.standardize_dict_smiles(data))
-        data_features = self.featurizer.set_params(data_name=self.data_name).generate_features(standardized_data)
+        standardized_data = pd.DataFrame(
+            self.standardizer.standardize_dict_smiles(data)
+        )
+        data_features = self.featurizer.set_params(
+            data_name=self.data_name
+        ).generate_features(standardized_data)
         if len(data_features.keys()) == 1:
             return list(data_features.values())[0]
         else:
@@ -89,7 +101,7 @@ class TestDataGenerator(unittest.TestCase):
             smiles_col="standardized_smiles",
             activity_col="activity",
             id_col="id",
-            feature_types="RDK5",   # keep it light & fast
+            feature_types="RDK5",  # keep it light & fast
             n_jobs=1,
             verbose=0,
             deactivate=False,
@@ -153,7 +165,7 @@ class TestDataGenerator(unittest.TestCase):
 
         std = SMILESStandardizer(smiles_col="smiles", n_jobs=1, deactivate=True)
         feat = FeatureGenerator(
-            mol_col="mol",                 # note: not standardized_mol
+            mol_col="mol",  # note: not standardized_mol
             smiles_col="smiles",
             activity_col="activity",
             id_col="id",
@@ -213,10 +225,12 @@ class TestDataGenerator(unittest.TestCase):
             )
             cfg = LocalConfig(std, feat)
             dg = DataGenerator(
-                "activity", "id", "smiles",
+                "activity",
+                "id",
+                "smiles",
                 config=cfg,
                 save_dir=tmpdir,
-                data_name="mini"
+                data_name="mini",
             )
             out = dg.generate(self.records)
             # files should exist

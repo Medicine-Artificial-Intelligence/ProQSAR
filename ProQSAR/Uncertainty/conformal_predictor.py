@@ -14,7 +14,39 @@ from mapie.classification import MapieClassifier
 
 class ConformalPredictor(BaseEstimator):
     """
-    A class to perform conformal prediction for classification and regression models.
+    Calibrate and query conformal predictors using MAPIE.
+
+    Parameters
+    ----------
+    model : Optional[Union[ModelDeveloper, BaseEstimator]]
+        The base estimator to wrap. May be an sklearn-compatible estimator or
+        a ProQSAR ModelDeveloper instance (in which case the underlying
+        estimator is extracted).
+    activity_col : str, optional
+        Column name of the target/label in input DataFrames (default "activity").
+    id_col : str, optional
+        Column name of the identifier in input DataFrames (default "id").
+    n_jobs : int, optional
+        Number of parallel jobs for MAPIE when supported (default 1).
+    random_state : Optional[int], optional
+        Random seed passed to MAPIE and possibly the estimator (default 42).
+    save_dir : Optional[str], optional
+        Directory to save fitted ConformalPredictor and results (default None).
+    deactivate : bool, optional
+        If True, ConformalPredictor becomes a no-op (fit/predict return early).
+    **kwargs : dict
+        Additional keyword arguments passed to the MAPIE estimator (e.g., `method`, `cv`).
+
+    Attributes
+    ----------
+    model : BaseEstimator | None
+        The underlying estimator used by MAPIE (extracted from ModelDeveloper if provided).
+    cp : MapieClassifier | MapieRegressor | None
+        The fitted MAPIE wrapper after calling `fit`.
+    task_type : Optional[str]
+        'C' for classification or 'R' for regression (inferred during fit).
+    cp_kwargs : dict
+        Additional kwargs passed to the MAPIE wrapper at `set_params`.
     """
 
     def __init__(
@@ -28,15 +60,7 @@ class ConformalPredictor(BaseEstimator):
         deactivate: bool = False,
         **kwargs,
     ) -> None:
-        """
-        Initialize the ConformalPredictor class.
 
-        Args:
-            model (Union[ModelDeveloper, object]): The model to be used for conformal prediction.
-            activity_col (str): The target variable column name.
-            id_col (str): The identifier column name.
-            save_dir (Optional[str]): Directory to save calibration and prediction results.
-        """
         self.model = model
         self.activity_col = activity_col
         self.id_col = id_col
@@ -49,7 +73,35 @@ class ConformalPredictor(BaseEstimator):
         self.cp_kwargs = kwargs
         self.cp = None
 
-    def fit(self, data: pd.DataFrame):
+    def fit(self, data: pd.DataFrame) -> "ConformalPredictor":
+        """
+        Fit (calibrate) the MAPIE conformal predictor on the provided dataset.
+
+        If `model` is an instance of ProQSAR's ModelDeveloper, its fitted
+        estimator (`model.model`) is used. The method determines whether the
+        task is classification or regression and uses MapieClassifier or
+        MapieRegressor accordingly.
+
+        The fitted ConformalPredictor stores MAPIE's `conformity_scores_`
+        as float64 for consistency and optionally saves the fitted object
+        to disk.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            DataFrame containing features and the activity/id columns named
+            according to `activity_col` and `id_col`.
+
+        Returns
+        -------
+        ConformalPredictor
+            The fitted ConformalPredictor instance.
+
+        Raises
+        ------
+        Exception
+            Any unexpected errors are logged and re-raised.
+        """
 
         if self.deactivate:
             logging.info("ConformalPredictor is deactivated. Skipping calibrate.")
@@ -105,15 +157,40 @@ class ConformalPredictor(BaseEstimator):
         alpha: Optional[Union[float, Iterable[float]]] = None,
     ) -> pd.DataFrame:
         """
-        Generate conformal prediction intervals or sets.
+        Produce conformal predictions for the input DataFrame.
 
-        Args:
-            data (pd.DataFrame): Dataset for making predictions.
-            confidence (float): Confidence level for prediction intervals.
-            **kwargs: Additional parameters for prediction.
+        For classification, MAPIE returns prediction sets (arrays indicating
+        membership of classes for each alpha). For regression, MAPIE returns
+        prediction intervals. This method organizes MAPIE outputs into a
+        readable pandas DataFrame where each row corresponds to an input sample,
+        with columns for ID, actual value (if available), point prediction and
+        the prediction set / interval for each alpha supplied.
 
-        Returns:
-            pd.DataFrame: DataFrame containing prediction results.
+        Parameters
+        ----------
+        data : pd.DataFrame
+            DataFrame containing features and optional id/activity columns.
+        alpha : float or iterable of float, optional
+            Significance level(s) for conformal prediction (e.g., 0.1 for 90%
+            prediction sets/intervals). If a single float is provided it is
+            converted to a list internally. If None, only point predictions
+            are returned (behavior depends on MAPIE's predict signature).
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with prediction results. Columns include:
+              - id_col (if present)
+              - activity_col (if present)
+              - 'Predicted value'
+              - 'Prediction Set (alpha=...)' or 'Prediction Interval (alpha=...)'
+
+        Raises
+        ------
+        NotFittedError
+            If called before `fit` / calibration.
+        Exception
+            Any unexpected errors are logged and re-raised.
         """
         # check_is_fitted(self.predictor)
         if self.cp is None:
@@ -177,6 +254,21 @@ class ConformalPredictor(BaseEstimator):
             raise
 
     def set_params(self, **kwargs):
+        """
+        Set attributes on the ConformalPredictor. Only keys already present in
+        the instance's __dict__ are accepted; attempting to set unknown keys
+        raises a KeyError.
+
+        Returns
+        -------
+        ConformalPredictor
+            The updated instance (self).
+
+        Raises
+        ------
+        KeyError
+            If an unknown attribute name is passed in kwargs.
+        """
         valid_keys = self.__dict__.keys()
         for key in kwargs:
             if key not in valid_keys:

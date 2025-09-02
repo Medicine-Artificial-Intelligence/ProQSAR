@@ -26,6 +26,30 @@ class SMILESStandardizer(BaseEstimator):
         standardize_mol: Standardizes RDKit Mol objects with various chemical standardization steps.
         standardize_smiles: Converts SMILES strings to standardized RDKit Mol objects.
         standardize_dict_smiles: Standardizes SMILES strings within a pandas DataFrame or a list of dictionaries.
+
+    Parameters:
+        smiles_col: str
+            The name of the column containing SMILES strings for molecular data.
+        normalize: bool
+            Whether to normalize the molecule.
+        tautomerize: bool
+            Whether to tautomerize the molecule.
+        remove_salts: bool
+            Whether to remove salt fragments.
+        handle_charges: bool
+            Whether to handle charges.
+        uncharge: bool
+            Whether to uncharge the molecule.
+        handle_stereo: bool
+            Whether to handle stereochemistry.
+        remove_fragments: bool
+            Whether to remove fragments.
+        largest_fragment_only: bool
+            Whether to keep only the largest fragment.
+        n_jobs: int
+            The number of jobs to run in parallel.
+        deactivate: bool
+            Whether to deactivate the process.
     """
 
     def __init__(
@@ -81,18 +105,10 @@ class SMILESStandardizer(BaseEstimator):
         mol: Chem.Mol,
     ) -> Optional[Chem.Mol]:
         """
-        Applies a series of standardization procedures to an RDKit Mol object based on specified options.
+        Standardizes an RDKit Mol object using various chemical standardization steps.
 
         Parameters:
             mol (Chem.Mol): The molecule to be standardized.
-            normalize (bool): Applies normalization corrections.
-            tautomerize (bool): Canonicalizes tautomers.
-            remove_salts (bool): Removes salt fragments.
-            handle_charges (bool): Adjusts molecule to its most likely ionic state.
-            uncharge (bool): Neutralizes the molecule by removing counter-ions.
-            handle_stereo (bool): Handles stereochemistry.
-            remove_fragments (bool): Removes small fragments.
-            largest_fragment_only (bool): Keeps only the largest fragment.
 
         Returns:
             Chem.Mol: The standardized molecule or None if the molecule cannot be processed.
@@ -160,12 +176,14 @@ class SMILESStandardizer(BaseEstimator):
 
         Parameters:
             data_input (DataFrame or list of dicts): Data containing SMILES strings to be standardized.
-            key (str): Key or column name for SMILES strings in the data.
-            n_jobs (int): Number of jobs to run in parallel.
 
         Returns:
             DataFrame or list of dicts: The input data with additional columns/keys for
             standardized SMILES and Mol objects.
+
+        Raises:
+            TypeError: If the input data is not a pandas DataFrame or a list of dictionaries.
+            Exception: Unexpected exceptions are logged and re-raised.
         """
         if self.deactivate:
             logging.info("SMILESStandardizer is deactivated. Skipping standardization.")
