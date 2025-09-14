@@ -162,12 +162,20 @@ class StatisticalAnalysis:
             Unexpected exceptions are logged and re-raised.
         """
         try:
-            report_new, scoring_list, _ = StatisticalAnalysis.extract_scoring_dfs(
-                report_df=report_df,
-                scoring_list=scoring_list,
-                method_list=method_list,
-                melt=True,
+            report_new, scoring_list, method_list = (
+                StatisticalAnalysis.extract_scoring_dfs(
+                    report_df=report_df,
+                    scoring_list=scoring_list,
+                    method_list=method_list,
+                    melt=True,
+                )
             )
+
+            if not method_list or len(method_list) == 1:
+                logging.info(
+                    "StatisticalAnalysis: Only one method provided. Skipping statistical test."
+                )
+                return None
 
             result = []
 
@@ -512,7 +520,7 @@ class StatisticalAnalysis:
                 logging.info(
                     "StatisticalAnalysis: Only one method provided. Skipping statistical test."
                 )
-                return
+                return None, None
 
             # Precompute posthoc Conover-Friedman results for each metric
             pc_results = {}
@@ -773,7 +781,7 @@ class StatisticalAnalysis:
                 logging.info(
                     "StatisticalAnalysis: Only one method provided. Skipping statistical test."
                 )
-                return
+                return None
 
             # Set defaults
             for key in scoring_list:

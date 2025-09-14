@@ -87,7 +87,10 @@ class Splitter(BaseEstimator):
             logging.info(
                 "Splitter is deactivated. Skipping fit and returning original data as train set."
             )
-            return data, None
+            data_train = data.reset_index(drop=True).drop(
+                columns=[self.smiles_col, self.mol_col], errors="ignore"
+            )
+            return data_train, None
 
         try:
             if self.option == "random":

@@ -773,7 +773,11 @@ class ProQSAR:
             self.logger.info(
                 "External test data provided. Using it for external validation."
             )
-            test_data = external_test_data
+            test_data = self._apply_generator(
+                external_test_data,
+                data_name="test",
+                record_shape=True,
+            )
         elif hasattr(self, "test") and self.test is not None:
             self.logger.info(
                 "External validation will be performed on the test set from the train-test split."
