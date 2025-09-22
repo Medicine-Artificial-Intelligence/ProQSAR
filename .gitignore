@@ -5,3 +5,8 @@
 *.tsv
 *.pkl
 Project/
+*.db
+catboost_info/*
+Project/*
+*ipynb
+docs/*

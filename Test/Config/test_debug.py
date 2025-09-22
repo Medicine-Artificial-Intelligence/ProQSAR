@@ -2,7 +2,7 @@ import unittest
 import os
 import tempfile
 import logging
-from ProQSAR.Config.debug import setup_logging
+from proqsar.Config.debug import setup_logging
 
 
 class TestDebugSetupLogging(unittest.TestCase):

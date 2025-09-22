@@ -1,6 +1,6 @@
 import unittest
-from ProQSAR.Config.config import Config
-from ProQSAR.Rescaler.rescaler import Rescaler
+from proqsar.Config.config import Config
+from proqsar.Preprocessor.Clean.rescaler import Rescaler
 
 
 class TestConfig(unittest.TestCase):

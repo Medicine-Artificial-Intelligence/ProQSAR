@@ -3,8 +3,8 @@ import unittest
 import numpy as np
 import pandas as pd
 from tempfile import TemporaryDirectory
-from ProQSAR.Config.config import Config
-from ProQSAR.data_preprocessor import DataPreprocessor
+from proqsar.Config.config import Config
+from proqsar.data_preprocessor import DataPreprocessor
 
 
 def make_preproc_df(

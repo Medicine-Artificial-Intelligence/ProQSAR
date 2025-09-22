@@ -1,5 +1,5 @@
 import unittest
-from ProQSAR.Config.validation_config import CrossValidationConfig
+from proqsar.Config.validation_config import CrossValidationConfig
 
 
 class TestValidationConfig(unittest.TestCase):

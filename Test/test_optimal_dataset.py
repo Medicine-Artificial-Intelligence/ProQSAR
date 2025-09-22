@@ -3,8 +3,8 @@ import unittest
 import numpy as np
 import pandas as pd
 from tempfile import TemporaryDirectory
-from ProQSAR.Config.config import Config
-from ProQSAR.optimal_dataset import OptimalDataset
+from proqsar.Config.config import Config
+from proqsar.optimal_dataset import OptimalDataset
 
 
 # Use the sample data function the user provided

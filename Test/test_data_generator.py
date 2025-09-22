@@ -4,8 +4,8 @@ import tempfile
 import unittest
 import pandas as pd
 from rdkit import Chem
-from ProQSAR.Standardizer.smiles_standardizer import SMILESStandardizer
-from ProQSAR.Featurizer.feature_generator import FeatureGenerator
+from proqsar.Data.Standardizer.smiles_standardizer import SMILESStandardizer
+from proqsar.Data.Featurizer.feature_generator import FeatureGenerator
 from sklearn.base import BaseEstimator
 from typing import Optional
 
@@ -22,7 +22,7 @@ class DataGenerator(BaseEstimator):
         data_name: Optional[str] = None,
         config=None,
     ):
-        from ProQSAR.Config.config import Config  # fallback only if none provided
+        from proqsar.Config.config import Config  # fallback only if none provided
 
         self.activity_col = activity_col
         self.id_col = id_col

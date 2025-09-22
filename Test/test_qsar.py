@@ -1,8 +1,8 @@
 import unittest
 import pandas as pd
 from tempfile import TemporaryDirectory
-from ProQSAR.Config.config import Config
-from ProQSAR.qsar import ProQSAR
+from proqsar.Config.config import Config
+from proqsar.qsar import ProQSAR
 
 
 class TestProQSAR(unittest.TestCase):
