@@ -7,7 +7,7 @@ name: Test & Lint
 
 on:
   push:
-    branches: [ "main", "dev-long", "stagging" ]
+    branches: [ "main", "stagging", "dev-minh" ]
   pull_request:
     branches: [ "main" ]
 
@@ -37,4 +37,4 @@ jobs:
         ./lint.sh
     - name: Test with pytest
       run: |
-        pytest
+        pytest Test
