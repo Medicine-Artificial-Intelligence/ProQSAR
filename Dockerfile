@@ -21,7 +21,7 @@ COPY pyproject.toml README.md ./
 # COPY poetry.lock ./
 
 # 5. Copy your library source
-COPY synkit/ ./synkit
+COPY proqsar/ ./proqsar
 
 # 6. Build the wheel
 RUN python -m build --wheel --no-isolation
@@ -32,7 +32,7 @@ RUN python -m build --wheel --no-isolation
 FROM python:3.11-slim
 
 # 7. Set a clean workdir
-WORKDIR /opt/synkit
+WORKDIR /opt/proqsar
 
 # 8. Copy in the built wheel from the builder stage
 COPY --from=builder /build/dist/*.whl ./
@@ -41,5 +41,5 @@ COPY --from=builder /build/dist/*.whl ./
 RUN pip install --no-cache-dir *.whl \
     && rm *.whl
 
-# 10. Sanity check: print the installed synkit version
-CMD ["python", "-c", "import importlib.metadata as m; print(m.version('synkit'))"]
+# 10. Sanity check: print the installed proqsar version
+CMD ["python", "-c", "import importlib.metadata as m; print(m.version('proqsar'))"]
