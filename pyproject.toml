@@ -86,3 +86,4 @@ all = [
 homepage      = "https://github.com/Medicine-Artificial-Intelligence/ProQSAR"
 source        = "https://github.com/Medicine-Artificial-Intelligence/ProQSAR"
 issues        = "https://github.com/Medicine-Artificial-Intelligence/ProQSAR/issues"
+documentation = "https://proqsar.readthedocs.io/en/latest/"
