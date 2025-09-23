@@ -84,7 +84,7 @@ jobs:
 
   publish_beta:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/refactor'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/conda'
     runs-on: ubuntu-latest
     steps:
       - name: Download built packages
