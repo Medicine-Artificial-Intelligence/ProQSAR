@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "proqsar"
-version = "0.0.3"
+version = "0.0.4"
 description = "ProQSAR — automation utilities for QSAR workflows (standardization, featurization, model building & evaluation)."
 readme = "README.md"
 long-description = { file = "CHANGELOG.md" }
