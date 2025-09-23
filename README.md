@@ -3,6 +3,9 @@
 Automatic pipeline for QSAR modeling
 
 [![PyPI version](https://img.shields.io/pypi/v/proqsar.svg)](https://pypi.org/project/proqsar/)
+[![Conda version](https://img.shields.io/conda/vn/tieulongphan/proqsar.svg)](https://anaconda.org/tieulongphan/proqsar)
+[![Docker Pulls](https://img.shields.io/docker/pulls/tieulongphan/proqsar.svg)](https://hub.docker.com/r/tieulongphan/proqsar)
+[![Docker Image Version](https://img.shields.io/docker/v/tieulongphan/proqsar/latest?label=container)](https://hub.docker.com/r/tieulongphan/proqsar)
 [![License](https://img.shields.io/github/license/Medicine-Artificial-Intelligence/proqsar.svg)](https://github.com/Medicine-Artificial-Intelligence/proqsar/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/v/release/Medicine-Artificial-Intelligence/proqsar.svg)](https://github.com/Medicine-Artificial-Intelligence/proqsar/releases)
 [![Last Commit](https://img.shields.io/github/last-commit/Medicine-Artificial-Intelligence/proqsar.svg)](https://github.com/Medicine-Artificial-Intelligence/proqsar/commits)
