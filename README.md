@@ -13,11 +13,10 @@
 
 **ProQSAR — automatic pipeline for quantitative structure–activity relationship (QSAR) modeling**
 
-A reproducible toolkit for end-to-end QSAR: data standardization, featurization, splitting, model training, uncertainty estimation, and evaluation. Designed for reproducible experiments, continuous integration, and easy integration into ML/CADD pipelines.
+A reproducible toolkit for end-to-end QSAR: data standardization, featurization, splitting, model training, uncertainty estimation, and evaluation. Designed for reproducible experiments, continuous integration, and easy integration into ML/CADD pipelines. Full documentation for ProQSAR is available at [ReadTheDocs](https://proqsar.readthedocs.io/en/latest/).
 
 ![ProQSAR](https://raw.githubusercontent.com/Medicine-Artificial-Intelligence/ProQSAR/main/doc/fig/proqsar.png)
 
-> Notebook-style and CLI-first workflows for quickly going from raw SMILES to validated, production-ready models.
 
 
 ## Key features
@@ -62,27 +61,6 @@ cd proqsar
 pip install -e .[dev]
 ```
 
-
-## Quickstart — Python API
-
-This minimal example shows a typical pipeline. Replace names with the exact classes/methods in your local codebase if they differ.
-
-```python
-TODO
-```
-
-
-
-## Quickstart — CLI (example)
-
-A simple CLI invocation for repeating an experiment from a YAML config.
-
-```bash
-TODO
-```
-
-Include `--help` for available commands once the package is installed.
-
 ## Development & contributing
 
 Thanks for your interest in contributing! A quick checklist:
@@ -107,9 +85,10 @@ If you use ProQSAR in research, please cite the project. Example BibTeX placehol
 
 ## Authors & Contributors
 
-- Tuyet-Minh Phan — https://github.com/tuyetminhphan
-- Tieu-Long Phan — https://Medicine-Artificial-Intelligence.github.io/
-- Phuoc-Chung Nguyen Van — https://github.com/phuocchung123
+- [Tuyet-Minh Phan](https://github.com/tuyetminhphan)
+- [Tieu-Long Phan](https://tieulongphan.github.io/)
+- [Phuoc-Chung Nguyen Van](https://github.com/phuocchung123)
+
 
 
 ## License
