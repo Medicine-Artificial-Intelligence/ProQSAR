@@ -88,6 +88,7 @@ If you use ProQSAR in research, please cite the project. Example BibTeX placehol
 - [Tuyet-Minh Phan](https://github.com/tuyetminhphan)
 - [Tieu-Long Phan](https://tieulongphan.github.io/)
 - [Phuoc-Chung Nguyen Van](https://github.com/phuocchung123)
+- [Thanh-An Pham](https://github.com/Thanh-An-Pham)
 
 
 
