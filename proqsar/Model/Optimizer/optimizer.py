@@ -139,7 +139,9 @@ class Optimizer(BaseEstimator):
         """
         Build and normalize the candidate model list.
         """
-        model_list = self.select_model or _get_model_list(self.task_type, self.add_model)
+        model_list = self.select_model or _get_model_list(
+            self.task_type, self.add_model
+        )
         if isinstance(model_list, str):
             model_list = [model_list]
         return model_list
@@ -193,7 +195,9 @@ class Optimizer(BaseEstimator):
             # set runtime params (n_jobs/thread_count/random_state) when available
             self._set_runtime_params(model)
 
-            logging.info(f"Starting trial with model={model_name} params={trial.params}")
+            logging.info(
+                f"Starting trial with model={model_name} params={trial.params}"
+            )
 
             # evaluate with cross_val_score and return mean
             score = cross_val_score(

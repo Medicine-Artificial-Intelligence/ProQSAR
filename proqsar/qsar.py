@@ -861,7 +861,7 @@ class ProQSAR:
 
     def run_all(
         self,
-        data_dev: pd.DataFrame,
+        data_dev: Union[pd.DataFrame, List[Dict]],
         data_pred: Optional[pd.DataFrame] = None,
         data_test: Optional[pd.DataFrame] = None,
         alpha: Optional[Union[float, Iterable[float]]] = None,
@@ -879,6 +879,8 @@ class ProQSAR:
         :type alpha: Optional[Union[float, Iterable[float]]]
         :returns: None
         """
+        if isinstance(data_dev, List):
+            data_dev = pd.DataFrame(data_dev)
         start = time.perf_counter()
         self.logger.info(
             f"----------STARTING PROQSAR PIPELINE AT {datetime.datetime.now()}----------"
@@ -904,3 +906,150 @@ class ProQSAR:
         )
         end = time.perf_counter()
         self.logger.info(f"Elapsed time: {datetime.timedelta(seconds=(end - start))}")
+
+    def _repr_basic_info(self) -> dict:
+        """Collect a few basic attributes used by __repr__ (keeps __repr__ small)."""
+        proj = getattr(self, "project_name", "<unknown>")
+        savedir = getattr(self, "save_dir", "<unknown>")
+        selected = getattr(self, "selected_feature", None)
+        n_jobs = getattr(self, "n_jobs", None)
+        scoring = getattr(self, "scoring_target", None)
+        select_model = getattr(self, "select_model", None)
+
+        has_train = getattr(self, "train", None) is not None
+        has_select_model = select_model is not None
+        fitted = has_train and has_select_model
+
+        # number of models if visible
+        n_models = "<n/a>"
+        md = getattr(self, "model_dev", None)
+        if md is not None and getattr(md, "add_model", None) is not None:
+            try:
+                n_models = len(md.add_model)
+            except Exception:
+                n_models = "<n/a>"
+
+        info = {
+            "proj": proj,
+            "savedir": savedir,
+            "selected": selected,
+            "n_jobs": n_jobs,
+            "scoring": scoring,
+            "select_model": select_model,
+            "fitted": fitted,
+            "has_train": has_train,
+            "has_select_model": has_select_model,
+            "n_models": n_models,
+            "optimizer": bool(getattr(self, "optimizer", None)),
+            "conf_pred": bool(getattr(self, "conf_pred", None)),
+            "ad": bool(getattr(self, "ad", None)),
+        }
+        return info
+
+    def _repr_cv_stat(
+        self, select_model: Optional[str], scoring: Optional[str]
+    ) -> Optional[str]:
+        """
+        Try to extract a concise CV mean ± std string for `select_model`.
+        Returns None if unavailable. Kept minimal to lower complexity.
+        """
+        try:
+            cr = getattr(self, "cv_report", None)
+            if cr is None:
+                md = getattr(self, "model_dev", None)
+                cr = getattr(md, "report", None) if md is not None else None
+
+            if not isinstance(cr, pd.DataFrame) or select_model is None:
+                return None
+
+            # pick scoring key if not provided
+            scoring_key = scoring
+            if scoring_key is None and "scoring" in cr.columns:
+                uniq = cr["scoring"].unique()
+                scoring_key = uniq[0] if len(uniq) > 0 else None
+
+            if scoring_key is None:
+                return None
+
+            # Preferred pattern: rows 'cv_cycle' == 'mean'/'std'
+            if "cv_cycle" in cr.columns and "scoring" in cr.columns:
+                mean_row = cr.loc[
+                    (cr["scoring"] == scoring_key) & (cr["cv_cycle"] == "mean")
+                ]
+                if not mean_row.empty and select_model in mean_row.columns:
+                    mean_val = pd.to_numeric(
+                        mean_row.iloc[0][select_model], errors="coerce"
+                    )
+                    std_row = cr.loc[
+                        (cr["scoring"] == scoring_key) & (cr["cv_cycle"] == "std")
+                    ]
+                    std_val = None
+                    if not std_row.empty and select_model in std_row.columns:
+                        std_val = pd.to_numeric(
+                            std_row.iloc[0][select_model], errors="coerce"
+                        )
+                    if pd.notna(mean_val):
+                        if pd.notna(std_val):
+                            return f"{float(mean_val):.3f} ± {float(std_val):.3f}"
+                        return f"{float(mean_val):.3f}"
+
+            # Fallback: compute mean/std across numeric entries for select_model
+            if "scoring" in cr.columns and select_model in cr.columns:
+                filtered = cr.loc[cr["scoring"] == scoring_key, select_model]
+                numeric = pd.to_numeric(filtered, errors="coerce").dropna()
+                if len(numeric) > 0:
+                    mean_val = numeric.mean()
+                    std_val = numeric.std(ddof=0)
+                    return f"{float(mean_val):.3f} ± {float(std_val):.3f}"
+        except Exception:
+            # be defensive: don't raise from repr helper
+            return None
+        return None
+
+    def __repr__(self) -> str:
+        """
+        Compact, low-complexity pretty repr for ProQSAR.
+        Uses two simple helpers above to keep cyclomatic complexity low.
+        """
+        info = self._repr_basic_info()
+
+        cv_str = self._repr_cv_stat(info["select_model"], info["scoring"])
+
+        # statuses
+        optimizer_status = "enabled" if info["optimizer"] else "disabled"
+        conf_pred_status = "enabled" if info["conf_pred"] else "disabled"
+        ad_status = "enabled" if info["ad"] else "disabled"
+
+        # build small multi-line string
+        box_width = 68
+        lines = [
+            "┌" + "─" * box_width + "┐",
+            ("│ ProQSAR Pipeline").ljust(box_width) + " │",
+            "├" + "─" * box_width + "┤",
+            ("│ Project: " + str(info["proj"])).ljust(box_width) + " │",
+            ("│ Save Dir: " + str(info["savedir"])).ljust(box_width) + " │",
+            ("│ Selected feature: " + repr(info["selected"])).ljust(box_width) + " │",
+            ("│ Fitted: " + str(info["fitted"])).ljust(box_width) + " │",
+            ("│ Models registered: " + str(info["n_models"])).ljust(box_width) + " │",
+            ("│ Selected model: " + repr(info["select_model"])).ljust(box_width) + " │",
+        ]
+        if cv_str:
+            lines.append(
+                ("│ CV (" + str(info["select_model"]) + "): " + cv_str).ljust(box_width)
+                + " │"
+            )
+        lines += [
+            ("│ n_jobs: " + str(info["n_jobs"])).ljust(box_width) + " │",
+            ("│ scoring_target: " + repr(info["scoring"])).ljust(box_width) + " │",
+            (
+                "│ Optimizer: "
+                + optimizer_status
+                + "    ConfPred: "
+                + conf_pred_status
+                + "    AD: "
+                + ad_status
+            ).ljust(box_width)
+            + " │",
+            "└" + "─" * box_width + "┘",
+        ]
+        return "\n".join(lines)
