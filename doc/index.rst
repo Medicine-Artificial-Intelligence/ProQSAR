@@ -7,6 +7,9 @@ This is documentation for **proqsar** version |version| (release |release|).
    :maxdepth: 1
 
    Getting Started <getting_started>
-   Tutorials and Examples <tutorial>
+   Data module <data>
+   Preprocessor module <preprocess>
+   Model module <model>
+   Pipeline <pipeline>
    API Reference <api>
    References <reference>

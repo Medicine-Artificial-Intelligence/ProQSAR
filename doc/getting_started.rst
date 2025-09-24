@@ -1,60 +1,98 @@
-.. _getting-started-template:
+.. _getting-started-proqsar:
 
-.. image:: https://img.shields.io/pypi/v/proqsar.svg
+.. |pypi-badge| image:: https://img.shields.io/pypi/v/proqsar.svg
    :alt: PyPI version
-   :align: right
+   :target: https://pypi.org/project/proqsar/
 
-===============================
-Getting Started with Template
-===============================
+.. |conda-badge| image:: https://img.shields.io/conda/vn/tieulongphan/proqsar.svg?label=conda
+   :alt: conda
+   :target: https://anaconda.org/tieulongphan/proqsar
 
-Welcome to the **template** documentation!
+.. |docker-badge| image:: https://img.shields.io/docker/pulls/tieulongphan/proqsar.svg
+   :alt: Docker pulls
+   :target: https://hub.docker.com/r/tieulongphan/proqsar
 
-This repository provides a standardized template for building, testing, documenting, and releasing Python-based methods. It includes recommended layouts, tooling integrations, and CI/CD workflows to streamline development.
+|pypi-badge| |conda-badge| |docker-badge|
 
-🛠 Development Workflow
------------------------
 
-1. **Source Layout**  
-   Store all library code under ``src/`` (rename folder as desired).
+Getting Started
+===============
 
-2. **Unit Tests**  
-   Keep tests in ``tests/`` and run via pytest::
+Welcome to **ProQSAR** — an opinionated, reproducible pipeline for QSAR modelling and small-molecule featurisation.
 
-      pytest --maxfail=1 --disable-warnings -q
+This quickstart shows how to install ProQSAR, verify the installation, and run a minimal pipeline. For full reference documentation, see the project docs and the API reference in the repository.
 
-3. **Linting & Formatting**  
-   - Follow PEP 8 style and PEP 257 docstring conventions.  
-   - Use ``black`` for automatic formatting and ``flake8`` to enforce quality.  
-   - Run both via::
+Introduction
+------------
+**ProQSAR** is a lightweight toolkit for end-to-end QSAR workflows: data standardization, featurization, dataset splitting, model training, uncertainty estimation, and evaluation. It provides a simple CLI and a modular Python API so you can run quick experiments or embed ProQSAR components into larger CADD pipelines.
 
-        ./lint.sh
+Requirements
+------------
+- **Python** >= 3.11
+- Recommended: an isolated virtual environment (venv/virtualenv or Conda)
 
-   - Edit ``lint.sh`` to adjust rules or exclude files.
+Virtual environment (recommended)
+---------------------------------
+Using a virtual environment prevents dependency conflicts.
 
-4. **Documentation**  
-   - Write docs in ``docs/`` using Sphinx.  
-   - Build locally with::
+1. Using ``venv`` (cross-platform)
 
-        ./build_doc.sh
+.. code-block:: bash
 
-   - Automate publishing via ReadTheDocs with ``.readthedocs.yml``.
+   python3 -m venv proqsar-env
+   source proqsar-env/bin/activate    # Linux / macOS
+   proqsar-env\Scripts\activate     # Windows (PowerShell)
 
-5. **Dependency Management**  
-   - Use ``env.yml`` for Conda (pins ``rdkit>=2025.3.1``, ``pytest``, ``black``, ``flake8``).  
-   - Alternatively, manage with ``requirements.txt`` for pip users.
+2. Using Conda
 
-6. **Release & Packaging**  
-   - Define package metadata in ``pyproject.toml``.  
-   - Local install::
+.. code-block:: bash
 
-        pip install .
+   conda create -n proqsar-env python=3.11 -y
+   conda activate proqsar-env
 
-   - CI/CD workflows:  
-     - **PyPI**: ``.github/workflows/publish-package.yml``  
-     - **Docker**: ``.github/workflows/docker-publish.yml``
 
-7. **Automated Dependency Updates**  
-   - ``.github/dependabot.yml`` configured for weekly checks and PRs.
+Installation
+------------
+Install the package from PyPI, Conda (channel: ``tieulongphan``), or using the official Docker image.
 
-*Feel free to adapt any naming conventions or tooling versions to fit your project needs.*  
+**From PyPI**::
+
+   pip install proqsar
+
+**From conda**::
+
+   conda install -c tieulongphan proqsar
+
+**Docker**::
+
+   docker pull tieulongphan/proqsar:latest
+   docker run --rm tieulongphan/proqsar:latest proqsar --help
+
+Quick verification
+------------------
+Verify the installed package and check the version:
+
+.. code-block:: bash
+
+   python -c "import importlib.metadata as m; print(m.version('proqsar'))"
+
+Development & contributing
+--------------------------
+1. Fork the repository and work on a feature branch.
+2. Add unit tests and run the test-suite locally.
+3. Follow code style (PEP8, type hints) and run pre-commit hooks.
+4. Open a PR with a clear description and tests.
+
+Support
+-------
+Report bugs or request features on GitHub:
+
+`ProQSAR Issues <https://github.com/Medicine-Artificial-Intelligence/proqsar/issues>`_
+
+Further reading
+---------------
+- Project repository: `ProQSAR on GitHub <https://github.com/Medicine-Artificial-Intelligence/proqsar>`_
+- Full documentation: `ProQSAR Docs <http://proqsar.readthedocs.io/en/latest/>`_
+
+Enjoy using **ProQSAR**! 
+

@@ -861,7 +861,7 @@ class ProQSAR:
 
     def run_all(
         self,
-        data_dev: pd.DataFrame,
+        data_dev: Union[pd.DataFrame, List[Dict]],
         data_pred: Optional[pd.DataFrame] = None,
         data_test: Optional[pd.DataFrame] = None,
         alpha: Optional[Union[float, Iterable[float]]] = None,
@@ -879,6 +879,8 @@ class ProQSAR:
         :type alpha: Optional[Union[float, Iterable[float]]]
         :returns: None
         """
+        if isinstance(data_dev, List):
+            data_dev = pd.DataFrame(data_dev)
         start = time.perf_counter()
         self.logger.info(
             f"----------STARTING PROQSAR PIPELINE AT {datetime.datetime.now()}----------"
