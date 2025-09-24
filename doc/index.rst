@@ -12,4 +12,3 @@ This is documentation for **proqsar** version |version| (release |release|).
    Model module <model>
    Pipeline <pipeline>
    API Reference <api>
-   References <reference>

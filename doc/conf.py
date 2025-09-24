@@ -29,8 +29,19 @@ extensions = [
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.githubpages",
     "sphinxcontrib.bibtex",
+    "sphinx.ext.intersphinx",
     # "sphinx.ext.napoleon",  # un-comment if using Google/NumPy docstrings
 ]
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
+    "sklearn": (
+        "https://scikit-learn.org/stable",
+        "https://scikit-learn.org/stable/objects.inv",
+    ),
+}
 
 bibtex_bibfiles = ["refs.bib"]
 templates_path = ["_templates"]
