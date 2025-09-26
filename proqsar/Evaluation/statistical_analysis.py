@@ -282,6 +282,8 @@ class StatisticalAnalysis:
         save_fig: bool = True,
         save_dir: str = "Project/Analysis",
         fig_name: Optional[str] = None,
+        axis_text_size: float = 12,
+        title_size: float = 16,
     ) -> None:
         """
         Perform statistical tests (repeated-measures ANOVA or Friedman).
@@ -369,9 +371,9 @@ class StatisticalAnalysis:
                     legend=False,
                     width=0.5,
                 )
-                ax.set_title(f"p={p_value:.1e}", fontsize=16)
+                ax.set_title(f"p={p_value:.1e}", fontsize=title_size)
                 ax.set_xlabel("")
-                ax.set_ylabel(scoring.upper())
+                ax.set_ylabel(scoring.upper(), fontsize=axis_text_size)
 
                 # Wrap labels
                 labels = [item.get_text() for item in ax.get_xticklabels()]
@@ -389,7 +391,7 @@ class StatisticalAnalysis:
 
                 ax.set_xticks(list(range(0, len(labels))))
                 ax.set_xticklabels(new_labels)
-                ax.tick_params(axis="both", labelsize=12)
+                ax.tick_params(axis="both", labelsize=axis_text_size)
 
             # If there are less plots than cells in the grid, hide the remaining cells
             if (len(scoring_list) % 2) != 0:
