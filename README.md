@@ -91,7 +91,6 @@ If you use ProQSAR in research, please cite the project. Example BibTeX placehol
 - [Thanh-An Pham](https://github.com/Thanh-An-Pham)
 
 
-
 ## License
 
 This project is licensed under MIT License - see the [License](LICENSE) file for details.
