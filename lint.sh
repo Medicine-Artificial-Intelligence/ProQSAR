@@ -7,6 +7,7 @@ flake8 . --count --statistics --max-complexity=16 --max-line-length=120 \
 		missing_handler.py:F401, 
 		optimizer_utils.py:C901, 
 		statistical_analysis.py:C901, 
-		feature_selector_utils.py:C901
-		model_validation.py:C901
+		feature_selector_utils.py:C901,
+		model_validation.py:C901,
+		optimizer.py:C901
 		'

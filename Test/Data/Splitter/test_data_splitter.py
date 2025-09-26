@@ -1,7 +1,7 @@
-from proqsar.Data.Splitter.data_splitter import Splitter
-import pandas as pd
-import numpy as np
 import unittest
+import numpy as np
+import pandas as pd
+from proqsar.Data.Splitter.data_splitter import Splitter
 
 
 class TestSplitter(unittest.TestCase):
@@ -68,6 +68,13 @@ class TestSplitter(unittest.TestCase):
             n_splits=5,
             random_state=42,
         )
+        self.butinasplitter = Splitter(
+            activity_col="pIC50",
+            smiles_col="smiles",
+            option="butina",
+            cutoff=0.5,
+            random_state=42,
+        )
         self.invalidsplitter = Splitter(
             activity_col="pIC50", smiles_col="smiles", option="invalid"
         )
@@ -98,6 +105,14 @@ class TestSplitter(unittest.TestCase):
 
     def test_stratifiedscaffoldsplitter(self):
         data_train, data_test = self.stratifiedscaffoldsplitter.fit(self.data)
+
+        self.assertEqual(data_train.shape[0], 16)
+        self.assertEqual(data_test.shape[0], 4)
+        self.assertIsInstance(data_train, pd.DataFrame)
+        self.assertIsInstance(data_test, pd.DataFrame)
+
+    def test_butinasplitter(self):
+        data_train, data_test = self.butinasplitter.fit(self.data)
 
         self.assertEqual(data_train.shape[0], 16)
         self.assertEqual(data_test.shape[0], 4)

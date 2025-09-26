@@ -1,7 +1,6 @@
-# proqsar/Model/Optimizer/optimizer.py
 import optuna
-import pandas as pd
 import logging
+import pandas as pd
 from sklearn.model_selection import cross_val_score
 from typing import Optional, List, Tuple, Dict, Any, Union
 from ..ModelDeveloper.model_developer_utils import (
@@ -174,6 +173,18 @@ class Optimizer(BaseEstimator):
             except Exception:
                 pass
 
+        if "verbose" in params:
+            try:
+                model.set_params(verbose=0)
+            except Exception:
+                pass
+
+        if "logging_level" in params:
+            try:
+                model.set_params(logging_level="Silent")
+            except Exception:
+                pass
+
     def _make_objective(self, X: pd.DataFrame, y: pd.Series, model_list: List[str]):
         """
         Return an Optuna objective function bound to X, y and model_list.
@@ -196,9 +207,9 @@ class Optimizer(BaseEstimator):
             self._set_runtime_params(model)
 
             logging.info(
-                f"Starting trial with model={model_name} params={trial.params}"
+                f"Starting trial {trial.number + 1} | "
+                f"model={model_name} params={trial.params}"
             )
-
             # evaluate with cross_val_score and return mean
             score = cross_val_score(
                 model,
@@ -208,6 +219,12 @@ class Optimizer(BaseEstimator):
                 cv=self.cv,
                 n_jobs=self.n_jobs,
             ).mean()
+
+            # --- log trial result ---
+            logging.info(
+                f"Finished trial {trial.number + 1} | "
+                f"model={model_name} params={trial.params} | score={score:.4f}"
+            )
             return score
 
         return objective

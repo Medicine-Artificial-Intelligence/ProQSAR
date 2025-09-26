@@ -3,8 +3,9 @@ from .stratified_random_splitter import StratifiedRandomSplitter
 from .random_scaffold_splitter import RandomScaffoldSplitter
 from .scaffold_splitter import ScaffoldSplitter
 from .stratified_scaffold_splitter import StratifiedScaffoldSplitter
+from .butina_splitter import ButinaSplitter
 from sklearn.base import BaseEstimator
-from typing import Tuple, Optional, List, Dict, Union
+from typing import Tuple, Optional
 import os
 import pandas as pd
 import logging
@@ -30,7 +31,7 @@ class Splitter(BaseEstimator):
     :type mol_col: str
     :param option: Splitting method, one of
                    ``"random"``, ``"stratified_random"``, ``"scaffold"``,
-                   ``"random_scaffold"``, or ``"stratified_scaffold"``.
+                   ``"random_scaffold"``, ``"stratified_scaffold"``, ``"butina"``.
                    Default is ``"random"``.
     :type option: str
     :param test_size: Proportion of the dataset to include in the test split.
@@ -40,6 +41,11 @@ class Splitter(BaseEstimator):
                      (used only when option is ``"stratified_scaffold"``).
                      Default is ``5``.
     :type n_splits: int
+    :param cutoff: Tanimoto distance cutoff used in ``"butina"`` splitting.
+                   Lower values produce smaller, finer clusters (stricter similarity),
+                   while higher values produce larger, coarser clusters.
+                   Only used when ``option="butina"``. Default is ``0.6``.
+    :type cutoff: float
     :param random_state: Random seed used by the random number generator.
                          Default is ``42``.
     :type random_state: int
@@ -80,6 +86,7 @@ class Splitter(BaseEstimator):
         option: str = "random",
         test_size: float = 0.2,
         n_splits: int = 5,
+        cutoff: float = 0.35,
         random_state: int = 42,
         save_dir: Optional[str] = "Project/Splitter",
         data_name: Optional[str] = None,
@@ -92,13 +99,12 @@ class Splitter(BaseEstimator):
         self.smiles_col = smiles_col
         self.mol_col = mol_col
         self.n_splits = n_splits
+        self.cutoff = cutoff
         self.save_dir = save_dir
         self.data_name = data_name
         self.deactivate = deactivate
 
-    def fit(
-        self, data: Union[pd.DataFrame, List[Dict]]
-    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+    def fit(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
         """
         Split the dataset into training and testing sets.
 
@@ -114,8 +120,6 @@ class Splitter(BaseEstimator):
         :raises ValueError: If an invalid splitting option is provided.
         :raises Exception: If an unexpected error occurs during splitting.
         """
-        if isinstance(data, List):
-            data = pd.DataFrame(data)
         if self.deactivate:
             logging.info(
                 "Splitter is deactivated. Returning original dataset as training set."
@@ -161,11 +165,20 @@ class Splitter(BaseEstimator):
                     n_splits=self.n_splits,
                     random_state=self.random_state,
                 )
+            elif self.option == "butina":
+                splitter = ButinaSplitter(
+                    self.activity_col,
+                    self.smiles_col,
+                    self.mol_col,
+                    test_size=self.test_size,
+                    cutoff=self.cutoff,
+                )
             else:
                 raise ValueError(
                     f"Invalid splitting option: {self.option}. "
                     "Choose from 'random', 'stratified_random', "
-                    "'scaffold', 'random_scaffold', 'stratified_scaffold'."
+                    "'scaffold', 'random_scaffold', "
+                    "'stratified_scaffold', 'butina'."
                 )
 
             data_train, data_test = splitter.fit(data)
