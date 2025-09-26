@@ -5,7 +5,7 @@ from .scaffold_splitter import ScaffoldSplitter
 from .stratified_scaffold_splitter import StratifiedScaffoldSplitter
 from .butina_splitter import ButinaSplitter
 from sklearn.base import BaseEstimator
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List, Dict, Union
 import os
 import pandas as pd
 import logging
@@ -104,7 +104,9 @@ class Splitter(BaseEstimator):
         self.data_name = data_name
         self.deactivate = deactivate
 
-    def fit(self, data: pd.DataFrame) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+    def fit(
+        self, data: Union[pd.DataFrame, List[Dict]]
+    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
         """
         Split the dataset into training and testing sets.
 
@@ -120,6 +122,8 @@ class Splitter(BaseEstimator):
         :raises ValueError: If an invalid splitting option is provided.
         :raises Exception: If an unexpected error occurs during splitting.
         """
+        if isinstance(data, List):
+            data = pd.DataFrame(data)
         if self.deactivate:
             logging.info(
                 "Splitter is deactivated. Returning original dataset as training set."
