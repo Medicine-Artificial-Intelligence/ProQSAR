@@ -548,6 +548,8 @@ class ProQSAR:
         if keep_all_records:
             self.datapreprocessor.duplicate.set_params(rows=False)
             self.datapreprocessor.multiv_outlier.set_params(deactivate=True)
+        else:
+            self.datapreprocessor.duplicate.set_params(keep="first")
 
         df = deepcopy(data)
         if record_shape:

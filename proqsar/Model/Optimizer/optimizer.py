@@ -139,7 +139,9 @@ class Optimizer(BaseEstimator):
         """
         Build and normalize the candidate model list.
         """
-        model_list = self.select_model or _get_model_list(self.task_type, self.add_model)
+        model_list = self.select_model or _get_model_list(
+            self.task_type, self.add_model
+        )
         if isinstance(model_list, str):
             model_list = [model_list]
         return model_list
@@ -172,6 +174,18 @@ class Optimizer(BaseEstimator):
             except Exception:
                 pass
 
+        if "verbose" in params:
+            try:
+                model.set_params(verbose=0)
+            except Exception:
+                pass
+
+        if "logging_level" in params:
+            try:
+                model.set_params(logging_level="Silent")
+            except Exception:
+                pass
+
     def _make_objective(self, X: pd.DataFrame, y: pd.Series, model_list: List[str]):
         """
         Return an Optuna objective function bound to X, y and model_list.
@@ -193,8 +207,10 @@ class Optimizer(BaseEstimator):
             # set runtime params (n_jobs/thread_count/random_state) when available
             self._set_runtime_params(model)
 
-            logging.info(f"Starting trial with model={model_name} params={trial.params}")
-
+            logging.info(
+                f"Starting trial {trial.number + 1} | "
+                f"model={model_name} params={trial.params}"
+            )
             # evaluate with cross_val_score and return mean
             score = cross_val_score(
                 model,
@@ -204,6 +220,12 @@ class Optimizer(BaseEstimator):
                 cv=self.cv,
                 n_jobs=self.n_jobs,
             ).mean()
+
+            # --- log trial result ---
+            logging.info(
+                f"Finished trial {trial.number + 1} | "
+                f"model={model_name} params={trial.params} | score={score:.4f}"
+            )
             return score
 
         return objective
