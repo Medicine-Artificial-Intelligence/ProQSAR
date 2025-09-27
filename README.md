@@ -7,8 +7,9 @@
 [![License](https://img.shields.io/github/license/Medicine-Artificial-Intelligence/proqsar.svg)](https://github.com/Medicine-Artificial-Intelligence/proqsar/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/v/release/Medicine-Artificial-Intelligence/proqsar.svg)](https://github.com/Medicine-Artificial-Intelligence/proqsar/releases)
 [![Last Commit](https://img.shields.io/github/last-commit/Medicine-Artificial-Intelligence/proqsar.svg)](https://github.com/Medicine-Artificial-Intelligence/proqsar/commits)
+[![Zenodo](https://zenodo.org/badge/DOI/10.5281/zenodo.17209616.svg)](https://doi.org/10.5281/zenodo.17209616)
 [![CI](https://github.com/Medicine-Artificial-Intelligence/proqsar/actions/workflows/test-and-lint.yml/badge.svg?branch=main)](https://github.com/Medicine-Artificial-Intelligence/proqsar/actions/workflows/test-and-lint.yml)
-
+[![Stars](https://img.shields.io/github/stars/Medicine-Artificial-Intelligence/proqsar.svg?style=social&label=Star)](https://github.com/Medicine-Artificial-Intelligence/proqsar/stargazers)
 ---
 
 **ProQSAR — automatic pipeline for quantitative structure–activity relationship (QSAR) modeling**
